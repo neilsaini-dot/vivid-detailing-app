@@ -1,0 +1,470 @@
+Project Overview
+Build a full-stack, mobile-first web app for Vivid Detailing, a premium automotive appearance shop located at 2-70 Nicholas Lane, Charlottetown, PEI. Phone: 902-267-7775. Email: contact@vividpei.com.
+The app is a digital service advisor — it guides customers to the right service by goal, shows accurate dynamic pricing, and converts visitors into booked appointments. It should feel like a premium automotive brand, not a generic booking tool.
+
+Tech Stack (fixed — do not deviate)
+
+Frontend: Next.js 14 (App Router) + Tailwind CSS
+Backend: Next.js API routes (no separate Express server)
+Database: Supabase (PostgreSQL + Supabase Storage + Supabase Auth)
+Auth: Supabase Auth — email magic link only, no passwords
+Payments: Stripe (optional, scaffold only in V1)
+CRM: GoHighLevel via webhook (V1 — no direct GHL REST API)
+Hosting-ready: Vercel-compatible build
+
+
+Design System
+Brand Colors (use as CSS variables — apply consistently)
+css:root {
+  --color-bg:          #0A0A0A;   /* page background */
+  --color-surface:     #111111;   /* cards, panels */
+  --color-surface-2:   #1A1A1A;   /* elevated surfaces, modals */
+  --color-border:      #2A2A2A;   /* dividers, card borders */
+  --color-accent:      #29B8D9;   /* Vivid teal — primary CTA, highlights, prices */
+  --color-accent-dark: #1A8FA8;   /* teal hover state */
+  --color-text:        #FFFFFF;   /* primary text */
+  --color-text-muted:  #8A8A8A;   /* secondary text, labels */
+  --color-text-dim:    #555555;   /* disabled / placeholder */
+  --color-success:     #22C55E;
+  --color-warning:     #F59E0B;
+  --color-error:       #EF4444;
+}
+Typography
+
+Font: Inter (Google Fonts) — clean, modern, automotive
+Headings: font-weight: 700, tracked slightly wide on display sizes
+Package names: color: var(--color-accent), weight 600
+Prices: color: var(--color-accent), weight 700
+Body: white, muted on supporting copy
+
+Component Style
+
+Cards: background: var(--color-surface), border: 1px solid var(--color-border), border-radius: 12px
+Service cards: image top, package name in teal, short description, price, CTA button — mirrors the TV media layout
+Primary button: teal background, white text, border-radius: 8px, hover darkens
+Ghost button: teal border, teal text, transparent background
+Teal is the only accent color. Do not introduce gold, orange, or red accents.
+The "V" logo mark should appear in the nav and loading states in teal on black.
+
+Layout
+
+Mobile-first. Single column on mobile, max-width 1280px on desktop
+Sticky bottom CTA bar on mobile during booking flow showing running total
+Sticky order summary sidebar on desktop during booking flow
+Smooth step transitions (slide or fade) — no full page reloads in the booking flow
+
+
+Database Schema (Supabase — create exactly these tables)
+sql-- Core tables
+users (id uuid, email text, created_at timestamptz)
+
+customers (
+  id uuid, user_id uuid references users,
+  name text, email text, phone text,
+  ghl_contact_id text, ghl_opportunity_id text,
+  ghl_last_sync timestamptz, ghl_sync_status text,
+  created_at timestamptz
+)
+
+vehicles (
+  id uuid, customer_id uuid references customers,
+  type text CHECK(type IN ('car','suv','truck','van')),
+  year int, make text, model text, colour text,
+  license_plate text, notes text, created_at timestamptz
+)
+
+services (
+  id uuid, name text, category text, pricing_rule text,
+  base_price numeric, is_active boolean, is_seasonal boolean,
+  sort_order int, description text, includes text[],
+  show_in_protection_step boolean DEFAULT false
+)
+
+service_prices (
+  id uuid, service_id uuid references services,
+  vehicle_type text, price numeric
+)
+
+add_ons (
+  id uuid, name text, category_group text,
+  is_active boolean, show_in_protection_step boolean,
+  sort_order int
+)
+
+add_on_prices (
+  id uuid, add_on_id uuid references add_ons,
+  vehicle_type text, price numeric
+)
+
+seasonal_promos (
+  id uuid, name text, base_price numeric,
+  is_active boolean, valid_from date, valid_to date,
+  description text, includes text[]
+)
+
+bookings (
+  id uuid, customer_id uuid references customers,
+  vehicle_id uuid references vehicles,
+  status text CHECK(status IN ('pending','confirmed','completed','cancelled')),
+  appointment_at timestamptz, total_estimate numeric,
+  deposit_paid boolean DEFAULT false, notes text,
+  ghl_contact_id text, ghl_opportunity_id text,
+  created_at timestamptz
+)
+
+booking_items (
+  id uuid, booking_id uuid references bookings,
+  item_type text CHECK(item_type IN ('service','addon','quote','promo')),
+  item_name text, unit_price numeric, quantity int DEFAULT 1,
+  is_quote_based boolean DEFAULT false
+)
+
+quote_requests (
+  id uuid, customer_id uuid, vehicle_id uuid,
+  service_type text, coverage_option text,
+  notes text, photo_urls text[], status text,
+  created_at timestamptz
+)
+
+service_history (
+  id uuid, customer_id uuid references customers,
+  booking_id uuid references bookings,
+  condition_score int CHECK(condition_score BETWEEN 0 AND 100),
+  before_photo_urls text[], after_photo_urls text[],
+  notes text, completed_at timestamptz
+)
+
+loyalty_activity (
+  id uuid, customer_id uuid references customers,
+  booking_id uuid, spend_amount numeric,
+  tier_at_time text, created_at timestamptz
+)
+
+uploaded_photos (
+  id uuid, booking_id uuid, customer_id uuid,
+  storage_path text, photo_type text, created_at timestamptz
+)
+
+ghl_sync_logs (
+  id uuid, customer_id uuid, booking_id uuid,
+  event_type text, payload jsonb, response jsonb,
+  status text, created_at timestamptz
+)
+
+Pricing Engine (/lib/pricing.ts)
+Build all pricing logic here. Never hardcode pricing in UI components.
+Pricing Rules
+Each service has a pricing_rule field. Support these rules:
+typescripttype PricingRule =
+  | 'flat'                        // same price regardless of vehicle
+  | 'seasonal_flat'               // flat promo, ignores vehicle type
+  | 'fixed_by_vehicle_type'       // explicit price per vehicle in service_prices table
+  | 'vehicle_multiplier_round5'   // base × multiplier, round UP to nearest $5
+  | 'quote_based'                 // no price shown, CTA only
+  | 'admin_configurable'          // admin sets price, show "Pricing Available Upon Request" until set
+
+const VEHICLE_MULTIPLIERS = { car: 1.0, suv: 1.2, truck: 1.3, van: 1.4 }
+
+function roundUpToNearestFive(amount: number): number {
+  return Math.ceil(amount / 5) * 5
+}
+
+function calculatePrice(service, vehicleType): number | 'quote' | 'pending'
+What uses which rule
+RuleServicesfixed_by_vehicle_typeAll detailing packages (Vivid Interior, Vivid Luster, Vivid Glow), Vivid Interior LVP, all add-onsvehicle_multiplier_round5Vivid Ceramic Gloss Pro, Vivid Ceramic Guard, Vivid Ceramic Elite GuardflatVivid Ceramic Glass - Full Vehicle ($129), Windshield Ceramic ($89)seasonal_flatSummer Special Ceramic Exterior ($249)quote_basedPaint Correction (all stages), PPF Full Front, PPF Full Vehicleadmin_configurableVivid Ceramic Elite Guard base price — seed as $1,299 placeholder, display "Pricing Available Upon Request" until admin confirms
+
+Service Catalog (seed data)
+Detailing Packages — pricing_rule: fixed_by_vehicle_type
+Vivid Interior
+
+Car $189 / SUV $209 / Truck $229 / Van $249
+Includes: Deep vacuum, full wipe down, interior windows cleaned, leather/vinyl conditioned, door panels, dash, console, seats
+
+Vivid Luster
+
+Car $219 / SUV $239 / Truck $259 / Van $279
+Includes: Full vacuum, full interior wipe down, windows and mirrors, hand wash and wax, tire shine
+
+Vivid Glow
+
+Car $329 / SUV $349 / Truck $369 / Van $389
+Includes: Everything in Vivid Luster + steam seats/carpets/surfaces, premium full interior and exterior detail
+
+
+Summer Special — pricing_rule: seasonal_flat
+Summer Special Ceramic Exterior — $249 flat, any vehicle size
+
+Includes: 1-year ceramic exterior protection, exterior wash, paint decontamination, ceramic application on painted exterior surfaces
+is_seasonal: true, is_active: true (admin-toggleable)
+Do NOT apply vehicle multipliers to this package
+Display as featured card on homepage hero and in "Protect my vehicle" flow
+CTA: "Book Summer Special" / "Get 1-Year Ceramic for $249"
+
+
+Vivid Ceramic Tint — pricing_rule: flat
+PackagePriceIncludesVivid Ceramic Tint - Rear$275Back windows + rear windshieldVivid Ceramic Tint - Full$350Rear + front side windowsWindshield Eyebrow Tint$50Eyebrow strip across windshield
+
+Nano Ceramic IR Tint only, Lifetime Warranty
+Tint pricing is flat — no vehicle multipliers
+Tint packages are combinable (Full + Eyebrow = $400 shown as separate line items)
+
+
+Ceramic Coating — pricing_rule: vehicle_multiplier_round5
+Apply base × VEHICLE_MULTIPLIERS[type], then roundUpToNearestFive().
+Vivid Ceramic Gloss Pro — base car price: $299
+VehiclePriceCar$299SUV$360Truck$390Van$420
+
+Includes: 1-year ceramic protection, decontamination wash, painted surfaces
+
+Vivid Ceramic Guard — base car price: $999
+VehiclePriceCar$999SUV$1,200Truck$1,300Van$1,400
+
+Includes: 3-year ceramic protection, decontamination wash, 1-stage paint enhancement, paint and trim
+
+Vivid Ceramic Elite Guard — pricing_rule: admin_configurable, seed base as $1,299
+
+Apply vehicle multiplier once admin confirms base price
+Display "Pricing Available Upon Request" until admin sets confirmed price
+Includes: Everything in Ceramic Guard + 5-year durability tier, premium protection
+
+
+Surface Protection Add-Ons — pricing_rule: flat
+Vivid Ceramic Glass - Full Vehicle — $129 flat
+
+No vehicle multipliers. Does not change by size.
+show_in_protection_step: true
+
+Windshield Ceramic — $89 flat
+
+No vehicle multipliers
+show_in_protection_step: true
+
+Vivid Interior LVP — pricing_rule: fixed_by_vehicle_type
+
+Car $199 / SUV $240 / Truck $260 / Van $280
+Customer-facing name is Vivid Interior LVP only. Do not use "Interior Leather Ceramic."
+show_in_protection_step: true
+
+
+Paint Correction — pricing_rule: quote_based
+
+One-stage paint enhancement
+Two-stage paint correction
+Three-stage paint correction
+CTAs: "Request Quote", "Add to Ceramic Coating Consultation", "Book Inspection"
+Also surfaces as upgrade/prep step within ceramic coating flow
+
+
+Paint Protection Film — de-emphasized, quote-only
+PackagePriceVivid Impact$299Full Front PPFQuote onlyFull Vehicle PPFQuote only
+
+Do not show PPF on homepage hero
+Do not include in smart upsell recommendations anywhere
+Do not recommend PPF after tint, ceramic, or detailing
+Place only under "More Services" or "Request a Quote" section
+Allow photo upload for quote requests
+CTA: "Request Quote" only
+
+
+Add-On Services — pricing_rule: fixed_by_vehicle_type
+Seed the add_on_prices table with these values:
+Add-OnCarSUVTruckVanPet Hair Removal$50$60$70$80Steam Cleaning Interior$40$50$60$70Door Jambs$15$15$15$15Child Seat Clean & Sanitize$10$10$10$10Ozone Treatment / Deodorizer$95$105$105$135Headlight Restoration$60$60$60$60Engine Shampoo$75$85$85$105Ceramic Rims$60$70$80$70Trash Cleanup$15$15$15$25Shampoo Upholstery$30$40$40$60Headliner Cleaning$40$50$60$70Additional Mats$15$15$15$25Excess Sand/Dirt Removal$40$50$60$60Minor Scratch/Blemish Correction$150$175$200$200Windshield Hydrophobic Coating$120$140$160$160Soft Top / Tonneau Cover Protection$95$95$95$95Paint Decontamination$150$175$200$200Paint Sealant$150$175$200$200
+
+Booking Flow (multi-step, no full-page reloads)
+Show a step progress bar at the top throughout. Pricing updates in real-time as selections change.
+Step 1 — Vehicle
+
+Select type: Car / SUV / Truck / Van (large tap targets, icon per type)
+Year, Make, Model, Colour (text inputs)
+Licence plate (optional)
+
+Step 2 — Choose Your Goal (UI routing only — these buttons are NOT stored in the DB)
+
+Clean my vehicle → routes to detailing packages
+Protect my vehicle → routes to Summer Special + ceramic options
+Tint my windows → routes to tint packages
+Improve paint/gloss → routes to Vivid Glow + paint correction + ceramic
+Request a quote → paint correction / custom / PPF as low-priority option
+
+Step 3 — Recommended Services
+Clean my vehicle: Vivid Interior, Vivid Luster, Vivid Glow
+Protect my vehicle: Summer Special (featured/highlighted), Vivid Ceramic Gloss Pro, Vivid Ceramic Guard, Vivid Ceramic Elite Guard, Vivid Ceramic Glass, Windshield Ceramic, Vivid Interior LVP
+Tint my windows: Vivid Ceramic Tint Rear, Vivid Ceramic Tint Full, Windshield Eyebrow Tint (with tint visualizer inline)
+Improve paint/gloss: Vivid Glow, Paint Correction (quote), Vivid Ceramic Guard, Vivid Ceramic Elite Guard
+Request a quote: Paint Correction, custom, PPF as last/lowest priority option
+Step 4 — Add-Ons (grouped, not a flat checklist)
+Group 1 — Interior Upgrades:
+Pet Hair Removal, Steam Cleaning Interior, Shampoo Upholstery, Headliner Cleaning, Ozone Treatment, Child Seat Clean & Sanitize, Additional Mats, Vivid Interior LVP
+Group 2 — Exterior Upgrades:
+Headlight Restoration, Engine Shampoo, Ceramic Rims, Paint Decontamination, Paint Sealant, Minor Scratch/Blemish Correction, Windshield Hydrophobic Coating, Soft Top/Tonneau Cover Protection, Vivid Ceramic Glass - Full Vehicle, Windshield Ceramic
+Important — no duplicates: Vivid Interior LVP, Vivid Ceramic Glass, and Windshield Ceramic exist once in the add_ons table with show_in_protection_step: true. They may surface in both the add-on step and smart upsell recommendations, but always appear as a single line item in the cart. Never render the same item twice in the order summary.
+Step 5 — Smart Upsells (pre-selected, customer can remove freely)
+Primary ServicePre-selected Add-OnsVivid InteriorPet Hair Removal, Ozone Treatment, Vivid Interior LVPVivid LusterPaint Sealant, Vivid Ceramic Glass, Engine ShampooVivid GlowVivid Ceramic Glass, Windshield Hydrophobic Coating, Vivid Interior LVPSummer SpecialVivid Ceramic Glass, Windshield Ceramic, Ceramic RimsVivid Ceramic Gloss ProVivid Ceramic Glass, Windshield Ceramic, Ceramic RimsVivid Ceramic GuardVivid Ceramic Glass, Vivid Interior LVP, Ceramic RimsVivid Ceramic Elite GuardVivid Ceramic Glass, Vivid Interior LVP, Ceramic RimsVivid Ceramic Tint - FullWindshield Eyebrow Tint, Vivid Ceramic Glass, Vivid Interior LVP
+Do not recommend PPF in any upsell row.
+Step 6 — Review Estimate
+
+Vehicle, selected service, add-ons as line items, subtotal
+Tax placeholder (HST 15%)
+Optional deposit toggle
+Quote-based items shown separately with "Final price after inspection" note
+Do not show final checkout price if the order contains only quote-based items
+
+Step 7 — Appointment
+
+Date picker + time slots (8am, 10am, 12pm, 2pm, 4pm)
+No double-booking enforcement in V1 — capture preference only
+Contact info (name, email, phone) — pre-filled if logged in
+Notes field
+Vehicle photo upload (Supabase Storage)
+
+Step 8 — Confirmation
+
+Booking summary, appointment date/time
+Prep instructions
+Add to calendar button
+Upgrade CTA (suggest one relevant upgrade before appointment)
+Prompt to create account to access dashboard + service history
+
+Auth/Guest Rule:
+Customers do NOT need an account to book. After confirmation, show a prompt: "Save your booking and track your service history — create your Vivid account (just your email, no password)." Auth is Supabase magic link.
+
+Tint Visualizer
+Build inline within the tint step (Step 3, not a separate page).
+
+Show a car window SVG/image with a dark overlay layer
+Slider moves between 5 VLT levels: 5%, 15%, 25%, 35%, 50%
+Labels: Very Dark → Dark → Medium → Light → Very Light
+Overlay uses CSS opacity — no photo manipulation
+Preview responds separately for: rear windows, front windows, windshield eyebrow based on what's selected
+Education cards below slider (tap to expand):
+
+Heat rejection
+UV protection
+Privacy
+Appearance
+Lifetime warranty
+
+
+
+
+Customer Dashboard (/dashboard — requires login)
+
+My Vehicles (list, tap to view history)
+Service History (date, service name, total, before/after photos per booking)
+Upcoming Appointment (with modify/cancel request)
+Total Lifetime Spend
+Loyalty Tier + progress bar to next tier:
+
+Silver: $0–$999
+Black: $1,000–$2,999
+Elite: $3,000+
+
+
+Vehicle Condition Score — circular gauge (0–100), sourced from service_history.condition_score
+"Rebook Last Service" — pre-fills booking flow with last service details
+Maintenance Reminder banner — shown if last completed booking was 90+ days ago
+
+
+Admin Dashboard (/admin — restricted route)
+
+Services manager: toggle active/inactive, edit prices, edit descriptions
+Summer Special toggle (on/off) + price editor
+Vivid Ceramic Elite Guard base price editor (labeled "Admin Configurable — updates all vehicle pricing")
+Add-on manager
+Bookings list: filter by status, date, service type
+Customer profiles: view vehicle history, update condition score, upload before/after photos, mark complete, trigger review request
+Revenue by service category (chart)
+Most popular add-ons (chart)
+GHL sync status per customer
+
+
+GoHighLevel Integration
+V1 uses webhook only — no direct GHL REST API calls.
+Store GHL_WEBHOOK_URL in environment variables.
+Trigger a POST to GHL_WEBHOOK_URL on:
+
+New booking submitted
+PPF/paint correction quote request submitted
+Abandoned booking (customer reached Step 6 but did not confirm — fire after 30min)
+
+Webhook payload:
+json{
+  "event": "booking_created",
+  "customer": {
+    "name": "string",
+    "email": "string",
+    "phone": "string"
+  },
+  "vehicle": {
+    "type": "car|suv|truck|van",
+    "year": "string",
+    "make": "string",
+    "model": "string"
+  },
+  "booking": {
+    "service_category": "string",
+    "package": "string",
+    "addons": ["string"],
+    "total_estimate": 0,
+    "appointment_at": "ISO8601",
+    "notes": "string",
+    "is_quote_based": false
+  },
+  "tags": ["Detail|Summer Special|Ceramic|Tint|Paint Correction|PPF Quote|High Value Lead"],
+  "source": "vivid-app"
+}
+For PPF quote: "event": "ppf_quote_request" + add "coverage_option" field.
+For abandoned booking: "event": "booking_abandoned" + last step reached.
+
+Environment Variables
+Create a .env.local file with these keys. Do not hardcode any of these values.
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+GHL_WEBHOOK_URL=
+NEXT_PUBLIC_APP_URL=
+NEXT_PUBLIC_BUSINESS_PHONE=902-267-7775
+NEXT_PUBLIC_BUSINESS_EMAIL=contact@vividpei.com
+NEXT_PUBLIC_BUSINESS_ADDRESS=2-70 Nicholas Lane, Charlottetown, PE
+
+Build Priority
+Build in this exact sequence. Complete each layer before moving to the next.
+Phase 1 — Core (build first)
+
+Supabase schema (all tables above)
+Seed data — all services, service_prices, add_ons, add_on_prices
+Pricing utility /lib/pricing.ts — all rules, unit tested
+Vehicle selection + booking flow Steps 1–8
+GHL webhook integration
+Booking confirmation email (Supabase email or simple SMTP)
+
+Phase 2 — Customer layer
+7. Supabase Auth (magic link)
+8. Customer dashboard
+9. Loyalty tier logic
+10. "Rebook last service" flow
+Phase 3 — Experience layer
+11. Tint visualizer
+12. Before/after photo gallery
+13. Maintenance reminders
+Phase 4 — Admin layer
+14. Admin dashboard
+15. Summer Special toggle
+16. Vivid Ceramic Elite Guard price editor
+17. Revenue and add-on analytics
+Do not build Phase 3 or 4 before Phase 1 is working end-to-end.
+
+Hard Rules (enforce throughout — no exceptions)
+
+Do not include carbon tint, dyed tint, economy tint, tires, rust protection, or undercoating
+Do not recommend PPF anywhere in the app
+Do not show PPF on homepage hero
+Do not duplicate services — Vivid Interior LVP and Vivid Ceramic Glass exist once each
+Teal (#29B8D9) is the only accent color
+All pricing logic lives in /lib/pricing.ts — never in components
+Summer Special does not use vehicle multipliers
+Vivid Ceramic Glass ($129) and Windshield Ceramic ($89) are flat — no multipliers
+Vivid Ceramic Elite Guard shows "Pricing Available Upon Request" until admin confirms base price
+Intent buttons in Step 2 are UI routing only — not stored in the database
+Guests can book without an account
+GHL integration is webhook-only in V1

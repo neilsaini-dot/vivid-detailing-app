@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Vivid Detailing"
+version = "1.0.0"
+id = "artifacts/vivid-detailing"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19466
+
+[services.development]
+run = "pnpm --filter @workspace/vivid-detailing run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/vivid-detailing", "run", "build" ]
+publicDir = "artifacts/vivid-detailing/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19466"
+BASE_PATH = "/"

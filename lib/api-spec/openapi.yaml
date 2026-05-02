@@ -3,20 +3,27 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Vivid Detailing API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
-    description: Health operations
+  - name: services
+  - name: addons
+  - name: pricing
+  - name: bookings
+  - name: customers
+  - name: vehicles
+  - name: quotes
+  - name: admin
+  - name: analytics
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +31,627 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  # ─── Services ───────────────────────────────────────────────
+  /services:
+    get:
+      operationId: listServices
+      tags: [services]
+      summary: List all active services
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: goal
+          in: query
+          description: "Filter by intent goal: clean, protect, tint, paint, quote"
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+
+  /services/featured:
+    get:
+      operationId: listFeaturedServices
+      tags: [services]
+      summary: Featured and seasonal services for the homepage hero
+      responses:
+        "200":
+          description: Featured services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+
+  /services/{id}:
+    get:
+      operationId: getService
+      tags: [services]
+      summary: Get a single service
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+        "404":
+          description: Not found
+
+  # ─── Add-ons ─────────────────────────────────────────────────
+  /add-ons:
+    get:
+      operationId: listAddOns
+      tags: [addons]
+      summary: List all active add-ons
+      parameters:
+        - name: vehicleType
+          in: query
+          schema:
+            type: string
+            enum: [car, suv, truck, van]
+        - name: group
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: List of add-ons with pricing for vehicle type
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AddOn"
+
+  # ─── Pricing ─────────────────────────────────────────────────
+  /pricing/calculate:
+    post:
+      operationId: calculatePrice
+      tags: [pricing]
+      summary: Calculate total price for a cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PriceCalculateBody"
+      responses:
+        "200":
+          description: Price breakdown
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PriceResult"
+
+  # ─── Bookings ─────────────────────────────────────────────────
+  /bookings:
+    post:
+      operationId: createBooking
+      tags: [bookings]
+      summary: Create a new booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingBody"
+      responses:
+        "201":
+          description: Created booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/{id}:
+    get:
+      operationId: getBooking
+      tags: [bookings]
+      summary: Get a booking by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+        "404":
+          description: Not found
+    patch:
+      operationId: updateBooking
+      tags: [bookings]
+      summary: Update a booking (status, notes, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBookingBody"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /bookings/{id}/abandon:
+    post:
+      operationId: abandonBooking
+      tags: [bookings]
+      summary: Mark a booking as abandoned (triggers GHL webhook)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                lastStep:
+                  type: integer
+              required: [lastStep]
+      responses:
+        "200":
+          description: Booking abandoned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                required: [success]
+
+  # ─── Customers ─────────────────────────────────────────────────
+  /customers:
+    post:
+      operationId: upsertCustomer
+      tags: [customers]
+      summary: Create or find customer by email
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpsertCustomerBody"
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}:
+    get:
+      operationId: getCustomer
+      tags: [customers]
+      summary: Get customer profile
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /customers/{id}/vehicles:
+    get:
+      operationId: getCustomerVehicles
+      tags: [customers]
+      summary: Get all vehicles for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Vehicle"
+
+  /customers/{id}/bookings:
+    get:
+      operationId: getCustomerBookings
+      tags: [customers]
+      summary: Get all bookings for a customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+  /customers/{id}/loyalty:
+    get:
+      operationId: getCustomerLoyalty
+      tags: [customers]
+      summary: Get loyalty tier, progress, and lifetime spend
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Loyalty info
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoyaltyInfo"
+
+  /customers/{id}/dashboard:
+    get:
+      operationId: getCustomerDashboard
+      tags: [customers]
+      summary: Full customer dashboard summary (vehicles, bookings, loyalty, condition score)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Dashboard summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerDashboard"
+
+  # ─── Vehicles ─────────────────────────────────────────────────
+  /vehicles:
+    post:
+      operationId: createVehicle
+      tags: [vehicles]
+      summary: Create a vehicle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateVehicleBody"
+      responses:
+        "201":
+          description: Created vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  /vehicles/{id}:
+    get:
+      operationId: getVehicle
+      tags: [vehicles]
+      summary: Get a vehicle by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Vehicle
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Vehicle"
+
+  # ─── Quotes ─────────────────────────────────────────────────
+  /quotes:
+    post:
+      operationId: createQuoteRequest
+      tags: [quotes]
+      summary: Submit a quote request (paint correction / PPF / custom)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateQuoteBody"
+      responses:
+        "201":
+          description: Quote request created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteRequest"
+
+  # ─── Admin ─────────────────────────────────────────────────
+  /admin/services:
+    get:
+      operationId: adminListServices
+      tags: [admin]
+      summary: List all services (including inactive)
+      responses:
+        "200":
+          description: All services
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Service"
+
+  /admin/services/{id}:
+    patch:
+      operationId: adminUpdateService
+      tags: [admin]
+      summary: Update service (price, active state, description)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateServiceBody"
+      responses:
+        "200":
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Service"
+
+  /admin/add-ons:
+    get:
+      operationId: adminListAddOns
+      tags: [admin]
+      summary: List all add-ons (including inactive)
+      responses:
+        "200":
+          description: All add-ons
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AddOn"
+
+  /admin/add-ons/{id}:
+    patch:
+      operationId: adminUpdateAddOn
+      tags: [admin]
+      summary: Update add-on
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateAddOnBody"
+      responses:
+        "200":
+          description: Updated add-on
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AddOn"
+
+  /admin/bookings:
+    get:
+      operationId: adminListBookings
+      tags: [admin]
+      summary: List bookings with optional filters
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, confirmed, completed, cancelled]
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: serviceCategory
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Bookings list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Booking"
+
+  /admin/bookings/{id}:
+    patch:
+      operationId: adminUpdateBooking
+      tags: [admin]
+      summary: Update booking (confirm, complete, cancel, condition score, photos)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateBookingBody"
+      responses:
+        "200":
+          description: Updated booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
+
+  /admin/customers:
+    get:
+      operationId: adminListCustomers
+      tags: [admin]
+      summary: List all customers with GHL sync status
+      responses:
+        "200":
+          description: Customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Customer"
+
+  /admin/customers/{id}:
+    patch:
+      operationId: adminUpdateCustomer
+      tags: [admin]
+      summary: Update customer profile (condition score, photos, etc.)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminUpdateCustomerBody"
+      responses:
+        "200":
+          description: Updated customer
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
+  /admin/analytics:
+    get:
+      operationId: getAnalytics
+      tags: [analytics]
+      summary: Revenue by category + popular add-ons
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Analytics data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AnalyticsData"
+
+  /admin/seasonal-promos:
+    get:
+      operationId: listSeasonalPromos
+      tags: [admin]
+      summary: List seasonal promos
+      responses:
+        "200":
+          description: Promos
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SeasonalPromo"
+    patch:
+      operationId: updateSeasonalPromo
+      tags: [admin]
+      summary: Toggle or edit a seasonal promo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSeasonalPromoBody"
+      responses:
+        "200":
+          description: Updated promo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeasonalPromo"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +659,578 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    Service:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+        pricingRule:
+          type: string
+        basePrice:
+          type: number
+          nullable: true
+        isActive:
+          type: boolean
+        isSeasonal:
+          type: boolean
+        sortOrder:
+          type: integer
+        description:
+          type: string
+          nullable: true
+        includes:
+          type: array
+          items:
+            type: string
+        showInProtectionStep:
+          type: boolean
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePrice"
+      required: [id, name, category, pricingRule, isActive, isSeasonal, sortOrder, showInProtectionStep, includes, prices]
+
+    ServicePrice:
+      type: object
+      properties:
+        vehicleType:
+          type: string
+        price:
+          type: number
+      required: [vehicleType, price]
+
+    AddOn:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        categoryGroup:
+          type: string
+        isActive:
+          type: boolean
+        showInProtectionStep:
+          type: boolean
+        sortOrder:
+          type: integer
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePrice"
+      required: [id, name, categoryGroup, isActive, showInProtectionStep, sortOrder, prices]
+
+    PriceCalculateBody:
+      type: object
+      properties:
+        vehicleType:
+          type: string
+          enum: [car, suv, truck, van]
+        serviceIds:
+          type: array
+          items:
+            type: string
+        addOnIds:
+          type: array
+          items:
+            type: string
+      required: [vehicleType, serviceIds, addOnIds]
+
+    PriceResult:
+      type: object
+      properties:
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItem"
+        subtotal:
+          type: number
+        tax:
+          type: number
+        total:
+          type: number
+        hasQuoteItems:
+          type: boolean
+      required: [lineItems, subtotal, tax, total, hasQuoteItems]
+
+    LineItem:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        type:
+          type: string
+          enum: [service, addon, promo]
+        price:
+          type: number
+          nullable: true
+        isQuoteBased:
+          type: boolean
+      required: [id, name, type, isQuoteBased]
+
+    Booking:
+      type: object
+      properties:
+        id:
+          type: string
+        customerId:
+          type: string
+          nullable: true
+        vehicleId:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        appointmentAt:
+          type: string
+          nullable: true
+        totalEstimate:
+          type: number
+          nullable: true
+        depositPaid:
+          type: boolean
+        notes:
+          type: string
+          nullable: true
+        ghlContactId:
+          type: string
+          nullable: true
+        ghlOpportunityId:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/BookingItem"
+        customer:
+          $ref: "#/components/schemas/Customer"
+          nullable: true
+        vehicle:
+          $ref: "#/components/schemas/Vehicle"
+          nullable: true
+      required: [id, status, depositPaid, createdAt, items]
+
+    BookingItem:
+      type: object
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+        itemType:
+          type: string
+          enum: [service, addon, quote, promo]
+        itemName:
+          type: string
+        unitPrice:
+          type: number
+          nullable: true
+        quantity:
+          type: integer
+        isQuoteBased:
+          type: boolean
+      required: [id, bookingId, itemType, itemName, quantity, isQuoteBased]
+
+    CreateBookingBody:
+      type: object
+      properties:
+        customer:
+          $ref: "#/components/schemas/UpsertCustomerBody"
+        vehicle:
+          $ref: "#/components/schemas/CreateVehicleBody"
+        serviceIds:
+          type: array
+          items:
+            type: string
+        addOnIds:
+          type: array
+          items:
+            type: string
+        promoIds:
+          type: array
+          items:
+            type: string
+        appointmentAt:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        photoUrls:
+          type: array
+          items:
+            type: string
+        totalEstimate:
+          type: number
+          nullable: true
+      required: [customer, vehicle, serviceIds, addOnIds, promoIds]
+
+    UpdateBookingBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        appointmentAt:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        depositPaid:
+          type: boolean
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        ghlContactId:
+          type: string
+          nullable: true
+        ghlSyncStatus:
+          type: string
+          nullable: true
+        ghlLastSync:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required: [id, createdAt]
+
+    UpsertCustomerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+        phone:
+          type: string
+      required: [name, email, phone]
+
+    Vehicle:
+      type: object
+      properties:
+        id:
+          type: string
+        customerId:
+          type: string
+        type:
+          type: string
+          enum: [car, suv, truck, van]
+        year:
+          type: integer
+          nullable: true
+        make:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        colour:
+          type: string
+          nullable: true
+        licensePlate:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+      required: [id, customerId, type, createdAt]
+
+    CreateVehicleBody:
+      type: object
+      properties:
+        customerId:
+          type: string
+          nullable: true
+        type:
+          type: string
+          enum: [car, suv, truck, van]
+        year:
+          type: integer
+          nullable: true
+        make:
+          type: string
+          nullable: true
+        model:
+          type: string
+          nullable: true
+        colour:
+          type: string
+          nullable: true
+        licensePlate:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+      required: [type]
+
+    LoyaltyInfo:
+      type: object
+      properties:
+        tier:
+          type: string
+          enum: [Silver, Black, Elite]
+        lifetimeSpend:
+          type: number
+        nextTierName:
+          type: string
+          nullable: true
+        nextTierThreshold:
+          type: number
+          nullable: true
+        progressPercent:
+          type: number
+      required: [tier, lifetimeSpend, progressPercent]
+
+    CustomerDashboard:
+      type: object
+      properties:
+        customer:
+          $ref: "#/components/schemas/Customer"
+        vehicles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vehicle"
+        upcomingBooking:
+          $ref: "#/components/schemas/Booking"
+          nullable: true
+        recentBookings:
+          type: array
+          items:
+            $ref: "#/components/schemas/Booking"
+        loyalty:
+          $ref: "#/components/schemas/LoyaltyInfo"
+        conditionScore:
+          type: integer
+          nullable: true
+        maintenanceDue:
+          type: boolean
+        lastCompletedAt:
+          type: string
+          nullable: true
+      required: [customer, vehicles, recentBookings, loyalty, maintenanceDue]
+
+    QuoteRequest:
+      type: object
+      properties:
+        id:
+          type: string
+        customerId:
+          type: string
+          nullable: true
+        vehicleId:
+          type: string
+          nullable: true
+        serviceType:
+          type: string
+        coverageOption:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        photoUrls:
+          type: array
+          items:
+            type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+      required: [id, serviceType, status, createdAt, photoUrls]
+
+    CreateQuoteBody:
+      type: object
+      properties:
+        customer:
+          $ref: "#/components/schemas/UpsertCustomerBody"
+        vehicle:
+          $ref: "#/components/schemas/CreateVehicleBody"
+        serviceType:
+          type: string
+        coverageOption:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        photoUrls:
+          type: array
+          items:
+            type: string
+      required: [customer, vehicle, serviceType]
+
+    AdminUpdateServiceBody:
+      type: object
+      properties:
+        name:
+          type: string
+        description:
+          type: string
+        isActive:
+          type: boolean
+        isSeasonal:
+          type: boolean
+        basePrice:
+          type: number
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePrice"
+        includes:
+          type: array
+          items:
+            type: string
+
+    AdminUpdateAddOnBody:
+      type: object
+      properties:
+        name:
+          type: string
+        isActive:
+          type: boolean
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePrice"
+
+    AdminUpdateBookingBody:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, confirmed, completed, cancelled]
+        appointmentAt:
+          type: string
+        notes:
+          type: string
+        conditionScore:
+          type: integer
+        beforePhotoUrls:
+          type: array
+          items:
+            type: string
+        afterPhotoUrls:
+          type: array
+          items:
+            type: string
+
+    AdminUpdateCustomerBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        conditionScore:
+          type: integer
+
+    AnalyticsData:
+      type: object
+      properties:
+        revenueByCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/RevenueStat"
+        popularAddOns:
+          type: array
+          items:
+            $ref: "#/components/schemas/AddOnStat"
+        totalRevenue:
+          type: number
+        totalBookings:
+          type: integer
+        completedBookings:
+          type: integer
+        pendingBookings:
+          type: integer
+      required: [revenueByCategory, popularAddOns, totalRevenue, totalBookings, completedBookings, pendingBookings]
+
+    RevenueStat:
+      type: object
+      properties:
+        category:
+          type: string
+        revenue:
+          type: number
+        bookingCount:
+          type: integer
+      required: [category, revenue, bookingCount]
+
+    AddOnStat:
+      type: object
+      properties:
+        name:
+          type: string
+        count:
+          type: integer
+        revenue:
+          type: number
+      required: [name, count, revenue]
+
+    SeasonalPromo:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        basePrice:
+          type: number
+        isActive:
+          type: boolean
+        validFrom:
+          type: string
+          nullable: true
+        validTo:
+          type: string
+          nullable: true
+        description:
+          type: string
+          nullable: true
+        includes:
+          type: array
+          items:
+            type: string
+      required: [id, name, basePrice, isActive, includes]
+
+    UpdateSeasonalPromoBody:
+      type: object
+      properties:
+        id:
+          type: string
+        isActive:
+          type: boolean
+        basePrice:
+          type: number
+        name:
+          type: string
+        description:
+          type: string
+      required: [id]

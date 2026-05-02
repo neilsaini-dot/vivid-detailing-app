@@ -27,6 +27,8 @@ import {
   UpdateSeasonalPromoBody,
 } from "@workspace/api-zod";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
+import { sendGhlBookingConfirmed } from "../lib/ghl";
+import { createCalendarEvent } from "../lib/googleCalendar";
 
 const router = Router();
 
@@ -274,6 +276,102 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     res.json(formatBooking({ ...updated, items, customer: null, vehicle: null }));
   } catch (err) {
     req.log.error({ err }, "Failed to update admin booking");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/bookings/:id/resync — re-fires GHL webhook + calendar event
+router.post("/admin/bookings/:id/resync", async (req, res) => {
+  try {
+    const { id } = AdminUpdateBookingParams.parse(req.params);
+
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, id));
+    if (!booking) return res.status(404).json({ error: "Not found" });
+
+    const items = await db
+      .select()
+      .from(bookingItemsTable)
+      .where(eq(bookingItemsTable.bookingId, id));
+
+    const customer = booking.customerId
+      ? (await db.select().from(customersTable).where(eq(customersTable.id, booking.customerId)))[0]
+      : null;
+    const vehicle = booking.vehicleId
+      ? (await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId)))[0]
+      : null;
+
+    const serviceItems = items.filter((i) => i.itemType === "service");
+    const addonItems = items.filter((i) => i.itemType === "addon");
+    const serviceNames = serviceItems.map((i) => i.itemName);
+    const addonNames = addonItems.map((i) => i.itemName);
+    const total = Number(booking.totalEstimate ?? 0);
+    const hasQuote = items.some((i) => i.isQuoteBased);
+
+    const vehicleLabel = vehicle
+      ? [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.type
+      : "Vehicle";
+
+    const [firstName, ...rest] = (customer?.name ?? "Guest").trim().split(" ");
+    const lastName = rest.join(" ") || "";
+
+    const calendarDescription = [
+      `Customer: ${customer?.name ?? ""} | ${customer?.phone ?? ""} | ${customer?.email ?? ""}`,
+      `Vehicle: ${vehicleLabel}`,
+      `Services: ${serviceNames.join(", ") || "N/A"}`,
+      addonNames.length > 0 ? `Add-ons: ${addonNames.join(", ")}` : null,
+      `Estimated Total (incl. HST): $${total.toFixed(2)}`,
+      booking.notes ? `Notes: ${booking.notes}` : null,
+      `Booking ID: ${booking.id}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const durationHours = Math.min(2 + Math.max(0, serviceNames.length - 1), 6);
+
+    await sendGhlBookingConfirmed({
+      event: "booking_confirmed",
+      contact: {
+        firstName,
+        lastName,
+        email: customer?.email ?? "",
+        phone: customer?.phone ?? "",
+        tags: ["Booking", "Vivid Detailing", "Resync", ...serviceNames],
+      },
+      opportunity: {
+        title: `${serviceNames[0] ?? "Detailing"} - ${vehicleLabel}`,
+        status: "won",
+        monetaryValue: total,
+        pipelineStageName: "Won",
+        notes: calendarDescription,
+      },
+      booking: {
+        id: booking.id,
+        services: serviceNames,
+        addons: addonNames,
+        vehicle: vehicleLabel,
+        appointment_at: booking.appointmentAt?.toISOString() ?? null,
+        total_estimate: total,
+        is_quote_based: hasQuote,
+        notes: booking.notes ?? null,
+      },
+      source: "vivid-app",
+    });
+
+    if (booking.appointmentAt) {
+      await createCalendarEvent({
+        summary: `Vivid Detailing - ${customer?.name ?? "Customer"} - ${serviceNames.join(", ") || "Appointment"}`,
+        description: calendarDescription,
+        startIso: booking.appointmentAt.toISOString(),
+        durationHours,
+      });
+    }
+
+    res.json({ success: true, resynced: { ghl: true, calendar: !!booking.appointmentAt } });
+  } catch (err) {
+    req.log.error({ err }, "Failed to resync booking");
     res.status(500).json({ error: "Internal server error" });
   }
 });

@@ -161,6 +161,7 @@ export default function BookingFlow() {
   const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
   const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false });
   const [recsApplied, setRecsApplied] = useState(false);
+  const [totalFlash, setTotalFlash] = useState(false);
 
   const { data: services = [] } = useListServices(
     state.intent ? { goal: state.intent } : {}
@@ -192,6 +193,15 @@ export default function BookingFlow() {
       setCurrentPricing(null);
     }
   }, [state.vehicle.type, state.serviceIds, state.addOnIds]);
+
+  // Flash effect when total changes
+  useEffect(() => {
+    if (currentPricing?.total) {
+      setTotalFlash(true);
+      const t = setTimeout(() => setTotalFlash(false), 700);
+      return () => clearTimeout(t);
+    }
+  }, [currentPricing?.total]);
 
   // Derived: service scope determines which add-on groups to display
   const selectedServiceNames = (services as any[])
@@ -825,10 +835,32 @@ export default function BookingFlow() {
                 </div>
               ))}
             </div>
-            <div className="border-t border-border pt-3 space-y-1.5">
+            <div className={`border-t pt-3 space-y-1.5 transition-colors duration-300 ${totalFlash ? "border-primary/50" : "border-border"}`}>
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>${currentPricing?.subtotal?.toFixed(2) ?? "0.00"}</span></div>
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">HST (15%)</span><span>${currentPricing?.tax?.toFixed(2) ?? "0.00"}</span></div>
-              <div className="flex justify-between font-bold text-lg pt-1"><span>Total</span><span className="text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</span></div>
+              <div className="flex justify-between font-bold text-lg pt-1 items-center">
+                <span>Total</span>
+                <AnimatePresence mode="popLayout">
+                  <motion.span
+                    key={currentPricing?.total ?? 0}
+                    initial={{ opacity: 0, scale: 0.85 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.85 }}
+                    transition={{ type: "spring", stiffness: 500, damping: 28 }}
+                    className={`text-primary tabular-nums transition-colors duration-300 ${totalFlash ? "drop-shadow-[0_0_8px_rgba(41,184,217,0.6)]" : ""}`}
+                  >
+                    ${currentPricing?.total?.toFixed(2) ?? "0.00"}
+                  </motion.span>
+                </AnimatePresence>
+              </div>
+              {step >= 3 && step <= 5 && (state.serviceIds.length > 0 || state.addOnIds.length > 0) && (
+                <p className="text-[10px] text-muted-foreground pt-0.5">
+                  {[
+                    state.serviceIds.length > 0 ? `${state.serviceIds.length} service${state.serviceIds.length !== 1 ? "s" : ""}` : null,
+                    state.addOnIds.length > 0 ? `${state.addOnIds.length} add-on${state.addOnIds.length !== 1 ? "s" : ""}` : null,
+                  ].filter(Boolean).join(" · ")} selected
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -836,14 +868,48 @@ export default function BookingFlow() {
 
       {/* Mobile sticky bar */}
       {step > 2 && step < 8 && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 z-50 flex justify-between items-center">
-          <div>
-            <p className="text-xs text-muted-foreground">Estimated Total</p>
-            <p className="text-lg font-bold text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</p>
+        <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t z-50 transition-colors duration-300 ${totalFlash && step >= 3 && step <= 5 ? "border-primary/60" : "border-border"}`}>
+          <div className="flex justify-between items-center p-4 gap-4">
+            <div className="min-w-0">
+              {step >= 3 && step <= 5 && (state.serviceIds.length > 0 || state.addOnIds.length > 0) ? (
+                <>
+                  <p className="text-[11px] text-muted-foreground leading-tight truncate">
+                    {[
+                      state.serviceIds.length > 0 ? `${state.serviceIds.length} service${state.serviceIds.length !== 1 ? "s" : ""}` : null,
+                      state.addOnIds.length > 0 ? `${state.addOnIds.length} add-on${state.addOnIds.length !== 1 ? "s" : ""}` : null,
+                    ].filter(Boolean).join(" · ")}
+                  </p>
+                  <div className="flex items-baseline gap-1.5">
+                    <AnimatePresence mode="popLayout">
+                      <motion.span
+                        key={currentPricing?.total ?? 0}
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: 8 }}
+                        transition={{ type: "spring", stiffness: 500, damping: 30 }}
+                        className="text-xl font-bold text-primary tabular-nums"
+                      >
+                        ${currentPricing?.total?.toFixed(2) ?? "0.00"}
+                      </motion.span>
+                    </AnimatePresence>
+                    <span className="text-[10px] text-muted-foreground">incl. HST</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-xs text-muted-foreground">Estimated Total</p>
+                  <p className="text-lg font-bold text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</p>
+                </>
+              )}
+            </div>
+            <Button
+              className="bg-primary text-primary-foreground shrink-0"
+              onClick={step === 7 ? handleSubmit : () => go(1)}
+              disabled={!canNext}
+            >
+              {step === 7 ? "Confirm" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
+            </Button>
           </div>
-          <Button className="bg-primary text-primary-foreground" onClick={step === 7 ? handleSubmit : () => go(1)} disabled={!canNext}>
-            {step === 7 ? "Confirm" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
-          </Button>
         </div>
       )}
     </div>

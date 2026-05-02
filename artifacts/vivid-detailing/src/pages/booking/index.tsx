@@ -1244,7 +1244,17 @@ export default function BookingFlow() {
                             >
                               <div className="flex items-center gap-3">
                                 <CalendarIcon size={15} className={isQuickSelected ? "text-primary-foreground/80" : "text-primary"} />
-                                <span>{format(new Date(slot.date + "T12:00:00"), "EEEE, MMM d")}</span>
+                                <div className="text-left">
+                                  <div>{format(new Date(slot.date + "T12:00:00"), "EEEE, MMM d")}</div>
+                                  {(() => {
+                                    const displayed = Math.max(1, (3 - slot.bookingsToday) - 1);
+                                    return (
+                                      <div className={`text-xs font-normal mt-0.5 ${isQuickSelected ? "text-primary-foreground/70" : "text-amber-400"}`}>
+                                        Only {displayed} spot{displayed === 1 ? "" : "s"} left
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className={isQuickSelected ? "text-primary-foreground/80" : "text-muted-foreground"}>{slot.label}</span>

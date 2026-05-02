@@ -410,7 +410,7 @@ router.post("/bookings/:id/abandon", async (req, res) => {
   }
 });
 
-// POST /api/bookings/:id/magic-link — fires a GHL workflow to email the customer a login link
+// POST /api/bookings/:id/magic-link — fires the dedicated GHL magic-link webhook
 router.post("/bookings/:id/magic-link", async (req, res) => {
   try {
     const { id } = req.params;
@@ -421,23 +421,40 @@ router.post("/bookings/:id/magic-link", async (req, res) => {
       ? (await db.select().from(customersTable).where(eq(customersTable.id, booking.customerId)))[0]
       : null;
 
-    sendGhlWebhook({
+    const magicLinkUrl = process.env.GHL_MAGIC_LINK_WEBHOOK_URL;
+    if (!magicLinkUrl) {
+      req.log.warn("GHL_MAGIC_LINK_WEBHOOK_URL not configured");
+      return res.status(500).json({ error: "Magic link webhook not configured" });
+    }
+
+    const payload = {
       event: "magic_link_requested",
-      customer: { name: customer?.name ?? "", email: customer?.email ?? "", phone: customer?.phone ?? "" },
-      vehicle: { type: "car" },
+      customer: {
+        name: customer?.name ?? "",
+        email: customer?.email ?? "",
+        phone: customer?.phone ?? "",
+      },
       booking: {
-        service_category: "",
-        package: "Magic Link",
-        addons: [],
-        total_estimate: Number(booking.totalEstimate ?? 0),
+        id,
         appointment_at: formatAppointment(booking.appointmentAt?.toISOString()),
-        notes: null,
-        is_quote_based: false,
+        total_estimate: Number(booking.totalEstimate ?? 0),
       },
       tags: ["Magic Link Requested"],
       source: "vivid-app",
-    }).catch(() => {});
+    };
 
+    const ghRes = await fetch(magicLinkUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!ghRes.ok) {
+      req.log.warn({ status: ghRes.status }, "GHL magic-link webhook returned non-200");
+      return res.status(502).json({ error: "GHL webhook failed" });
+    }
+
+    req.log.info({ bookingId: id }, "Magic link webhook sent");
     res.json({ success: true });
   } catch (err) {
     req.log.error({ err }, "Failed to send magic link");

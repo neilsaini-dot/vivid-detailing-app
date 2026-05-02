@@ -221,7 +221,7 @@ export default function BookingFlow() {
   const [currentPricing, setCurrentPricing] = useState<any>(null);
 
   const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
-  const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false });
+  const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false, email: false });
   const [totalFlash, setTotalFlash] = useState(false);
 
   const { data: services = [] } = useListServices(
@@ -319,6 +319,7 @@ export default function BookingFlow() {
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
   const isValidPhone = (p: string) => p.replace(/\D/g, "").length === 10;
+  const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim());
 
   const formatPhone = (raw: string) => {
     const digits = raw.replace(/\D/g, "").slice(0, 10);
@@ -403,7 +404,7 @@ export default function BookingFlow() {
     (step === 4) ||
     (step === 5) ||
     (step === 6) ||
-    (step === 7 && !!state.appointmentAt && !!state.timeSlot && !!state.customer.email);
+    (step === 7 && !!state.appointmentAt && !!state.timeSlot && isValidEmail(state.customer.email));
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background flex flex-col md:flex-row">
@@ -1020,9 +1021,19 @@ export default function BookingFlow() {
                       </div>
                       <div className="space-y-2">
                         <Label>Email</Label>
-                        <Input type="email" placeholder="jane@example.com"
+                        <Input
+                          type="email"
+                          placeholder="jane@example.com"
+                          className={touched.email && !isValidEmail(state.customer.email) ? "border-destructive focus-visible:ring-destructive" : ""}
                           value={state.customer.email}
-                          onChange={e => updateCustomer({ email: e.target.value })} />
+                          onChange={e => updateCustomer({ email: e.target.value })}
+                          onBlur={() => setTouched(t => ({ ...t, email: true }))}
+                        />
+                        {touched.email && !isValidEmail(state.customer.email) && (
+                          <p className="text-xs text-destructive">
+                            {state.customer.email ? "Please enter a valid email address" : "Please enter your email address"}
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>Notes (Optional)</Label>

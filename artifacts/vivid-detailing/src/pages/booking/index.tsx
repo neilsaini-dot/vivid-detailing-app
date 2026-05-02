@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Droplet, Sun, Shield, Settings,
-  ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Plus, Check, CalendarIcon, Info, User, Phone, Clock
+  ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Plus, Check, CalendarIcon, Info, User, Phone, Clock, X
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -1029,7 +1029,25 @@ export default function BookingFlow() {
                                   ) : null;
                                 })()}
                                 {selected
-                                  ? <div className="mt-1.5 flex items-center justify-end gap-1 text-primary text-xs font-semibold"><Check size={12} />Selected</div>
+                                  ? (
+                                    <div className="mt-1.5 flex items-center justify-end">
+                                      <span className="inline-flex items-center gap-1 pl-2 pr-1 py-0.5 rounded-full bg-primary/15 border border-primary/40 text-primary text-xs font-semibold">
+                                        <Check size={11} />Selected
+                                        <button
+                                          type="button"
+                                          aria-label="Remove service"
+                                          onClick={e => {
+                                            e.stopPropagation();
+                                            if (isPc) clearPcForm(svc.id);
+                                            else toggleServiceInGroup(svc.id, groupIntent);
+                                          }}
+                                          className="ml-0.5 flex items-center justify-center w-4 h-4 rounded-full hover:bg-destructive/20 hover:text-destructive transition-colors"
+                                        >
+                                          <X size={10} />
+                                        </button>
+                                      </span>
+                                    </div>
+                                  )
                                   : isPc
                                     ? <div className="mt-1.5 text-xs text-primary font-medium">{pcFormOpen ? "▲ Hide details" : "▼ Add details"}</div>
                                     : <div className="mt-1.5 text-xs text-muted-foreground">Tap to select</div>

@@ -381,6 +381,35 @@ export default function BookingFlow() {
     { query: { enabled: step === 7 } }
   );
 
+  // ── Slot hold countdown (10 min) ──────────────────────────────────────────
+  const [slotSecondsLeft, setSlotSecondsLeft] = useState<number>(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const slotExpiresRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (state.timeSlot) {
+      slotExpiresRef.current = Date.now() + 10 * 60 * 1000;
+      setSlotSecondsLeft(10 * 60);
+      if (timerRef.current) clearInterval(timerRef.current);
+      timerRef.current = setInterval(() => {
+        const remaining = Math.max(0, Math.round((slotExpiresRef.current! - Date.now()) / 1000));
+        setSlotSecondsLeft(remaining);
+        if (remaining === 0) {
+          clearInterval(timerRef.current!);
+          timerRef.current = null;
+          slotExpiresRef.current = null;
+          setState(s => ({ ...s, timeSlot: undefined, appointmentAt: undefined }));
+        }
+      }, 1000);
+    } else {
+      if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      slotExpiresRef.current = null;
+      setSlotSecondsLeft(0);
+    }
+    return () => { if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; } };
+  }, [state.timeSlot]);
+
+  const fmtCountdown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
@@ -1267,6 +1296,23 @@ export default function BookingFlow() {
                     ) : !nextSlotsFetching ? (
                       <p className="text-sm text-muted-foreground py-4 text-center">No upcoming availability found. Try choosing a date below.</p>
                     ) : null}
+
+                    {/* ── Slot hold countdown banner ── */}
+                    {state.timeSlot && slotSecondsLeft > 0 && (
+                      <div className={`flex items-center justify-between px-4 py-2.5 rounded-lg border text-sm transition-colors ${
+                        slotSecondsLeft < 60
+                          ? "border-red-500/40 bg-red-500/10 text-red-400"
+                          : slotSecondsLeft < 180
+                          ? "border-amber-400/40 bg-amber-400/10 text-amber-400"
+                          : "border-primary/30 bg-primary/10 text-primary"
+                      }`}>
+                        <div className="flex items-center gap-2">
+                          <Clock size={14} />
+                          <span>Your slot is held for</span>
+                        </div>
+                        <span className="font-mono font-semibold tracking-wider">{fmtCountdown(slotSecondsLeft)}</span>
+                      </div>
+                    )}
 
                     {/* Toggle to custom date picker */}
                     <button

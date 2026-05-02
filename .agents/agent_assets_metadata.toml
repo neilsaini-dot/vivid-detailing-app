@@ -6,3 +6,9 @@ id = "anxoiSzCWV1b8GWNHXM5L"
 uri = "file://artifacts/vivid-detailing/public/tint-car.png"
 type = "image"
 title = "car side window close up"
+
+[[generated]]
+id = "ZsNd9e56JJ9SsLIFuEKhy"
+uri = "file://artifacts/vivid-detailing/public/tint-car-dark.png"
+type = "image"
+title = "car dark 5pct limo tint"

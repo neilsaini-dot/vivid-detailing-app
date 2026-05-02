@@ -5,58 +5,33 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
 const VLT_LEVELS = [
-  { vlt: 5,  label: "5% — Limo",        desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
-  { vlt: 15, label: "15% — Very Dark",  desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
-  { vlt: 25, label: "25% — Dark",       desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
-  { vlt: 35, label: "35% — Medium",     desc: ["Good balance of privacy and visibility", "Elegant, understated finish", "Popular all-around choice"] },
-  { vlt: 50, label: "50% — Light",      desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
+  { vlt: 5,  label: "5% — Limo",       desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
+  { vlt: 15, label: "15% — Very Dark", desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
+  { vlt: 25, label: "25% — Dark",      desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
+  { vlt: 35, label: "35% — Medium",    desc: ["Good balance of privacy and visibility", "Elegant, understated finish", "Popular all-around choice"] },
+  { vlt: 50, label: "50% — Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
 ];
 
-const VLT_OPACITY: Record<number, number> = {
-  5: 0.83, 15: 0.65, 25: 0.47, 35: 0.28, 50: 0.10,
-};
-
 /*
-  SVG viewBox "0 0 100 56.25" — polygons re-traced from actual photo pixels.
-  Image is 16:9. Glass area sits between y≈15 (inside chrome trim) and y≈34 (sill).
-  Sky and roof panel are above y≈15 and are NOT covered.
-  Front glass:   x 4–43,  Rear glass: x 46–79,  Quarter: x 80–92
+  Multiply blend mode naturally darkens bright areas (glass) far more than
+  dark areas (car body/pillars), so no polygon masking is needed.
+  These opacity values are tuned so 5% feels nearly opaque and 50% is subtle.
 */
-const WINDOW_PATHS = {
-  front:   "4,15.5 43,15.2 43,34.2 4.5,34.5",
-  rear:    "46,15.2 79,15.5 79,34.2 46,34.2",
-  quarter: "80,17.0 92,19.5 92,34.2 80,34.2",
+const VLT_OPACITY: Record<number, number> = {
+  5: 0.92, 15: 0.76, 25: 0.58, 35: 0.38, 50: 0.15,
 };
 
-function TintSVG({ opacity }: { opacity: number }) {
-  return (
-    <svg
-      className="absolute inset-0 w-full h-full pointer-events-none"
-      viewBox="0 0 100 56.25"
-      preserveAspectRatio="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <defs>
-        <linearGradient id="tintGrad2" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#03090F" />
-          <stop offset="100%" stopColor="#060F1E" />
-        </linearGradient>
-      </defs>
-      <polygon points={WINDOW_PATHS.front}   fill="url(#tintGrad2)" opacity={opacity} />
-      <polygon points={WINDOW_PATHS.rear}    fill="url(#tintGrad2)" opacity={opacity} />
-      <polygon points={WINDOW_PATHS.quarter} fill="url(#tintGrad2)" opacity={opacity} />
-    </svg>
-  );
-}
+const SWATCH_COLOR = (opacity: number) =>
+  `rgba(8,12,20,${opacity})`;
 
 export default function TintVisualizer() {
   const [vlt, setVlt] = useState<number>(35);
-  const [splitPos, setSplitPos] = useState<number>(50); // 0–100 %
+  const [splitPos, setSplitPos] = useState<number>(50);
   const [dragging, setDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const currentLevel = VLT_LEVELS.find((l) => l.vlt === vlt) ?? VLT_LEVELS[3];
-  const opacity = VLT_OPACITY[vlt] ?? 0.28;
+  const opacity = VLT_OPACITY[vlt] ?? 0.38;
 
   const updateSplit = useCallback((clientX: number) => {
     if (!containerRef.current) return;
@@ -85,7 +60,7 @@ export default function TintVisualizer() {
         </p>
       </div>
 
-      {/* Before / After Reveal — full width */}
+      {/* Before / After Reveal */}
       <div
         ref={containerRef}
         className="relative aspect-video rounded-xl border border-border overflow-hidden bg-black shadow-xl shadow-black/50 mb-5 select-none"
@@ -98,27 +73,52 @@ export default function TintVisualizer() {
       >
         {/* ── BEFORE (clear glass) — always full width beneath ── */}
         <div className="absolute inset-0">
-          <img src="/tint-car.png" alt="Clear glass" className="w-full h-full object-cover" draggable={false} />
+          <img
+            src="/tint-car.png"
+            alt="Clear windows"
+            className="absolute inset-0 w-full h-full object-cover"
+            draggable={false}
+          />
         </div>
 
-        {/* ── AFTER (tinted glass) — clipped to right of divider ── */}
+        {/* ── AFTER (tinted) — clipped to right of divider ── */}
         <div
           className="absolute inset-0"
           style={{ clipPath: `inset(0 0 0 ${splitPos}%)` }}
         >
-          <img src="/tint-car.png" alt="Tinted glass" className="w-full h-full object-cover" draggable={false} />
-          <TintSVG opacity={opacity} />
+          {/* Same base car photo */}
+          <img
+            src="/tint-car.png"
+            alt="Tinted windows"
+            className="absolute inset-0 w-full h-full object-cover"
+            draggable={false}
+          />
+          {/*
+            Dark overlay with multiply blend mode.
+            Multiply darkens bright pixels (the glass/sky) much more than
+            dark pixels (the car body), so only the glass noticeably changes.
+            No polygon coordinates or masks needed.
+          */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "rgb(6, 10, 18)",
+              mixBlendMode: "multiply",
+              opacity,
+              transition: "opacity 0.3s ease",
+            }}
+          />
         </div>
 
         {/* ── Divider line ── */}
         <div
-          className="absolute top-0 bottom-0 w-px bg-white/80 shadow-[0_0_8px_rgba(255,255,255,0.6)]"
+          className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.7)]"
           style={{ left: `${splitPos}%` }}
         />
 
-        {/* ── Drag handle circle ── */}
+        {/* ── Drag handle ── */}
         <div
-          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-lg shadow-black/40 cursor-col-resize"
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-lg shadow-black/50 cursor-col-resize"
           style={{ left: `${splitPos}%` }}
           onMouseDown={(e) => { e.preventDefault(); setDragging(true); }}
           onTouchStart={(e) => { e.preventDefault(); setDragging(true); }}
@@ -127,16 +127,16 @@ export default function TintVisualizer() {
           <ChevronRight size={14} className="text-gray-700 -ml-0.5" />
         </div>
 
-        {/* ── Before / After labels ── */}
+        {/* ── Labels ── */}
         <div
-          className="absolute top-3 text-xs font-bold text-white bg-black/55 backdrop-blur-sm rounded-full px-3 py-1 tracking-widest pointer-events-none transition-opacity"
-          style={{ left: "12px", opacity: splitPos > 15 ? 1 : 0 }}
+          className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-white tracking-widest pointer-events-none transition-opacity duration-200"
+          style={{ opacity: splitPos > 15 ? 1 : 0 }}
         >
           BEFORE
         </div>
         <div
-          className="absolute top-3 text-xs font-bold text-white bg-black/55 backdrop-blur-sm rounded-full px-3 py-1 tracking-widest pointer-events-none transition-opacity"
-          style={{ right: "12px", opacity: splitPos < 85 ? 1 : 0 }}
+          className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-white tracking-widest pointer-events-none transition-opacity duration-200"
+          style={{ opacity: splitPos < 85 ? 1 : 0 }}
         >
           {vlt}% VLT
         </div>
@@ -147,7 +147,7 @@ export default function TintVisualizer() {
         </div>
       </div>
 
-      {/* VLT selector row */}
+      {/* VLT selector swatches */}
       <div className="flex items-center justify-center gap-2 mb-10">
         {VLT_LEVELS.map((l) => (
           <button
@@ -161,7 +161,7 @@ export default function TintVisualizer() {
           >
             <span
               className="w-8 h-5 rounded border border-white/10"
-              style={{ background: `rgba(3,9,15,${VLT_OPACITY[l.vlt]})` }}
+              style={{ background: SWATCH_COLOR(VLT_OPACITY[l.vlt]) }}
             />
             {l.vlt}%
           </button>
@@ -181,7 +181,6 @@ export default function TintVisualizer() {
             ))}
           </CardContent>
         </Card>
-
         <Card className="bg-card border-border flex flex-col justify-between">
           <CardContent className="pt-6 space-y-4">
             <p className="text-sm text-muted-foreground">

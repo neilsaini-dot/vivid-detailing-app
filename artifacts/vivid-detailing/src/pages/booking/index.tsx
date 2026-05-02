@@ -318,9 +318,18 @@ export default function BookingFlow() {
 
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
+  const isValidPhone = (p: string) => p.replace(/\D/g, "").length === 10;
+
+  const formatPhone = (raw: string) => {
+    const digits = raw.replace(/\D/g, "").slice(0, 10);
+    if (digits.length <= 3) return digits;
+    if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+    return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+  };
+
   const handleStep1Continue = async () => {
     setTouched({ name: true, phone: true, yearMakeModel: true });
-    if (!state.customer.name || !state.customer.phone || !state.vehicleTypeSelected || !state.vehicle.yearMakeModel) return;
+    if (!state.customer.name || !isValidPhone(state.customer.phone) || !state.vehicleTypeSelected || !state.vehicle.yearMakeModel) return;
     if (!capturedLeadId) {
       try {
         const result = await captureLead.mutateAsync({
@@ -388,7 +397,7 @@ export default function BookingFlow() {
   };
 
   const canNext =
-    (step === 1 && !!state.customer.name && !!state.customer.phone && state.vehicleTypeSelected && !!state.vehicle.yearMakeModel) ||
+    (step === 1 && !!state.customer.name && isValidPhone(state.customer.phone) && state.vehicleTypeSelected && !!state.vehicle.yearMakeModel) ||
     (step === 2 && !!state.intent) ||
     (step === 3 && (state.serviceIds.length > 0 || (state.intent === "protect" && state.addOnIds.length > 0))) ||
     (step === 4) ||
@@ -452,15 +461,17 @@ export default function BookingFlow() {
                         <Input
                           id="phone"
                           type="tel"
-                          className={`pl-9 ${touched.phone && !state.customer.phone ? "border-destructive focus-visible:ring-destructive" : ""}`}
+                          className={`pl-9 ${touched.phone && !isValidPhone(state.customer.phone) ? "border-destructive focus-visible:ring-destructive" : ""}`}
                           placeholder="902-555-1234"
                           value={state.customer.phone}
-                          onChange={e => updateCustomer({ phone: e.target.value })}
+                          onChange={e => updateCustomer({ phone: formatPhone(e.target.value) })}
                           onBlur={() => setTouched(t => ({ ...t, phone: true }))}
                         />
                       </div>
-                      {touched.phone && !state.customer.phone && (
-                        <p className="text-xs text-destructive">Please enter your phone number</p>
+                      {touched.phone && !isValidPhone(state.customer.phone) && (
+                        <p className="text-xs text-destructive">
+                          {state.customer.phone ? "Please enter a valid 10-digit phone number" : "Please enter your phone number"}
+                        </p>
                       )}
                     </div>
                   </div>

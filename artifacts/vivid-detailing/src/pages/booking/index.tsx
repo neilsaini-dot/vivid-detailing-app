@@ -31,6 +31,7 @@ type Intent = "clean" | "protect" | "tint" | "paint" | "quote";
 interface BookingState {
   customer: { name: string; email: string; phone: string; };
   vehicle: { type: VehicleType; yearMakeModel: string; colour: string; };
+  vehicleTypeSelected: boolean;
   intent?: Intent;
   serviceIds: string[];
   addOnIds: string[];
@@ -44,6 +45,7 @@ interface BookingState {
 const initialState: BookingState = {
   customer: { name: "", email: "", phone: "" },
   vehicle: { type: "car", yearMakeModel: "", colour: "" },
+  vehicleTypeSelected: false,
   serviceIds: [], addOnIds: [], promoIds: [],
   notes: "", depositPaid: false,
 };
@@ -220,7 +222,7 @@ export default function BookingFlow() {
   };
 
   const canNext =
-    (step === 1 && !!state.customer.name && !!state.customer.phone) ||
+    (step === 1 && !!state.customer.name && !!state.customer.phone && state.vehicleTypeSelected && !!state.vehicle.yearMakeModel) ||
     (step === 2 && !!state.intent) ||
     (step === 3 && (state.serviceIds.length > 0 || state.promoIds.length > 0)) ||
     (step === 4) ||
@@ -301,16 +303,16 @@ export default function BookingFlow() {
                       ]).map(({ type: t, label, img }) => (
                         <Card
                           key={t}
-                          className={`cursor-pointer transition-all ${state.vehicle.type === t ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/50"}`}
-                          onClick={() => updateVehicle({ type: t })}
+                          className={`cursor-pointer transition-all ${state.vehicleTypeSelected && state.vehicle.type === t ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/50"}`}
+                          onClick={() => { updateVehicle({ type: t }); setState(s => ({ ...s, vehicleTypeSelected: true })); }}
                         >
                           <CardContent className="flex flex-col items-center justify-center p-3 gap-2">
                             <img
                               src={img}
                               alt={label}
-                              className={`w-full h-24 object-contain transition-all ${state.vehicle.type === t ? "opacity-100" : "opacity-60"}`}
+                              className={`w-full h-24 object-contain transition-all ${state.vehicleTypeSelected && state.vehicle.type === t ? "opacity-100" : "opacity-60"}`}
                             />
-                            <span className={`font-semibold text-xs text-center ${state.vehicle.type === t ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
+                            <span className={`font-semibold text-xs text-center ${state.vehicleTypeSelected && state.vehicle.type === t ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
                           </CardContent>
                         </Card>
                       ))}

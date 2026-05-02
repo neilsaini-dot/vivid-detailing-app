@@ -64,6 +64,10 @@ export async function getAvailableSlots(
   date: string,
   durationHours: number
 ): Promise<TimeSlot[]> {
+  // Closed Sundays — return no slots
+  const dayOfWeek = new Date(`${date}T12:00:00`).getDay(); // 0 = Sunday
+  if (dayOfWeek === 0) return [];
+
   const connectors = new ReplitConnectors();
 
   const dayStart = new Date(`${date}T00:00:00`);

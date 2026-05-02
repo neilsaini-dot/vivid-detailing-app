@@ -1281,7 +1281,7 @@ export default function BookingFlow() {
                               disabled={date => {
                                 const today = new Date();
                                 today.setHours(0, 0, 0, 0);
-                                return date < today;
+                                return date < today || date.getDay() === 0;
                               }}
                               className="rounded-md"
                             />

@@ -3,15 +3,15 @@ import { ReplitConnectors } from "@replit/connectors-sdk";
 const CALENDAR_ID = "primary";
 const SHOP_OPEN_HOUR = 8;
 const SHOP_CLOSE_HOUR = 18;
-// Max concurrent jobs allowed before a slot is considered fully booked
-const MAX_CONCURRENT_JOBS = 3;
+// Max vehicles accepted per day via online booking
+const MAX_BOOKINGS_PER_DAY = 3;
 
 export interface TimeSlot {
   start: string;
   end: string;
   label: string;
   available: boolean;
-  concurrentCount: number;
+  bookingsToday: number;
 }
 
 export async function getAvailableSlots(
@@ -23,7 +23,7 @@ export async function getAvailableSlots(
   const dayStart = new Date(`${date}T00:00:00`);
   const dayEnd = new Date(`${date}T23:59:59`);
 
-  // Use events list instead of freeBusy so we can count concurrent bookings
+  // Fetch all events for the day to count total bookings
   const eventsResponse = await connectors.proxy(
     "google-calendar",
     `/calendars/${encodeURIComponent(CALENDAR_ID)}/events?timeMin=${dayStart.toISOString()}&timeMax=${dayEnd.toISOString()}&singleEvents=true&orderBy=startTime`,
@@ -38,24 +38,13 @@ export async function getAvailableSlots(
     events = [];
   }
 
-  // Normalise events to millisecond timestamps (skip all-day events)
-  const eventRanges = events
-    .filter(e => e.start?.dateTime && e.end?.dateTime)
-    .map(e => ({
-      start: new Date(e.start.dateTime!).getTime(),
-      end: new Date(e.end.dateTime!).getTime(),
-    }));
+  // Count only timed events (ignore all-day blocks like "closed" markers)
+  const bookingsToday = events.filter(e => e.start?.dateTime).length;
+  const dayFull = bookingsToday >= MAX_BOOKINGS_PER_DAY;
 
   const slots: TimeSlot[] = [];
-  const durationMs = durationHours * 60 * 60 * 1000;
 
   for (let hour = SHOP_OPEN_HOUR; hour + durationHours <= SHOP_CLOSE_HOUR; hour++) {
-    const slotStart = new Date(`${date}T${String(hour).padStart(2, "0")}:00:00`).getTime();
-    const slotEnd = slotStart + durationMs;
-
-    // Count how many existing events overlap with this slot window
-    const concurrentCount = eventRanges.filter(e => slotStart < e.end && slotEnd > e.start).length;
-
     const hh = String(hour).padStart(2, "0");
     const totalEndHours = hour + durationHours;
     const endHH = String(Math.floor(totalEndHours)).padStart(2, "0");
@@ -65,8 +54,8 @@ export async function getAvailableSlots(
       start: `${hh}:00`,
       end: `${endHH}:${endMM}`,
       label: `${hh}:00`,
-      available: concurrentCount < MAX_CONCURRENT_JOBS,
-      concurrentCount,
+      available: !dayFull,
+      bookingsToday,
     });
   }
 

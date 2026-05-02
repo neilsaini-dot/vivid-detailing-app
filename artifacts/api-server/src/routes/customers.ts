@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, desc, sum } from "drizzle-orm";
 import {
+  CaptureLeadBody,
   UpsertCustomerBody,
   GetCustomerParams,
   GetCustomerVehiclesParams,
@@ -24,6 +25,24 @@ import {
 } from "../lib/pricing";
 
 const router = Router();
+
+// POST /api/leads — partial lead capture (name + phone, no email required)
+router.post("/leads", async (req, res) => {
+  try {
+    const body = CaptureLeadBody.parse(req.body);
+
+    const [customer] = await db
+      .insert(customersTable)
+      .values({ name: body.name, phone: body.phone })
+      .returning();
+
+    req.log.info({ customerId: customer.id }, "Lead captured");
+    res.status(201).json(formatCustomer(customer));
+  } catch (err) {
+    req.log.error({ err }, "Failed to capture lead");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 // POST /api/customers
 router.post("/customers", async (req, res) => {

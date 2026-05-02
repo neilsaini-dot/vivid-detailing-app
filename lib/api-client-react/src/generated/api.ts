@@ -27,6 +27,7 @@ import type {
   AdminUpdateServiceBody,
   AnalyticsData,
   Booking,
+  CaptureLeadBody,
   CreateBookingBody,
   CreateQuoteBody,
   CreateVehicleBody,
@@ -913,6 +914,92 @@ export const useAbandonBooking = <
   TContext
 > => {
   return useMutation(getAbandonBookingMutationOptions(options));
+};
+
+/**
+ * @summary Capture a partial lead with name and phone only (no email required)
+ */
+export const getCaptureLeadUrl = () => {
+  return `/api/leads`;
+};
+
+export const captureLead = async (
+  captureLeadBody: CaptureLeadBody,
+  options?: RequestInit,
+): Promise<Customer> => {
+  return customFetch<Customer>(getCaptureLeadUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(captureLeadBody),
+  });
+};
+
+export const getCaptureLeadMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof captureLead>>,
+    TError,
+    { data: BodyType<CaptureLeadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof captureLead>>,
+  TError,
+  { data: BodyType<CaptureLeadBody> },
+  TContext
+> => {
+  const mutationKey = ["captureLead"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof captureLead>>,
+    { data: BodyType<CaptureLeadBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return captureLead(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CaptureLeadMutationResult = NonNullable<
+  Awaited<ReturnType<typeof captureLead>>
+>;
+export type CaptureLeadMutationBody = BodyType<CaptureLeadBody>;
+export type CaptureLeadMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Capture a partial lead with name and phone only (no email required)
+ */
+export const useCaptureLead = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof captureLead>>,
+    TError,
+    { data: BodyType<CaptureLeadBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof captureLead>>,
+  TError,
+  { data: BodyType<CaptureLeadBody> },
+  TContext
+> => {
+  return useMutation(getCaptureLeadMutationOptions(options));
 };
 
 /**

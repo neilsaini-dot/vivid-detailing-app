@@ -21,7 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 import {
-  useListServices, useListAddOns, useCalculatePrice, useCreateBooking,
+  useListServices, useListAddOns, useCalculatePrice, useCreateBooking, useCaptureLead,
   PriceCalculateBodyVehicleType, CreateVehicleBodyType
 } from "@workspace/api-client-react";
 
@@ -131,12 +131,15 @@ export default function BookingFlow() {
   const [state, setState] = useState<BookingState>(initialState);
   const [currentPricing, setCurrentPricing] = useState<any>(null);
 
+  const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
+
   const { data: services = [] } = useListServices(
     state.intent ? { goal: state.intent } : {}
   );
   const { data: addOns = [] } = useListAddOns({ vehicleType: state.vehicle.type as any });
   const calculatePrice = useCalculatePrice();
   const createBooking = useCreateBooking();
+  const captureLead = useCaptureLead();
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -162,6 +165,21 @@ export default function BookingFlow() {
   }, [state.vehicle.type, state.serviceIds, state.addOnIds]);
 
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
+
+  const handleStep1Continue = async () => {
+    if (!capturedLeadId) {
+      try {
+        const result = await captureLead.mutateAsync({
+          data: { name: state.customer.name, phone: state.customer.phone }
+        });
+        setCapturedLeadId(result.id);
+      } catch {
+        // Non-blocking — proceed even if lead save fails
+      }
+    }
+    go(1);
+  };
+
   const updateCustomer = (d: Partial<BookingState["customer"]>) => setState(s => ({ ...s, customer: { ...s.customer, ...d } }));
   const updateVehicle = (d: Partial<BookingState["vehicle"]>) => setState(s => ({ ...s, vehicle: { ...s.vehicle, ...d } }));
   const toggleService = (id: string) => setState(s => ({ ...s, serviceIds: s.serviceIds.includes(id) ? s.serviceIds.filter(x => x !== id) : [...s.serviceIds, id] }));
@@ -177,6 +195,7 @@ export default function BookingFlow() {
       const ymm = parseYMM(state.vehicle.yearMakeModel);
       await createBooking.mutateAsync({
         data: {
+          existingCustomerId: capturedLeadId ?? undefined,
           customer: state.customer,
           vehicle: {
             type: state.vehicle.type as CreateVehicleBodyType,
@@ -650,10 +669,10 @@ export default function BookingFlow() {
             </Button>
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8"
-              onClick={step === 8 ? handleSubmit : () => go(1)}
-              disabled={!canNext}
+              onClick={step === 8 ? handleSubmit : step === 1 ? handleStep1Continue : () => go(1)}
+              disabled={!canNext || (step === 1 && captureLead.isPending)}
             >
-              {step === 8 ? "Confirm Booking" : "Continue"} <ChevronRight className="w-4 h-4" />
+              {step === 8 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         )}
@@ -698,8 +717,8 @@ export default function BookingFlow() {
             <p className="text-xs text-muted-foreground">Estimated Total</p>
             <p className="text-lg font-bold text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</p>
           </div>
-          <Button className="bg-primary text-primary-foreground" onClick={step === 8 ? handleSubmit : () => go(1)} disabled={!canNext}>
-            {step === 8 ? "Confirm" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
+          <Button className="bg-primary text-primary-foreground" onClick={step === 8 ? handleSubmit : step === 1 ? handleStep1Continue : () => go(1)} disabled={!canNext || (step === 1 && captureLead.isPending)}>
+            {step === 8 ? "Confirm" : step === 1 && captureLead.isPending ? "Saving…" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
       )}

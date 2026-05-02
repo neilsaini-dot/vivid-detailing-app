@@ -152,6 +152,12 @@ export const CalculatePriceResponse = zod.object({
  * @summary Create a new booking
  */
 export const CreateBookingBody = zod.object({
+  existingCustomerId: zod
+    .string()
+    .nullish()
+    .describe(
+      "ID of a previously captured lead to link instead of creating a new customer",
+    ),
   customer: zod.object({
     name: zod.string(),
     email: zod.string(),
@@ -314,6 +320,14 @@ export const AbandonBookingBody = zod.object({
 
 export const AbandonBookingResponse = zod.object({
   success: zod.boolean(),
+});
+
+/**
+ * @summary Capture a partial lead with name and phone only (no email required)
+ */
+export const CaptureLeadBody = zod.object({
+  name: zod.string(),
+  phone: zod.string(),
 });
 
 /**

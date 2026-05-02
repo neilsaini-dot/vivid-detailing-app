@@ -186,6 +186,8 @@ export interface CreateVehicleBody {
 }
 
 export interface CreateBookingBody {
+  /** ID of a previously captured lead to link instead of creating a new customer */
+  existingCustomerId?: string | null;
   customer: UpsertCustomerBody;
   vehicle: CreateVehicleBody;
   serviceIds: string[];
@@ -342,6 +344,11 @@ export interface UpdateSeasonalPromoBody {
   basePrice?: number;
   name?: string;
   description?: string;
+}
+
+export interface CaptureLeadBody {
+  name: string;
+  phone: string;
 }
 
 export type ListServicesParams = {

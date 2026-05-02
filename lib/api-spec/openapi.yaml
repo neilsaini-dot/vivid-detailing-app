@@ -237,6 +237,26 @@ paths:
                     type: boolean
                 required: [success]
 
+  # ─── Leads ─────────────────────────────────────────────────────
+  /leads:
+    post:
+      operationId: captureLead
+      tags: [customers]
+      summary: Capture a partial lead with name and phone only (no email required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CaptureLeadBody"
+      responses:
+        "201":
+          description: Lead saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Customer"
+
   # ─── Customers ─────────────────────────────────────────────────
   /customers:
     post:
@@ -845,6 +865,10 @@ components:
     CreateBookingBody:
       type: object
       properties:
+        existingCustomerId:
+          type: string
+          nullable: true
+          description: ID of a previously captured lead to link instead of creating a new customer
         customer:
           $ref: "#/components/schemas/UpsertCustomerBody"
         vehicle:
@@ -1234,3 +1258,12 @@ components:
         description:
           type: string
       required: [id]
+
+    CaptureLeadBody:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+      required: [name, phone]

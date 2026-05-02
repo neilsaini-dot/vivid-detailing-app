@@ -32,31 +32,40 @@ router.post("/bookings", async (req, res) => {
   try {
     const body = CreateBookingBody.parse(req.body);
 
-    // Upsert customer
+    // Upsert customer — link to existing lead if ID provided
     let customer: any;
-    const existing = await db
-      .select()
-      .from(customersTable)
-      .where(eq(customersTable.email, body.customer.email))
-      .limit(1);
-
-    if (existing.length > 0) {
+    if (body.existingCustomerId) {
       const [updated] = await db
         .update(customersTable)
-        .set({ name: body.customer.name, phone: body.customer.phone })
-        .where(eq(customersTable.id, existing[0].id))
+        .set({ name: body.customer.name, email: body.customer.email, phone: body.customer.phone })
+        .where(eq(customersTable.id, body.existingCustomerId))
         .returning();
       customer = updated;
-    } else {
-      const [created] = await db
-        .insert(customersTable)
-        .values({
-          name: body.customer.name,
-          email: body.customer.email,
-          phone: body.customer.phone,
-        })
-        .returning();
-      customer = created;
+    }
+    if (!customer) {
+      const existing = await db
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.email, body.customer.email))
+        .limit(1);
+      if (existing.length > 0) {
+        const [updated] = await db
+          .update(customersTable)
+          .set({ name: body.customer.name, phone: body.customer.phone })
+          .where(eq(customersTable.id, existing[0].id))
+          .returning();
+        customer = updated;
+      } else {
+        const [created] = await db
+          .insert(customersTable)
+          .values({
+            name: body.customer.name,
+            email: body.customer.email,
+            phone: body.customer.phone,
+          })
+          .returning();
+        customer = created;
+      }
     }
 
     // Create vehicle

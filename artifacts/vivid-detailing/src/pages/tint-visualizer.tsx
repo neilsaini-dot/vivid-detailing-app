@@ -16,11 +16,16 @@ const VLT_OPACITY: Record<number, number> = {
   5: 0.83, 15: 0.65, 25: 0.47, 35: 0.28, 50: 0.10,
 };
 
-// SVG viewBox "0 0 100 56.25" — polygons traced from the car photo
+/*
+  SVG viewBox "0 0 100 56.25" — polygons re-traced from actual photo pixels.
+  Image is 16:9. Glass area sits between y≈15 (inside chrome trim) and y≈34 (sill).
+  Sky and roof panel are above y≈15 and are NOT covered.
+  Front glass:   x 4–43,  Rear glass: x 46–79,  Quarter: x 80–92
+*/
 const WINDOW_PATHS = {
-  front:   "8.5,5.5 44.5,4.8 44.8,32.2 8.8,32.8",
-  rear:    "47.5,4.8 82.2,5.5 82.2,32.0 47.5,31.8",
-  quarter: "82.5,7.2 92.8,12.0 92.8,31.5 82.5,31.5",
+  front:   "4,15.5 43,15.2 43,34.2 4.5,34.5",
+  rear:    "46,15.2 79,15.5 79,34.2 46,34.2",
+  quarter: "80,17.0 92,19.5 92,34.2 80,34.2",
 };
 
 function TintSVG({ opacity }: { opacity: number }) {

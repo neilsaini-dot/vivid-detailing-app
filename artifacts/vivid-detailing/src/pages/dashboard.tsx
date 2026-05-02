@@ -10,20 +10,17 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CarFront, Calendar, History, Shield, AlertCircle, Clock, ChevronRight } from "lucide-react";
+import { CarFront, Calendar, History, Shield, AlertCircle, Settings, Plus, Activity } from "lucide-react";
 import { format } from "date-fns";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
-  // In a real app, this would come from auth context
-  const [customerId] = useState("cus_123"); // Mock ID for demo
+  const [customerId] = useState<string | null>(() => localStorage.getItem("vd_customer_id"));
 
-  // Use the dashboard aggregate hook
-  // Assuming the hook requires an ID. We handle the case where it might fail gracefully.
-  const { data: dashboard, isLoading } = useGetCustomerDashboard(customerId, {
+  const { data: dashboard, isLoading } = useGetCustomerDashboard(customerId ?? "", {
     query: {
       enabled: !!customerId,
-      retry: false
+      retry: false,
     }
   });
 
@@ -60,11 +57,28 @@ export default function Dashboard() {
     ]
   };
 
-  const data = dashboard || mockDashboard;
+  if (!customerId) {
+    return (
+      <div className="container py-24 max-w-lg text-center">
+        <div className="mx-auto w-16 h-16 rounded-full bg-surface flex items-center justify-center mb-6">
+          <CarFront className="h-8 w-8 text-primary" />
+        </div>
+        <h2 className="text-2xl font-bold mb-3">No account found</h2>
+        <p className="text-muted-foreground mb-8">
+          Complete a booking first and your dashboard will be available here with your vehicles, service history, and loyalty status.
+        </p>
+        <Button className="bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setLocation("/book")}>
+          Book Your First Service
+        </Button>
+      </div>
+    );
+  }
 
-  if (isLoading && !dashboard) {
+  if (isLoading) {
     return <div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>;
   }
+
+  const data = dashboard || mockDashboard;
 
   return (
     <div className="container py-8 max-w-6xl">
@@ -224,7 +238,3 @@ export default function Dashboard() {
   );
 }
 
-// Ensure Activity icon is imported
-function Activity(props: any) {
-  return <svg {...props} xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinelinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>;
-}

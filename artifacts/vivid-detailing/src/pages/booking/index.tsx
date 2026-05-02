@@ -190,7 +190,12 @@ const ADDON_TIMES: Record<string, { min: number; max: number }> = {
 };
 
 const ADDON_DISCLAIMERS: Record<string, string> = {
-  "Shampoo Upholstery": "Only needed for heavy staining. Vehicle must be left overnight.",
+  "Shampoo Upholstery":              "Only needed for heavy staining. Vehicle must be left overnight.",
+  "Ozone Treatment / Deodorizer":    "Vehicle must air out 2-3 hours after treatment before it can be occupied or driven.",
+  "Engine Shampoo":                  "Engine must be fully cool before service begins. Hood access required.",
+  "Headlight Restoration":           "Results may vary on severely cracked, pitted, or deeply scratched lenses.",
+  "Minor Scratch/Blemish Correction":"Suitable for light surface scratches only. Deep chips, gouges, or panel damage cannot be fully corrected.",
+  "Pet Hair Removal":                "Heavily embedded pet hair may require extra time. Final result depends on severity of buildup.",
 };
 
 function vehicleTimeMod(type: VehicleType): number {

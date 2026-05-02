@@ -62,7 +62,7 @@ export default function Home() {
             {[
               { href: "/book?intent=clean", icon: Droplets, title: "Clean", sub: "Starting at $149", desc: "Full interior & exterior detailing. Vacuum, wipe-down, windows, mats, and more." },
               { href: "/book?intent=protect", icon: Shield, title: "Protect", sub: "Starting at $249", desc: "Ceramic coatings and sealant wax for years of lasting paint defense." },
-              { href: "/book?intent=tint", icon: CarFront, title: "Tint", sub: "Get a Quote", desc: "Premium carbon and ceramic window tinting with UV and heat rejection." },
+              { href: "/book?intent=tint", icon: CarFront, title: "Tint", sub: "Get a Quote", desc: "Premium ceramic window tinting with UV and heat rejection." },
               { href: "/quote", icon: Sparkles, title: "Paint & PPF", sub: "Inquire", desc: "Paint correction, swirl removal, and Paint Protection Film installation." },
             ].map(({ href, icon: Icon, title, sub, desc }) => (
               <Link key={title} href={href}>

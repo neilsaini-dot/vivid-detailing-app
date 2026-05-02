@@ -48,7 +48,7 @@ const initialState: BookingState = {
   notes: "", depositPaid: false,
 };
 
-const STEPS = 9;
+const STEPS = 8;
 const TIME_SLOTS = ["08:00", "10:00", "12:00", "14:00", "16:00"];
 
 /* ── Vehicle silhouette SVGs ── */
@@ -221,13 +221,12 @@ export default function BookingFlow() {
 
   const canNext =
     (step === 1 && !!state.customer.name && !!state.customer.phone) ||
-    (step === 2 && !!state.vehicle.type) ||
-    (step === 3 && !!state.intent) ||
-    (step === 4 && (state.serviceIds.length > 0 || state.promoIds.length > 0)) ||
+    (step === 2 && !!state.intent) ||
+    (step === 3 && (state.serviceIds.length > 0 || state.promoIds.length > 0)) ||
+    (step === 4) ||
     (step === 5) ||
     (step === 6) ||
-    (step === 7) ||
-    (step === 8 && !!state.appointmentAt && !!state.timeSlot && !!state.customer.email);
+    (step === 7 && !!state.appointmentAt && !!state.timeSlot && !!state.customer.email);
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background flex flex-col md:flex-row">
@@ -250,14 +249,16 @@ export default function BookingFlow() {
               className="w-full absolute"
             >
 
-              {/* ── Step 1: Name + Phone (lead capture) ── */}
+              {/* ── Step 1: Name + Phone + Vehicle ── */}
               {step === 1 && (
                 <div className="space-y-6">
                   <div>
-                    <h2 className="text-3xl font-bold mb-2">Let's start with you</h2>
-                    <p className="text-muted-foreground">We'll hold your spot — takes under 30 seconds.</p>
+                    <h2 className="text-3xl font-bold mb-2">Let's get started</h2>
+                    <p className="text-muted-foreground">Your info and vehicle — takes under a minute.</p>
                   </div>
-                  <div className="space-y-4 max-w-sm">
+
+                  {/* Name + Phone */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Your Name</Label>
                       <div className="relative">
@@ -287,42 +288,36 @@ export default function BookingFlow() {
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs text-muted-foreground">We only contact you about your appointment. No spam.</p>
-                </div>
-              )}
 
-              {/* ── Step 2: Vehicle ── */}
-              {step === 2 && (
-                <div className="space-y-6">
+                  {/* Vehicle type */}
                   <div>
-                    <h2 className="text-3xl font-bold mb-2">Tell us about your vehicle</h2>
-                    <p className="text-muted-foreground">Select your vehicle type to ensure accurate pricing.</p>
+                    <Label className="mb-3 block">Vehicle Type</Label>
+                    <div className="grid grid-cols-2 gap-3">
+                      {([
+                        { type: "car" as VehicleType, label: "Car / Sedan", Icon: CarIcon },
+                        { type: "suv" as VehicleType, label: "SUV / Crossover", Icon: SuvIcon },
+                        { type: "truck" as VehicleType, label: "Pickup Truck", Icon: TruckIcon },
+                        { type: "van" as VehicleType, label: "Van / Minivan", Icon: VanIcon },
+                      ]).map(({ type: t, label, Icon }) => (
+                        <Card
+                          key={t}
+                          className={`cursor-pointer transition-all ${state.vehicle.type === t ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
+                          onClick={() => updateVehicle({ type: t })}
+                        >
+                          <CardContent className="flex flex-col items-center justify-center p-4 gap-2">
+                            <div className={state.vehicle.type === t ? "text-primary" : "text-muted-foreground"}>
+                              <Icon active={state.vehicle.type === t} />
+                            </div>
+                            <span className="font-semibold text-xs text-center">{label}</span>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    {([
-                      { type: "car" as VehicleType, label: "Car / Sedan", Icon: CarIcon },
-                      { type: "suv" as VehicleType, label: "SUV / Crossover", Icon: SuvIcon },
-                      { type: "truck" as VehicleType, label: "Pickup Truck", Icon: TruckIcon },
-                      { type: "van" as VehicleType, label: "Van / Minivan", Icon: VanIcon },
-                    ]).map(({ type: t, label, Icon }) => (
-                      <Card
-                        key={t}
-                        className={`cursor-pointer transition-all ${state.vehicle.type === t ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
-                        onClick={() => updateVehicle({ type: t })}
-                      >
-                        <CardContent className="flex flex-col items-center justify-center p-5 gap-3">
-                          <div className={state.vehicle.type === t ? "text-primary" : "text-muted-foreground"}>
-                            <Icon active={state.vehicle.type === t} />
-                          </div>
-                          <span className="font-semibold text-sm text-center">{label}</span>
-                        </CardContent>
-                      </Card>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4 pt-2">
-                    <div className="space-y-2 col-span-2">
+                  {/* Year / Make / Model + Colour */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-2">
                       <Label>Year, Make & Model</Label>
                       <Input
                         placeholder="e.g. 2023 Honda Civic"
@@ -330,7 +325,7 @@ export default function BookingFlow() {
                         onChange={e => updateVehicle({ yearMakeModel: e.target.value })}
                       />
                     </div>
-                    <div className="space-y-2 col-span-2">
+                    <div className="space-y-2">
                       <Label>Colour</Label>
                       <Input
                         placeholder="e.g. Midnight Black"
@@ -339,11 +334,13 @@ export default function BookingFlow() {
                       />
                     </div>
                   </div>
+
+                  <p className="text-xs text-muted-foreground">We only contact you about your appointment. No spam.</p>
                 </div>
               )}
 
-              {/* ── Step 3: Intent ── */}
-              {step === 3 && (
+              {/* ── Step 2: Intent ── */}
+              {step === 2 && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">What brings you in?</h2>
@@ -389,8 +386,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 4: Services ── */}
-              {step === 4 && (
+              {/* ── Step 3: Services ── */}
+              {step === 3 && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Recommended Services</h2>
@@ -461,8 +458,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 5: Add-ons ── */}
-              {step === 5 && (
+              {/* ── Step 4: Add-ons ── */}
+              {step === 4 && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Enhance Your Package</h2>
@@ -499,8 +496,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 6: Smart Recommendations ── */}
-              {step === 6 && (
+              {/* ── Step 5: Smart Recommendations ── */}
+              {step === 5 && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Smart Recommendations</h2>
@@ -532,8 +529,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 7: Review Estimate ── */}
-              {step === 7 && (
+              {/* ── Step 6: Review Estimate ── */}
+              {step === 6 && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Review Estimate</h2>
@@ -584,8 +581,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 8: Date + Time + Email + Notes ── */}
-              {step === 8 && (
+              {/* ── Step 7: Date + Time + Email + Notes ── */}
+              {step === 7 && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Choose a Date & Time</h2>
@@ -631,8 +628,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 9: Confirmation ── */}
-              {step === 9 && (
+              {/* ── Step 8: Confirmation ── */}
+              {step === 8 && (
                 <div className="space-y-6 text-center py-12">
                   <div className="mx-auto w-20 h-20 bg-primary/20 rounded-full flex items-center justify-center mb-6">
                     <Check className="w-10 h-10 text-primary" />
@@ -662,24 +659,24 @@ export default function BookingFlow() {
         </div>
 
         {/* Navigation */}
-        {step < 9 && (
+        {step < 8 && (
           <div className="flex justify-between items-center mt-16 pt-6 border-t border-border">
             <Button variant="ghost" onClick={() => go(-1)} disabled={step === 1} className="gap-2">
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8"
-              onClick={step === 8 ? handleSubmit : step === 1 ? handleStep1Continue : () => go(1)}
+              onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : () => go(1)}
               disabled={!canNext || (step === 1 && captureLead.isPending)}
             >
-              {step === 8 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-4 h-4" />
+              {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         )}
       </div>
 
       {/* Desktop Sidebar */}
-      {step > 3 && step < 9 && (
+      {step > 2 && step < 8 && (
         <div className="hidden md:block w-72 border-l border-border bg-card p-6 shrink-0">
           <div className="sticky top-24">
             <h3 className="text-base font-bold mb-4 border-b border-border pb-2">Order Summary</h3>
@@ -711,14 +708,14 @@ export default function BookingFlow() {
       )}
 
       {/* Mobile sticky bar */}
-      {step > 3 && step < 9 && (
+      {step > 2 && step < 8 && (
         <div className="md:hidden fixed bottom-0 left-0 right-0 bg-card border-t border-border p-4 z-50 flex justify-between items-center">
           <div>
             <p className="text-xs text-muted-foreground">Estimated Total</p>
             <p className="text-lg font-bold text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</p>
           </div>
-          <Button className="bg-primary text-primary-foreground" onClick={step === 8 ? handleSubmit : step === 1 ? handleStep1Continue : () => go(1)} disabled={!canNext || (step === 1 && captureLead.isPending)}>
-            {step === 8 ? "Confirm" : step === 1 && captureLead.isPending ? "Saving…" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
+          <Button className="bg-primary text-primary-foreground" onClick={step === 7 ? handleSubmit : () => go(1)} disabled={!canNext}>
+            {step === 7 ? "Confirm" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
           </Button>
         </div>
       )}

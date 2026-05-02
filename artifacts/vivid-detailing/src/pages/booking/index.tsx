@@ -282,6 +282,41 @@ export default function BookingFlow() {
 
   const isMultiIntent = state.intents.length > 1;
 
+  // ── Paint Correction inline quote form ────────────────────────────────────
+  const [showPcForm, setShowPcForm] = useState(false);
+  const [pcPanels, setPcPanels] = useState<string[]>([]);
+  const [pcSeverity, setPcSeverity] = useState("");
+  const [pcExtra, setPcExtra] = useState("");
+
+  const PC_PANELS = ["Hood", "Roof", "Trunk", "Front Bumper", "Rear Bumper", "Driver Door", "Passenger Door", "Rear Doors", "Left Fender", "Right Fender", "Mirrors"];
+  const PC_SEVERITIES = [
+    { id: "mild",     label: "Mild",     desc: "Light swirls, hazing, or water spots" },
+    { id: "moderate", label: "Moderate", desc: "Visible scratches and light oxidation" },
+    { id: "severe",   label: "Severe",   desc: "Deep scratches or heavy oxidation" },
+  ];
+
+  const togglePcPanel = (p: string) =>
+    setPcPanels(prev => prev.includes(p) ? prev.filter(x => x !== p) : [...prev, p]);
+
+  const confirmPcSelection = (svcId: string) => {
+    const parts = [
+      "\n\n--- Paint Correction Details ---",
+      pcPanels.length > 0 ? `Panels: ${pcPanels.join(", ")}` : null,
+      pcSeverity ? `Severity: ${PC_SEVERITIES.find(s => s.id === pcSeverity)?.label}` : null,
+      pcExtra ? `Notes: ${pcExtra}` : null,
+    ].filter(Boolean).join("\n");
+    setState(s => ({ ...s, serviceIds: [...s.serviceIds, svcId], notes: s.notes + parts }));
+    setShowPcForm(false);
+  };
+
+  const clearPcForm = (svcId: string) => {
+    toggleService(svcId);
+    setShowPcForm(false);
+    setPcPanels([]);
+    setPcSeverity("");
+    setPcExtra("");
+  };
+
   const { data: addOns = [] } = useListAddOns({ vehicleType: state.vehicle.type as any });
   const calculatePrice = useCalculatePrice();
   const createBooking = useCreateBooking();
@@ -913,11 +948,20 @@ export default function BookingFlow() {
                       const selected = state.serviceIds.includes(svc.id);
                       const price = svc.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? svc.basePrice;
                       const isTintGroup = groupIntent === "tint" || (!groupIntent && state.intents.includes("tint"));
+                      const isPc = svc.name === "Paint Correction";
+                      const pcFormOpen = isPc && showPcForm;
                       return (
+                        <div key={svc.id} className="space-y-0">
                         <Card
-                          key={svc.id}
-                          className={`transition-all cursor-pointer relative overflow-hidden ${selected ? "border-primary bg-primary/5 ring-1 ring-primary/50" : "hover:border-primary/40"} ${svc.isSeasonal ? "border-primary/60" : ""}`}
-                          onClick={() => toggleService(svc.id)}
+                          className={`transition-all cursor-pointer relative overflow-hidden ${selected ? "border-primary bg-primary/5 ring-1 ring-primary/50" : pcFormOpen ? "border-primary/60 bg-primary/5 rounded-b-none border-b-0" : "hover:border-primary/40"} ${svc.isSeasonal ? "border-primary/60" : ""}`}
+                          onClick={() => {
+                            if (isPc) {
+                              if (selected) { clearPcForm(svc.id); }
+                              else { setShowPcForm(v => !v); }
+                            } else {
+                              toggleService(svc.id);
+                            }
+                          }}
                         >
                           {svc.isSeasonal && (
                             <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2.5 py-1 rounded-bl-lg tracking-wide">
@@ -963,17 +1007,99 @@ export default function BookingFlow() {
                                 })()}
                                 {selected
                                   ? <div className="mt-1.5 flex items-center justify-end gap-1 text-primary text-xs font-semibold"><Check size={12} />Selected</div>
-                                  : <div className="mt-1.5 text-xs text-muted-foreground">Tap to select</div>
+                                  : isPc
+                                    ? <div className="mt-1.5 text-xs text-primary font-medium">{pcFormOpen ? "▲ Hide details" : "▼ Add details"}</div>
+                                    : <div className="mt-1.5 text-xs text-muted-foreground">Tap to select</div>
                                 }
                               </div>
                             </div>
                           </CardContent>
                         </Card>
+
+                        {/* ── Paint Correction inline form ── */}
+                        {isPc && pcFormOpen && !selected && (
+                          <div className="border border-primary/60 border-t-0 rounded-b-xl bg-card px-4 pb-4 pt-3 space-y-4">
+                            <p className="text-xs text-muted-foreground">Help us prepare an accurate quote by telling us about the affected areas.</p>
+
+                            {/* Panels */}
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Affected Panels <span className="normal-case font-normal">(select all that apply)</span></Label>
+                              <div className="flex flex-wrap gap-2">
+                                {PC_PANELS.map(p => {
+                                  const on = pcPanels.includes(p);
+                                  return (
+                                    <button
+                                      key={p}
+                                      type="button"
+                                      onClick={e => { e.stopPropagation(); togglePcPanel(p); }}
+                                      className={`px-3 py-1 rounded-full border text-xs font-medium transition-all ${on ? "bg-primary border-primary text-primary-foreground" : "border-border text-muted-foreground hover:border-primary/50"}`}
+                                    >{p}</button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Severity */}
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Severity</Label>
+                              <div className="grid gap-2">
+                                {PC_SEVERITIES.map(s => (
+                                  <button
+                                    key={s.id}
+                                    type="button"
+                                    onClick={e => { e.stopPropagation(); setPcSeverity(s.id); }}
+                                    className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border text-left transition-all ${pcSeverity === s.id ? "border-primary bg-primary/10" : "border-border hover:border-primary/40"}`}
+                                  >
+                                    <div className={`w-4 h-4 rounded-full border-2 shrink-0 flex items-center justify-center ${pcSeverity === s.id ? "border-primary" : "border-muted-foreground/40"}`}>
+                                      {pcSeverity === s.id && <div className="w-2 h-2 rounded-full bg-primary" />}
+                                    </div>
+                                    <div>
+                                      <p className="text-sm font-semibold">{s.label}</p>
+                                      <p className="text-xs text-muted-foreground">{s.desc}</p>
+                                    </div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+
+                            {/* Extra notes */}
+                            <div className="space-y-2">
+                              <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Additional Notes <span className="normal-case font-normal">(optional)</span></Label>
+                              <Textarea
+                                placeholder="e.g. scratch on driver door from parking lot, swirl marks across hood…"
+                                value={pcExtra}
+                                onChange={e => setPcExtra(e.target.value)}
+                                onClick={e => e.stopPropagation()}
+                                rows={2}
+                                className="text-sm resize-none"
+                              />
+                            </div>
+
+                            <div className="flex gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                className="flex-1 bg-primary text-primary-foreground"
+                                disabled={!pcSeverity}
+                                onClick={e => { e.stopPropagation(); confirmPcSelection(svc.id); }}
+                              >
+                                <Check size={14} className="mr-1.5" /> Add Paint Correction
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={e => { e.stopPropagation(); setShowPcForm(false); }}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                        </div>
                       );
                     };
 
                     if (isMultiIntent) {
-                      const seen = new Set<string>();
+                      const seen = new Set();
                       const groups = state.intents.map(intent => ({
                         intent,
                         label: INTENT_LABELS[intent] ?? intent,

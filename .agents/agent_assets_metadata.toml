@@ -12,3 +12,27 @@ id = "ZsNd9e56JJ9SsLIFuEKhy"
 uri = "file://artifacts/vivid-detailing/public/tint-car-dark.png"
 type = "image"
 title = "car dark 5pct limo tint"
+
+[[generated]]
+id = "vaUhsTNK0cEqFIH9hOCIe"
+uri = "file://artifacts/vivid-detailing/public/vehicle-sedan.png"
+type = "image"
+title = "sedan car realistic"
+
+[[generated]]
+id = "-eC256_BDOG4p0vZr4Q5e"
+uri = "file://artifacts/vivid-detailing/public/vehicle-suv.png"
+type = "image"
+title = "SUV crossover realistic"
+
+[[generated]]
+id = "XXkYLRX8aQIYaT2tT5VAb"
+uri = "file://artifacts/vivid-detailing/public/vehicle-truck.png"
+type = "image"
+title = "pickup truck realistic"
+
+[[generated]]
+id = "ebOqUeurDnQvPnOtoarjo"
+uri = "file://artifacts/vivid-detailing/public/vehicle-van.png"
+type = "image"
+title = "minivan realistic"

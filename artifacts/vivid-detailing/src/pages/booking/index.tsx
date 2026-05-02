@@ -294,21 +294,23 @@ export default function BookingFlow() {
                     <Label className="mb-3 block">Vehicle Type</Label>
                     <div className="grid grid-cols-2 gap-3">
                       {([
-                        { type: "car" as VehicleType, label: "Car / Sedan", Icon: CarIcon },
-                        { type: "suv" as VehicleType, label: "SUV / Crossover", Icon: SuvIcon },
-                        { type: "truck" as VehicleType, label: "Pickup Truck", Icon: TruckIcon },
-                        { type: "van" as VehicleType, label: "Van / Minivan", Icon: VanIcon },
-                      ]).map(({ type: t, label, Icon }) => (
+                        { type: "car" as VehicleType, label: "Car / Sedan", img: "/vehicle-sedan.png" },
+                        { type: "suv" as VehicleType, label: "SUV / Crossover", img: "/vehicle-suv.png" },
+                        { type: "truck" as VehicleType, label: "Pickup Truck", img: "/vehicle-truck.png" },
+                        { type: "van" as VehicleType, label: "Van / Minivan", img: "/vehicle-van.png" },
+                      ]).map(({ type: t, label, img }) => (
                         <Card
                           key={t}
-                          className={`cursor-pointer transition-all ${state.vehicle.type === t ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
+                          className={`cursor-pointer transition-all ${state.vehicle.type === t ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:border-primary/50"}`}
                           onClick={() => updateVehicle({ type: t })}
                         >
-                          <CardContent className="flex flex-col items-center justify-center p-4 gap-2">
-                            <div className={state.vehicle.type === t ? "text-primary" : "text-muted-foreground"}>
-                              <Icon active={state.vehicle.type === t} />
-                            </div>
-                            <span className="font-semibold text-xs text-center">{label}</span>
+                          <CardContent className="flex flex-col items-center justify-center p-3 gap-2">
+                            <img
+                              src={img}
+                              alt={label}
+                              className={`w-full h-24 object-contain transition-all ${state.vehicle.type === t ? "opacity-100" : "opacity-60"}`}
+                            />
+                            <span className={`font-semibold text-xs text-center ${state.vehicle.type === t ? "text-primary" : "text-muted-foreground"}`}>{label}</span>
                           </CardContent>
                         </Card>
                       ))}

@@ -485,6 +485,16 @@ export default function BookingFlow() {
   const updateCustomer = (d: Partial<BookingState["customer"]>) => setState(s => ({ ...s, customer: { ...s.customer, ...d } }));
   const updateVehicle = (d: Partial<BookingState["vehicle"]>) => setState(s => ({ ...s, vehicle: { ...s.vehicle, ...d } }));
   const toggleService = (id: string) => setState(s => ({ ...s, serviceIds: s.serviceIds.includes(id) ? s.serviceIds.filter(x => x !== id) : [...s.serviceIds, id] }));
+  const toggleServiceInGroup = (svcId: string, groupIntent?: string) => {
+    setState(s => {
+      const groupIds = groupIntent
+        ? (intentServiceMap[groupIntent] ?? []).map((x: any) => x.id)
+        : allServices.map((x: any) => x.id);
+      const wasSelected = s.serviceIds.includes(svcId);
+      const filtered = s.serviceIds.filter(id => !groupIds.includes(id));
+      return { ...s, serviceIds: wasSelected ? filtered : [...filtered, svcId] };
+    });
+  };
   const toggleAddon = (id: string) => setState(s => ({
     ...s,
     addOnIds: s.addOnIds.includes(id) ? s.addOnIds.filter(x => x !== id) : [...s.addOnIds, id],
@@ -568,7 +578,20 @@ export default function BookingFlow() {
   const canNext =
     (step === 1 && !!state.customer.name && isValidPhone(state.customer.phone) && state.vehicleTypeSelected && !!state.vehicle.yearMakeModel) ||
     (step === 2 && state.intents.length > 0) ||
-    (step === 3 && (state.serviceIds.length > 0 || (state.intents.includes("protect") && state.addOnIds.length > 0))) ||
+    (step === 3 && (() => {
+      if (state.serviceIds.length === 0 && !(state.intents.includes("protect") && state.addOnIds.length > 0)) return false;
+      if (!isMultiIntent) return true;
+      const seenIds = new Set<string>();
+      const groups = state.intents.map(intent => {
+        const svcs = (intentServiceMap[intent] ?? []).filter((s: any) => {
+          if (seenIds.has(s.id)) return false;
+          seenIds.add(s.id);
+          return true;
+        });
+        return { intent, svcs };
+      }).filter(g => g.svcs.length > 0);
+      return groups.every(g => g.svcs.some((s: any) => state.serviceIds.includes(s.id)));
+    })()) ||
     (step === 4) ||
     (step === 5) ||
     (step === 6) ||
@@ -608,7 +631,7 @@ export default function BookingFlow() {
                   onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
                   disabled={!canNext || (step === 1 && captureLead.isPending)}
                 >
-                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
+                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : step === 5 && state.bundleAddonIds.length === 0 ? "No Thanks" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
                 </Button>
               </div>
             </div>
@@ -639,7 +662,7 @@ export default function BookingFlow() {
                   onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
                   disabled={!canNext || (step === 1 && captureLead.isPending)}
                 >
-                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : tintSubStep ? "Continue" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
+                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : step === 5 && state.bundleAddonIds.length === 0 ? "No Thanks" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
                 </Button>
               </div>
             )}
@@ -959,7 +982,7 @@ export default function BookingFlow() {
                               if (selected) { clearPcForm(svc.id); }
                               else { setShowPcForm(v => !v); }
                             } else {
-                              toggleService(svc.id);
+                              toggleServiceInGroup(svc.id, groupIntent);
                             }
                           }}
                         >
@@ -1321,41 +1344,6 @@ export default function BookingFlow() {
                       </>
                     )}
 
-                    {/* No thanks / continue section */}
-                    <div className="border-t border-border/50 pt-4 flex flex-col items-center gap-3">
-                      <Button
-                        size="lg"
-                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
-                        onClick={() => go(1)}
-                      >
-                        {anyAdded ? "Continue to Review" : "Continue"}
-                        <ArrowRight className="ml-2 h-4 w-4" />
-                      </Button>
-                      {anyAdded && (
-                        <button
-                          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-                          onClick={() => {
-                            const recIds = recAddons.map((a: any) => a.id);
-                            setState(s => ({
-                              ...s,
-                              addOnIds: s.addOnIds.filter(id => !recIds.includes(id)),
-                              bundleAddonIds: s.bundleAddonIds.filter(id => !recIds.includes(id)),
-                            }));
-                            go(1);
-                          }}
-                        >
-                          No thanks, skip all
-                        </button>
-                      )}
-                      {!anyAdded && (
-                        <button
-                          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-                          onClick={() => go(1)}
-                        >
-                          No thanks, continue without adding
-                        </button>
-                      )}
-                    </div>
                   </div>
                 );
               })()}

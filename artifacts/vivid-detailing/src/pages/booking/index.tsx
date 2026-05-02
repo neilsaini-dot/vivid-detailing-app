@@ -667,14 +667,16 @@ export default function BookingFlow() {
                         }}
                       >
                         <CardContent className="flex items-center p-4 gap-4">
-                          <div className={`p-3 rounded-full ${active ? "bg-primary/20" : "bg-accent"}`}>
+                          <div className={`p-3 rounded-full shrink-0 ${active ? "bg-primary/20" : "bg-accent"}`}>
                             <intent.icon size={22} className={active ? "text-primary" : "text-muted-foreground"} />
                           </div>
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <h3 className="font-semibold">{intent.title}</h3>
                             <p className="text-sm text-muted-foreground">{intent.desc}</p>
                           </div>
-                          {active && <Check size={18} className="ml-auto text-primary shrink-0" />}
+                          <div className={`ml-auto shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-all ${active ? "bg-primary border-primary" : "border-muted-foreground/40 bg-transparent"}`}>
+                            {active && <Check size={12} className="text-primary-foreground" strokeWidth={3} />}
+                          </div>
                         </CardContent>
                       </Card>
                       );

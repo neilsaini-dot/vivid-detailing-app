@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Droplet, Sun, Shield, Settings,
-  ChevronRight, ArrowLeft, Plus, Check, CalendarIcon, Info, User, Phone, Clock
+  ChevronRight, ChevronLeft, ArrowLeft, ArrowRight, Plus, Check, CalendarIcon, Info, User, Phone, Clock
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -34,6 +34,7 @@ interface BookingState {
   vehicle: { type: VehicleType; yearMakeModel: string; colour: string; };
   vehicleTypeSelected: boolean;
   intent?: Intent;
+  selectedVlt: number;
   serviceIds: string[];
   addOnIds: string[];
   bundleAddonIds: string[];
@@ -48,12 +49,21 @@ const initialState: BookingState = {
   customer: { name: "", email: "", phone: "" },
   vehicle: { type: "car", yearMakeModel: "", colour: "" },
   vehicleTypeSelected: false,
-  serviceIds: [], addOnIds: [], bundleAddonIds: [], promoIds: [],
+  selectedVlt: 35, serviceIds: [], addOnIds: [], bundleAddonIds: [], promoIds: [],
   notes: "", depositPaid: false,
 };
 
 const STEPS = 8;
 const TIME_SLOTS = ["08:00", "10:00", "12:00", "14:00", "16:00"];
+
+const VLT_LEVELS = [
+  { vlt: 5,  label: "5% — Limo",       desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
+  { vlt: 15, label: "15% — Very Dark", desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
+  { vlt: 25, label: "25% — Dark",      desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
+  { vlt: 35, label: "35% — Medium",    desc: ["Good balance of privacy and visibility", "Elegant, understated finish", "Popular all-around choice"] },
+  { vlt: 50, label: "50% — Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
+];
+const VLT_OPACITY: Record<number, number> = { 5: 0.92, 15: 0.76, 25: 0.58, 35: 0.38, 50: 0.15 };
 
 /* ── Vehicle silhouette SVGs ── */
 function CarIcon({ active }: { active: boolean }) {
@@ -224,6 +234,27 @@ export default function BookingFlow() {
   const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false, email: false });
   const [totalFlash, setTotalFlash] = useState(false);
 
+  const [tintSubStep, setTintSubStep] = useState(false);
+  const [tintSplitPos, setTintSplitPos] = useState(50);
+  const [tintDragging, setTintDragging] = useState(false);
+  const tintContainerRef = useRef<HTMLDivElement>(null);
+
+  const updateTintSplit = useCallback((clientX: number) => {
+    if (!tintContainerRef.current) return;
+    const rect = tintContainerRef.current.getBoundingClientRect();
+    const pct = ((clientX - rect.left) / rect.width) * 100;
+    setTintSplitPos(Math.min(95, Math.max(5, pct)));
+  }, []);
+
+  const onTintMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!tintDragging) return;
+    updateTintSplit(e.clientX);
+  }, [tintDragging, updateTintSplit]);
+
+  const onTintTouchMove = useCallback((e: React.TouchEvent) => {
+    updateTintSplit(e.touches[0].clientX);
+  }, [updateTintSplit]);
+
   const { data: services = [] } = useListServices(
     state.intent ? { goal: state.intent } : {}
   );
@@ -238,6 +269,12 @@ export default function BookingFlow() {
     const vltParam = params.get("vlt");
     if (intentParam && ["clean", "protect", "tint", "paint"].includes(intentParam)) {
       setState(s => ({ ...s, intent: intentParam }));
+    }
+    if (vltParam) {
+      const parsed = parseInt(vltParam, 10);
+      if ([5, 15, 25, 35, 50].includes(parsed)) {
+        setState(s => ({ ...s, selectedVlt: parsed }));
+      }
     }
   }, []);
 
@@ -386,7 +423,9 @@ export default function BookingFlow() {
           bundleAddonIds: state.bundleAddonIds.length > 0 ? state.bundleAddonIds : undefined,
           bundleDiscount: bundleDiscount > 0 ? bundleDiscount : undefined,
           appointmentAt: dt?.toISOString(),
-          notes: state.notes,
+          notes: state.intent === "tint"
+            ? `VLT: ${state.selectedVlt}%${state.notes ? ` | ${state.notes}` : ""}`
+            : state.notes,
           totalEstimate: adjustedTotal,
         }
       });
@@ -394,6 +433,17 @@ export default function BookingFlow() {
       go(1);
     } catch {
       toast({ variant: "destructive", title: "Error", description: "Failed to create booking. Please try again." });
+    }
+  };
+
+  const handleBack = () => {
+    if (tintSubStep) {
+      setTintSubStep(false);
+    } else if (step === 3 && state.intent === "tint") {
+      setDir(-1);
+      setTintSubStep(true);
+    } else {
+      go(-1);
     }
   };
 
@@ -411,7 +461,9 @@ export default function BookingFlow() {
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 py-8 relative">
         <div className="mb-8">
           <Progress value={(step / STEPS) * 100} className="h-1.5" />
-          <p className="text-sm text-muted-foreground mt-2 font-medium">Step {step} of {STEPS}</p>
+          <p className="text-sm text-muted-foreground mt-2 font-medium">
+            {tintSubStep ? "Step 2 of 8 — Tint Preview" : `Step ${step} of ${STEPS}`}
+          </p>
         </div>
 
         <div className="overflow-x-hidden">
@@ -555,7 +607,7 @@ export default function BookingFlow() {
                       <Card
                         key={intent.id}
                         className={`cursor-pointer transition-all ${state.intent === intent.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
-                        onClick={() => setState(s => ({ ...s, intent: intent.id as Intent }))}
+                        onClick={() => { setState(s => ({ ...s, intent: intent.id as Intent })); if (intent.id !== "tint") setTintSubStep(false); }}
                       >
                         <CardContent className="flex items-center p-4 gap-4">
                           <div className={`p-3 rounded-full ${state.intent === intent.id ? "bg-primary/20" : "bg-accent"}`}>
@@ -582,6 +634,87 @@ export default function BookingFlow() {
                       </CardContent>
                     </Card>
                   </div>
+                </div>
+              )}
+
+              {/* ── Tint Sub-step: VLT Visualizer ── */}
+              {step === 2 && tintSubStep && state.intent === "tint" && (
+                <div className="space-y-6">
+                  <div>
+                    <h2 className="text-3xl font-bold mb-2">Preview Your Tint</h2>
+                    <p className="text-muted-foreground text-sm">
+                      Drag the divider to compare tinted vs. clear glass. Pick your preferred darkness, then continue to see pricing.
+                    </p>
+                  </div>
+
+                  {/* Before / After Reveal */}
+                  <div
+                    ref={tintContainerRef}
+                    className="relative aspect-video rounded-xl border border-border overflow-hidden bg-black shadow-xl shadow-black/50 select-none"
+                    style={{ cursor: tintDragging ? "col-resize" : "ew-resize" }}
+                    onMouseMove={onTintMouseMove}
+                    onMouseUp={() => setTintDragging(false)}
+                    onMouseLeave={() => setTintDragging(false)}
+                    onTouchMove={onTintTouchMove}
+                    onTouchEnd={() => setTintDragging(false)}
+                  >
+                    <div className="absolute inset-0">
+                      <img src="/tint-car.png" alt="Clear windows" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                    </div>
+                    <div className="absolute inset-0" style={{ clipPath: `inset(0 0 0 ${tintSplitPos}%)` }}>
+                      <img src="/tint-car.png" alt="Tinted windows" className="absolute inset-0 w-full h-full object-cover" draggable={false} />
+                      <div className="absolute inset-0 pointer-events-none" style={{ background: "rgb(6,10,18)", mixBlendMode: "multiply", opacity: VLT_OPACITY[state.selectedVlt] ?? 0.38, transition: "opacity 0.3s ease" }} />
+                    </div>
+                    <div className="absolute top-0 bottom-0 w-0.5 bg-white/90 shadow-[0_0_10px_rgba(255,255,255,0.7)]" style={{ left: `${tintSplitPos}%` }} />
+                    <div
+                      className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-lg cursor-col-resize"
+                      style={{ left: `${tintSplitPos}%` }}
+                      onMouseDown={e => { e.preventDefault(); setTintDragging(true); }}
+                      onTouchStart={e => { e.preventDefault(); setTintDragging(true); }}
+                    >
+                      <ChevronLeft size={14} className="text-gray-700 -mr-0.5" />
+                      <ChevronRight size={14} className="text-gray-700 -ml-0.5" />
+                    </div>
+                    <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-white tracking-widest pointer-events-none" style={{ opacity: tintSplitPos > 15 ? 1 : 0 }}>BEFORE</div>
+                    <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 text-xs font-bold text-white tracking-widest pointer-events-none" style={{ opacity: tintSplitPos < 85 ? 1 : 0 }}>{state.selectedVlt}% VLT</div>
+                    <div className="absolute bottom-3 right-3 opacity-50 pointer-events-none">
+                      <img src="/logo.png" alt="Vivid Detailing" className="h-7 w-7 object-contain" />
+                    </div>
+                  </div>
+
+                  {/* VLT selector */}
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    {VLT_LEVELS.map(l => (
+                      <button
+                        key={l.vlt}
+                        onClick={() => setState(s => ({ ...s, selectedVlt: l.vlt }))}
+                        className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
+                          state.selectedVlt === l.vlt
+                            ? "border-primary bg-primary/10 text-primary"
+                            : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                        }`}
+                      >
+                        <span className="w-8 h-5 rounded border border-white/10" style={{ background: `rgba(8,12,20,${VLT_OPACITY[l.vlt]})` }} />
+                        {l.vlt}%
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Description of selected level */}
+                  {(() => {
+                    const lvl = VLT_LEVELS.find(l => l.vlt === state.selectedVlt) ?? VLT_LEVELS[3];
+                    return (
+                      <div className="rounded-lg bg-card border border-border p-4 space-y-2">
+                        <p className="font-semibold text-sm">{lvl.label}</p>
+                        {lvl.desc.map(d => (
+                          <div key={d} className="flex items-start gap-2 text-sm text-muted-foreground">
+                            <span className="text-primary mt-0.5">•</span>
+                            <span>{d}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -1079,12 +1212,18 @@ export default function BookingFlow() {
         {/* Navigation */}
         {step < 8 && (
           <div className="flex justify-between items-center mt-6 pt-6 border-t border-border">
-            <Button variant="ghost" onClick={() => go(-1)} disabled={step === 1} className="gap-2">
+            <Button variant="ghost" onClick={handleBack} disabled={step === 1 && !tintSubStep} className="gap-2">
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8"
-              onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : () => go(1)}
+              onClick={
+                step === 7 ? handleSubmit :
+                step === 1 ? handleStep1Continue :
+                step === 2 && state.intent === "tint" && !tintSubStep ? () => setTintSubStep(true) :
+                step === 2 && tintSubStep ? () => { setTintSubStep(false); go(1); } :
+                () => go(1)
+              }
               disabled={!canNext || (step === 1 && captureLead.isPending)}
             >
               {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-4 h-4" />
@@ -1223,10 +1362,15 @@ export default function BookingFlow() {
             </div>
             <Button
               className="bg-primary text-primary-foreground shrink-0"
-              onClick={step === 7 ? handleSubmit : () => go(1)}
+              onClick={
+                step === 7 ? handleSubmit :
+                step === 2 && state.intent === "tint" && !tintSubStep ? () => setTintSubStep(true) :
+                step === 2 && tintSubStep ? () => { setTintSubStep(false); go(1); } :
+                () => go(1)
+              }
               disabled={!canNext}
             >
-              {step === 7 ? "Confirm" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
+              {step === 7 ? "Confirm" : tintSubStep ? "Continue to Pricing" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
             </Button>
           </div>
         </div>

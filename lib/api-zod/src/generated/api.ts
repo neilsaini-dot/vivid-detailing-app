@@ -15,6 +15,27 @@ export const HealthCheckResponse = zod.object({
 });
 
 /**
+ * @summary Get available time slots for a given date and service duration
+ */
+export const GetCalendarAvailabilityQueryParams = zod.object({
+  date: zod.coerce.string(),
+  duration: zod.coerce.number().optional(),
+});
+
+export const GetCalendarAvailabilityResponse = zod.object({
+  date: zod.string(),
+  duration: zod.number(),
+  slots: zod.array(
+    zod.object({
+      start: zod.string(),
+      end: zod.string(),
+      label: zod.string(),
+      available: zod.boolean(),
+    }),
+  ),
+});
+
+/**
  * @summary List all active services
  */
 export const ListServicesQueryParams = zod.object({

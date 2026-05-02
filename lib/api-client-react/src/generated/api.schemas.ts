@@ -346,10 +346,34 @@ export interface UpdateSeasonalPromoBody {
   description?: string;
 }
 
+export interface TimeSlot {
+  start: string;
+  end: string;
+  label: string;
+  available: boolean;
+}
+
+export interface CalendarAvailability {
+  date: string;
+  duration: number;
+  slots: TimeSlot[];
+}
+
 export interface CaptureLeadBody {
   name: string;
   phone: string;
 }
+
+export type GetCalendarAvailabilityParams = {
+  /**
+   * Date in YYYY-MM-DD format
+   */
+  date: string;
+  /**
+   * Service duration in hours
+   */
+  duration?: number;
+};
 
 export type ListServicesParams = {
   category?: string;

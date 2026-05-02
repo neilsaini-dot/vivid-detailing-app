@@ -27,6 +27,7 @@ import type {
   AdminUpdateServiceBody,
   AnalyticsData,
   Booking,
+  CalendarAvailability,
   CaptureLeadBody,
   CreateBookingBody,
   CreateQuoteBody,
@@ -34,6 +35,7 @@ import type {
   Customer,
   CustomerDashboard,
   GetAnalyticsParams,
+  GetCalendarAvailabilityParams,
   HealthStatus,
   ListAddOnsParams,
   ListServicesParams,
@@ -125,6 +127,109 @@ export function useHealthCheck<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getHealthCheckQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get available time slots for a given date and service duration
+ */
+export const getGetCalendarAvailabilityUrl = (
+  params: GetCalendarAvailabilityParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/calendar/availability?${stringifiedParams}`
+    : `/api/calendar/availability`;
+};
+
+export const getCalendarAvailability = async (
+  params: GetCalendarAvailabilityParams,
+  options?: RequestInit,
+): Promise<CalendarAvailability> => {
+  return customFetch<CalendarAvailability>(
+    getGetCalendarAvailabilityUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetCalendarAvailabilityQueryKey = (
+  params?: GetCalendarAvailabilityParams,
+) => {
+  return [`/api/calendar/availability`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCalendarAvailabilityQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCalendarAvailability>>,
+  TError = ErrorType<void>,
+>(
+  params: GetCalendarAvailabilityParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCalendarAvailability>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCalendarAvailabilityQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCalendarAvailability>>
+  > = ({ signal }) =>
+    getCalendarAvailability(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCalendarAvailability>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCalendarAvailabilityQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCalendarAvailability>>
+>;
+export type GetCalendarAvailabilityQueryError = ErrorType<void>;
+
+/**
+ * @summary Get available time slots for a given date and service duration
+ */
+
+export function useGetCalendarAvailability<
+  TData = Awaited<ReturnType<typeof getCalendarAvailability>>,
+  TError = ErrorType<void>,
+>(
+  params: GetCalendarAvailabilityParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCalendarAvailability>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCalendarAvailabilityQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

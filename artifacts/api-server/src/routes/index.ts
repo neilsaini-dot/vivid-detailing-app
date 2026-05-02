@@ -8,6 +8,7 @@ import customersRouter from "./customers";
 import vehiclesRouter from "./vehicles";
 import quotesRouter from "./quotes";
 import adminRouter from "./admin";
+import calendarRouter from "./calendar";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(customersRouter);
 router.use(vehiclesRouter);
 router.use(quotesRouter);
 router.use(adminRouter);
+router.use(calendarRouter);
 
 export default router;

@@ -22,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import {
   useListServices, useListAddOns, useCalculatePrice, useCreateBooking, useCaptureLead,
+  useGetCalendarAvailability,
   PriceCalculateBodyVehicleType, CreateVehicleBodyType
 } from "@workspace/api-client-react";
 
@@ -286,6 +287,17 @@ export default function BookingFlow() {
     : (selSvcs.length > 0 || selAddons.length > 0)
       ? fmtTime(runTimeMin, runTimeMax)
       : null;
+
+  // Calendar availability — fetched once we're on step 7 with a date selected
+  // Duration defaults to max service time, or 4 hrs for custom/quote services
+  const selectedDateStr = state.appointmentAt
+    ? `${state.appointmentAt.getFullYear()}-${String(state.appointmentAt.getMonth() + 1).padStart(2, "0")}-${String(state.appointmentAt.getDate()).padStart(2, "0")}`
+    : undefined;
+  const calDuration = hasCustomTime ? 4 : Math.max(runTimeMax || 2, 0.25);
+  const { data: calData, isFetching: calFetching } = useGetCalendarAvailability(
+    { date: selectedDateStr!, duration: calDuration },
+    { query: { enabled: step === 7 && !!selectedDateStr } }
+  );
 
   // Auto-apply smart recommendations when customer reaches step 5
   useEffect(() => {
@@ -830,21 +842,63 @@ export default function BookingFlow() {
                         <Calendar
                           mode="single"
                           selected={state.appointmentAt}
-                          onSelect={d => setState(s => ({ ...s, appointmentAt: d }))}
-                          disabled={date => date < new Date()}
+                          onSelect={d => setState(s => ({ ...s, appointmentAt: d, timeSlot: undefined }))}
+                          disabled={date => {
+                            const today = new Date();
+                            today.setHours(0, 0, 0, 0);
+                            return date < today;
+                          }}
                           className="rounded-md"
                         />
                       </Card>
                     </div>
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        <Label>Time Slot</Label>
-                        <Select value={state.timeSlot} onValueChange={v => setState(s => ({ ...s, timeSlot: v }))}>
-                          <SelectTrigger><SelectValue placeholder="Select a time" /></SelectTrigger>
-                          <SelectContent>
-                            {TIME_SLOTS.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
+                        <div className="flex items-center justify-between">
+                          <Label>Available Time Slots</Label>
+                          {timeEstimate && (
+                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                              <Clock size={10} />{timeEstimate} est.
+                            </span>
+                          )}
+                        </div>
+                        {!state.appointmentAt ? (
+                          <p className="text-sm text-muted-foreground py-4 text-center">Select a date to see available slots.</p>
+                        ) : calFetching ? (
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            {[...Array(6)].map((_, i) => (
+                              <div key={i} className="h-10 rounded-md bg-accent animate-pulse" />
+                            ))}
+                          </div>
+                        ) : calData?.slots && calData.slots.length > 0 ? (
+                          <div className="grid grid-cols-2 gap-2 pt-1">
+                            {calData.slots.map(slot => {
+                              const isSelected = state.timeSlot === slot.start;
+                              return (
+                                <button
+                                  key={slot.start}
+                                  type="button"
+                                  disabled={!slot.available}
+                                  onClick={() => setState(s => ({ ...s, timeSlot: slot.start }))}
+                                  className={`relative h-10 rounded-md border text-sm font-medium transition-all
+                                    ${!slot.available
+                                      ? "border-border/30 text-muted-foreground/30 cursor-not-allowed line-through bg-transparent"
+                                      : isSelected
+                                        ? "border-primary bg-primary text-primary-foreground shadow-[0_0_8px_rgba(41,184,217,0.4)]"
+                                        : "border-border hover:border-primary/60 hover:bg-primary/5 text-foreground"
+                                    }`}
+                                >
+                                  {slot.label}
+                                  {!slot.available && (
+                                    <span className="absolute inset-0 flex items-center justify-center text-[9px] text-muted-foreground/40 mt-4">booked</span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground py-4 text-center">No available slots for this date.</p>
+                        )}
                       </div>
                       <div className="space-y-2">
                         <Label>Email</Label>

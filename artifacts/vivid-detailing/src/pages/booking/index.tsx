@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Activity, Droplet, Sun, Shield, Settings,
-  ChevronRight, ArrowLeft, Plus, Check, CalendarIcon, Info, User, Phone
+  ChevronRight, ArrowLeft, Plus, Check, CalendarIcon, Info, User, Phone, Clock
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -150,6 +150,57 @@ const SMART_RECS: Record<string, string[]> = {
   "Vivid Ceramic Tint - Full":       ["Windshield Eyebrow Tint", "Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP"],
 };
 
+// ── Time estimates ──────────────────────────────────────────────
+// Vehicle modifier applies per base service (SUV/Truck +1hr, Van +2hr)
+const SERVICE_TIMES: Record<string, { min: number; max: number; custom?: boolean }> = {
+  "Vivid Interior":                    { min: 4,  max: 6  },
+  "Vivid Luster":                      { min: 5,  max: 6  },
+  "Vivid Glow":                        { min: 6,  max: 7  },
+  "Summer Special Ceramic Exterior":   { min: 7,  max: 7  },
+  "Vivid Ceramic Gloss Pro":           { min: 7,  max: 7  },
+  "Vivid Ceramic Guard":               { min: 24, max: 24 },
+  "Vivid Ceramic Elite Guard":         { min: 36, max: 36 },
+  "Vivid Ceramic Tint - Rear":         { min: 6,  max: 6  },
+  "Vivid Ceramic Tint - Full":         { min: 8,  max: 8  },
+  "Windshield Eyebrow Tint":           { min: 2,  max: 2  },
+  "Paint Correction":                  { min: 4,  max: 24 },
+  "PPF - Full Front":                  { min: 0,  max: 0,  custom: true },
+};
+
+const ADDON_TIMES: Record<string, { min: number; max: number }> = {
+  "Pet Hair Removal":                   { min: 1, max: 2 },
+  "Steam Cleaning Interior":            { min: 1, max: 1 },
+  "Shampoo Upholstery":                 { min: 3, max: 3 },
+  "Headliner Cleaning":                 { min: 1, max: 1 },
+  "Ozone Treatment / Deodorizer":       { min: 2, max: 2 },
+  "Child Seat Clean & Sanitize":        { min: 1, max: 1 },
+  "Additional Mats":                    { min: 1, max: 1 },
+  "Vivid Interior LVP":                 { min: 2, max: 2 },
+  "Headlight Restoration":              { min: 2, max: 2 },
+  "Engine Shampoo":                     { min: 1, max: 1 },
+  "Ceramic Rims":                       { min: 1, max: 1 },
+  "Paint Decontamination":              { min: 1, max: 1 },
+  "Paint Sealant":                      { min: 1, max: 1 },
+  "Minor Scratch/Blemish Correction":   { min: 1, max: 1 },
+  "Windshield Hydrophobic Coating":     { min: 1, max: 1 },
+  "Soft Top / Tonneau Cover Protection":{ min: 1, max: 1 },
+  "Vivid Ceramic Glass - Full Vehicle": { min: 2, max: 2 },
+  "Windshield Ceramic":                 { min: 1, max: 1 },
+};
+
+function vehicleTimeMod(type: VehicleType): number {
+  if (type === "suv" || type === "truck") return 1;
+  if (type === "van") return 2;
+  return 0;
+}
+
+function fmtTime(min: number, max: number, custom?: boolean): string {
+  if (custom) return "Custom";
+  const unit = (n: number) => `${n} hr${n !== 1 ? "s" : ""}`;
+  if (min === max) return unit(min);
+  return `${min}–${max} hrs`;
+}
+
 export default function BookingFlow() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -213,6 +264,28 @@ export default function BookingFlow() {
 
   // Protection add-ons shown in step 3 for the "protect" goal
   const protectionStepAddons = (addOns as any[]).filter(a => a.showInProtectionStep);
+
+  // ── Running time estimate ──────────────────────────────────────
+  const vMod = vehicleTimeMod(state.vehicle.type);
+  const selSvcs = (services as any[]).filter(s => state.serviceIds.includes(s.id));
+  const selAddons = (addOns as any[]).filter(a => state.addOnIds.includes(a.id));
+  const hasCustomTime = selSvcs.some(s => SERVICE_TIMES[s.name]?.custom);
+  let runTimeMin = 0, runTimeMax = 0;
+  if (!hasCustomTime) {
+    for (const s of selSvcs) {
+      const t = SERVICE_TIMES[s.name];
+      if (t && !t.custom) { runTimeMin += t.min + vMod; runTimeMax += t.max + vMod; }
+    }
+  }
+  for (const a of selAddons) {
+    const t = ADDON_TIMES[a.name];
+    if (t) { runTimeMin += t.min; runTimeMax += t.max; }
+  }
+  const timeEstimate = hasCustomTime
+    ? "Custom"
+    : (selSvcs.length > 0 || selAddons.length > 0)
+      ? fmtTime(runTimeMin, runTimeMax)
+      : null;
 
   // Auto-apply smart recommendations when customer reaches step 5
   useEffect(() => {
@@ -515,9 +588,20 @@ export default function BookingFlow() {
                                 ) : (
                                   <span className="font-bold text-primary text-lg">${price ?? "—"}</span>
                                 )}
+                                {(() => {
+                                  const t = SERVICE_TIMES[svc.name];
+                                  const svcMin = t && !t.custom ? t.min + vMod : t?.min ?? 0;
+                                  const svcMax = t && !t.custom ? t.max + vMod : t?.max ?? 0;
+                                  return t ? (
+                                    <div className="flex items-center justify-end gap-1 mt-1 text-muted-foreground text-xs">
+                                      <Clock size={10} />
+                                      <span>{fmtTime(svcMin, svcMax, t.custom)}</span>
+                                    </div>
+                                  ) : null;
+                                })()}
                                 {selected
-                                  ? <div className="mt-2 flex items-center justify-end gap-1 text-primary text-xs font-semibold"><Check size={12} />Selected</div>
-                                  : <div className="mt-2 text-xs text-muted-foreground">Tap to select</div>
+                                  ? <div className="mt-1.5 flex items-center justify-end gap-1 text-primary text-xs font-semibold"><Check size={12} />Selected</div>
+                                  : <div className="mt-1.5 text-xs text-muted-foreground">Tap to select</div>
                                 }
                               </div>
                             </div>
@@ -550,7 +634,14 @@ export default function BookingFlow() {
                                   <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground"}`}>
                                     {selected && <Check size={10} className="text-primary-foreground" />}
                                   </div>
-                                  <span className="font-medium text-sm">{addon.name}</span>
+                                  <div>
+                                    <span className="font-medium text-sm">{addon.name}</span>
+                                    {ADDON_TIMES[addon.name] && (
+                                      <div className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                                        <Clock size={9} />{fmtTime(ADDON_TIMES[addon.name].min, ADDON_TIMES[addon.name].max)}
+                                      </div>
+                                    )}
+                                  </div>
                                 </div>
                                 <span className="font-bold text-primary text-sm">${price ?? "—"}</span>
                               </CardContent>
@@ -596,7 +687,14 @@ export default function BookingFlow() {
                                       onCheckedChange={() => toggleAddon(addon.id)}
                                       className="h-4 w-4"
                                     />
-                                    <span className={`text-sm ${checked ? "font-medium text-primary" : "text-foreground"}`}>{addon.name}</span>
+                                    <div>
+                                      <span className={`text-sm leading-tight block ${checked ? "font-medium text-primary" : "text-foreground"}`}>{addon.name}</span>
+                                      {ADDON_TIMES[addon.name] && (
+                                        <span className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5">
+                                          <Clock size={9} />{fmtTime(ADDON_TIMES[addon.name].min, ADDON_TIMES[addon.name].max)}
+                                        </span>
+                                      )}
+                                    </div>
                                   </div>
                                   <span className={`text-xs font-semibold shrink-0 ml-4 ${checked ? "text-primary" : "text-muted-foreground"}`}>
                                     +${price}
@@ -861,6 +959,24 @@ export default function BookingFlow() {
                   ].filter(Boolean).join(" · ")} selected
                 </p>
               )}
+              {timeEstimate && (
+                <div className={`flex items-center gap-1.5 pt-2 mt-1 border-t text-sm transition-colors duration-300 ${totalFlash ? "border-primary/30 text-primary" : "border-border/50 text-muted-foreground"}`}>
+                  <Clock size={13} className="shrink-0" />
+                  <AnimatePresence mode="popLayout">
+                    <motion.span
+                      key={timeEstimate}
+                      initial={{ opacity: 0, x: -6 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="font-medium tabular-nums"
+                    >
+                      {timeEstimate}
+                    </motion.span>
+                  </AnimatePresence>
+                  <span className="text-xs text-muted-foreground">est. time</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -894,6 +1010,20 @@ export default function BookingFlow() {
                     </AnimatePresence>
                     <span className="text-[10px] text-muted-foreground">incl. HST</span>
                   </div>
+                  {timeEstimate && (
+                    <AnimatePresence mode="popLayout">
+                      <motion.div
+                        key={timeEstimate}
+                        initial={{ opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="flex items-center gap-1 text-[10px] text-muted-foreground mt-0.5"
+                      >
+                        <Clock size={9} /><span>{timeEstimate}</span>
+                      </motion.div>
+                    </AnimatePresence>
+                  )}
                 </>
               ) : (
                 <>

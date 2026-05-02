@@ -32,9 +32,9 @@ async function seed() {
   }).returning();
   await db.insert(servicePricesTable).values([
     { serviceId: vi.id, vehicleType: "car", price: "175" },
-    { serviceId: vi.id, vehicleType: "suv", price: "210" },
-    { serviceId: vi.id, vehicleType: "truck", price: "230" },
-    { serviceId: vi.id, vehicleType: "van", price: "245" },
+    { serviceId: vi.id, vehicleType: "suv", price: "195" },
+    { serviceId: vi.id, vehicleType: "truck", price: "215" },
+    { serviceId: vi.id, vehicleType: "van", price: "235" },
   ]);
 
   const [vl] = await db.insert(servicesTable).values({
@@ -48,10 +48,10 @@ async function seed() {
     showInProtectionStep: false,
   }).returning();
   await db.insert(servicePricesTable).values([
-    { serviceId: vl.id, vehicleType: "car", price: "249" },
-    { serviceId: vl.id, vehicleType: "suv", price: "300" },
-    { serviceId: vl.id, vehicleType: "truck", price: "325" },
-    { serviceId: vl.id, vehicleType: "van", price: "345" },
+    { serviceId: vl.id, vehicleType: "car", price: "219" },
+    { serviceId: vl.id, vehicleType: "suv", price: "239" },
+    { serviceId: vl.id, vehicleType: "truck", price: "259" },
+    { serviceId: vl.id, vehicleType: "van", price: "279" },
   ]);
 
   const [vg] = await db.insert(servicesTable).values({
@@ -66,9 +66,9 @@ async function seed() {
   }).returning();
   await db.insert(servicePricesTable).values([
     { serviceId: vg.id, vehicleType: "car", price: "299" },
-    { serviceId: vg.id, vehicleType: "suv", price: "360" },
-    { serviceId: vg.id, vehicleType: "truck", price: "390" },
-    { serviceId: vg.id, vehicleType: "van", price: "420" },
+    { serviceId: vg.id, vehicleType: "suv", price: "319" },
+    { serviceId: vg.id, vehicleType: "truck", price: "339" },
+    { serviceId: vg.id, vehicleType: "van", price: "359" },
   ]);
 
   const [ss] = await db.insert(servicesTable).values({

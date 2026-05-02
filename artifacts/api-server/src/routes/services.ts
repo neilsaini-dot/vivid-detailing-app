@@ -37,18 +37,21 @@ router.get("/services", async (req, res) => {
     }
 
     if (query.goal) {
-      const goalMap: Record<string, string[]> = {
-        clean: ["detailing"],
-        protect: ["ceramic", "seasonal", "protection"],
-        tint: ["tint"],
-        paint: ["detailing", "paint", "ceramic"],
-        quote: ["paint_correction", "ppf"],
+      const goalByCategory: Record<string, string[]> = {
+        clean:   ["detailing"],
+        protect: ["ceramic", "seasonal"],
+        tint:    ["tint"],
+        quote:   ["paint_correction", "ppf"],
       };
-      const cats = goalMap[query.goal] ?? [];
-      if (cats.length > 0) {
-        allServices = allServices.filter((s) =>
-          cats.some((c) => s.category.toLowerCase().includes(c))
-        );
+      const goalByName: Record<string, string[]> = {
+        paint: ["Vivid Glow", "Paint Correction", "Vivid Ceramic Guard", "Vivid Ceramic Elite Guard"],
+      };
+      if (goalByCategory[query.goal]) {
+        const cats = goalByCategory[query.goal];
+        allServices = allServices.filter((s) => cats.includes(s.category));
+      } else if (goalByName[query.goal]) {
+        const names = goalByName[query.goal];
+        allServices = allServices.filter((s) => names.includes(s.name));
       }
     }
 

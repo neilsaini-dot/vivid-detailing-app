@@ -12,7 +12,6 @@ const VEHICLE_TYPES = ["car", "suv", "truck", "van"] as const;
 async function seed() {
   console.log("Seeding database...");
 
-  // Clear existing data
   await db.delete(servicePricesTable);
   await db.delete(addOnPricesTable);
   await db.delete(servicesTable);
@@ -21,263 +20,227 @@ async function seed() {
 
   // ── SERVICES ──────────────────────────────────────────────────
 
-  // 1. Maintenance Wash & Detail (flat)
-  const [mwd] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Maintenance Wash & Detail",
-      category: "detailing",
-      pricingRule: "flat",
-      basePrice: "89",
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 1,
-      description: "Full exterior wash, interior vacuum, wipe-down, tire dressing, and windows.",
-      includes: ["Hand wash", "Interior vacuum", "Dash & console wipe-down", "Window cleaning", "Tire dressing"],
-      showInProtectionStep: false,
-    })
-    .returning();
-
-  // 2. Full Interior Detail (vehicle_multiplier_round5)
-  const [fid] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Full Interior Detail",
-      category: "detailing",
-      pricingRule: "vehicle_multiplier_round5",
-      basePrice: "175",
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 2,
-      description: "Deep clean every surface inside your vehicle — seats, carpets, dash, panels, and glass.",
-      includes: ["Seat extraction & shampoo", "Carpet shampoo", "Leather conditioning", "Vent cleaning", "Headliner wipe", "Full glass"],
-      showInProtectionStep: false,
-    })
-    .returning();
-
+  const [vi] = await db.insert(servicesTable).values({
+    name: "Vivid Interior",
+    category: "detailing",
+    pricingRule: "vehicle_multiplier_round5",
+    basePrice: "175",
+    isActive: true, isSeasonal: false, sortOrder: 1,
+    description: "Deep interior detail — seats, carpets, dash, panels, and glass cleaned to a showroom finish.",
+    includes: ["Seat extraction & shampoo", "Carpet shampoo", "Leather conditioning", "Vent cleaning", "Full glass clean"],
+    showInProtectionStep: false,
+  }).returning();
   await db.insert(servicePricesTable).values([
-    { serviceId: fid.id, vehicleType: "car", price: "175" },
-    { serviceId: fid.id, vehicleType: "suv", price: "210" },
-    { serviceId: fid.id, vehicleType: "truck", price: "230" },
-    { serviceId: fid.id, vehicleType: "van", price: "245" },
+    { serviceId: vi.id, vehicleType: "car", price: "175" },
+    { serviceId: vi.id, vehicleType: "suv", price: "210" },
+    { serviceId: vi.id, vehicleType: "truck", price: "230" },
+    { serviceId: vi.id, vehicleType: "van", price: "245" },
   ]);
 
-  // 3. Full Detail Package (vehicle_multiplier_round5)
-  const [fdp] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Full Detail Package",
-      category: "detailing",
-      pricingRule: "vehicle_multiplier_round5",
-      basePrice: "249",
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 3,
-      description: "Complete exterior + interior detail. Our most popular service.",
-      includes: ["Everything in Interior Detail", "Hand wash & clay bar", "Tire & wheel cleaning", "Exterior spray wax", "Door jamb wipe"],
-      showInProtectionStep: false,
-    })
-    .returning();
-
+  const [vl] = await db.insert(servicesTable).values({
+    name: "Vivid Luster",
+    category: "detailing",
+    pricingRule: "vehicle_multiplier_round5",
+    basePrice: "249",
+    isActive: true, isSeasonal: false, sortOrder: 2,
+    description: "Complete exterior detail — hand wash, clay bar, tire shine, and spray wax for a showroom-ready shine.",
+    includes: ["Hand wash & dry", "Clay bar decontamination", "Tire & wheel cleaning", "Spray wax", "Exterior glass clean"],
+    showInProtectionStep: false,
+  }).returning();
   await db.insert(servicePricesTable).values([
-    { serviceId: fdp.id, vehicleType: "car", price: "249" },
-    { serviceId: fdp.id, vehicleType: "suv", price: "300" },
-    { serviceId: fdp.id, vehicleType: "truck", price: "325" },
-    { serviceId: fdp.id, vehicleType: "van", price: "345" },
+    { serviceId: vl.id, vehicleType: "car", price: "249" },
+    { serviceId: vl.id, vehicleType: "suv", price: "300" },
+    { serviceId: vl.id, vehicleType: "truck", price: "325" },
+    { serviceId: vl.id, vehicleType: "van", price: "345" },
   ]);
 
-  // 4. Ceramic Coating (vehicle_multiplier_round5)
-  const [cc] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Ceramic Coating",
-      category: "ceramic",
-      pricingRule: "vehicle_multiplier_round5",
-      basePrice: "799",
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 4,
-      description: "Professional-grade 9H ceramic coating. Hydrophobic protection for 2–5 years.",
-      includes: ["Paint decontamination", "Single-stage polish", "Ceramic coating application", "Curing", "2-year protection"],
-      showInProtectionStep: true,
-    })
-    .returning();
-
+  const [vg] = await db.insert(servicesTable).values({
+    name: "Vivid Glow",
+    category: "detailing",
+    pricingRule: "vehicle_multiplier_round5",
+    basePrice: "299",
+    isActive: true, isSeasonal: false, sortOrder: 3,
+    description: "Full interior + exterior detail with a single-stage paint enhancement for a deeper, glossier finish.",
+    includes: ["Everything in Vivid Luster", "Single-stage machine polish", "Paint decontamination", "Interior detail", "Tire dressing"],
+    showInProtectionStep: false,
+  }).returning();
   await db.insert(servicePricesTable).values([
-    { serviceId: cc.id, vehicleType: "car", price: "799" },
-    { serviceId: cc.id, vehicleType: "suv", price: "960" },
-    { serviceId: cc.id, vehicleType: "truck", price: "1040" },
-    { serviceId: cc.id, vehicleType: "van", price: "1120" },
+    { serviceId: vg.id, vehicleType: "car", price: "299" },
+    { serviceId: vg.id, vehicleType: "suv", price: "360" },
+    { serviceId: vg.id, vehicleType: "truck", price: "390" },
+    { serviceId: vg.id, vehicleType: "van", price: "420" },
   ]);
 
-  // 5. Window Tint – Full (fixed_by_vehicle_type)
-  const [wtf] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Window Tint – Full",
-      category: "tint",
-      pricingRule: "fixed_by_vehicle_type",
-      basePrice: null,
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 5,
-      description: "Full vehicle window tint using premium carbon or ceramic film. UV blocking, heat rejection.",
-      includes: ["All side windows", "Rear window", "Film warranty"],
-      showInProtectionStep: false,
-    })
-    .returning();
+  const [ss] = await db.insert(servicesTable).values({
+    name: "Summer Special Ceramic Exterior",
+    category: "seasonal",
+    pricingRule: "flat",
+    basePrice: "249",
+    isActive: true, isSeasonal: true, sortOrder: 4,
+    description: "1-year ceramic exterior protection at a summer-exclusive flat rate. Any vehicle, one price.",
+    includes: ["Exterior wash", "Paint decontamination", "Ceramic (painted surfaces)", "1-year protection", "Free maintenance wash"],
+    showInProtectionStep: false,
+  }).returning();
+  await db.insert(servicePricesTable).values(
+    VEHICLE_TYPES.map(vt => ({ serviceId: ss.id, vehicleType: vt, price: "249" }))
+  );
 
+  const [cgp] = await db.insert(servicesTable).values({
+    name: "Vivid Ceramic Gloss Pro",
+    category: "ceramic",
+    pricingRule: "vehicle_multiplier_round5",
+    basePrice: "299",
+    isActive: true, isSeasonal: false, sortOrder: 5,
+    description: "Entry-level professional ceramic coating with 1-year durability. Hydrophobic, scratch-resistant, gloss-enhancing.",
+    includes: ["Paint decontamination", "Ceramic coating (painted surfaces)", "1-year protection", "Hydrophobic finish"],
+    showInProtectionStep: false,
+  }).returning();
   await db.insert(servicePricesTable).values([
-    { serviceId: wtf.id, vehicleType: "car", price: "299" },
-    { serviceId: wtf.id, vehicleType: "suv", price: "349" },
-    { serviceId: wtf.id, vehicleType: "truck", price: "329" },
-    { serviceId: wtf.id, vehicleType: "van", price: "379" },
+    { serviceId: cgp.id, vehicleType: "car", price: "299" },
+    { serviceId: cgp.id, vehicleType: "suv", price: "360" },
+    { serviceId: cgp.id, vehicleType: "truck", price: "390" },
+    { serviceId: cgp.id, vehicleType: "van", price: "420" },
   ]);
 
-  // 6. Window Tint – Rear Only (fixed_by_vehicle_type)
-  const [wtr] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Window Tint – Rear Only",
-      category: "tint",
-      pricingRule: "fixed_by_vehicle_type",
-      basePrice: null,
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 6,
-      description: "Rear window and rear side windows only. Great for privacy and UV protection.",
-      includes: ["Rear window", "Rear side windows", "Film warranty"],
-      showInProtectionStep: false,
-    })
-    .returning();
-
+  const [cg] = await db.insert(servicesTable).values({
+    name: "Vivid Ceramic Guard",
+    category: "ceramic",
+    pricingRule: "vehicle_multiplier_round5",
+    basePrice: "999",
+    isActive: true, isSeasonal: false, sortOrder: 6,
+    description: "3-year ceramic protection with a single-stage paint enhancement. Covers paint, trim, and glass surfaces.",
+    includes: ["Decontamination wash", "Single-stage paint enhancement", "Ceramic (paint + trim)", "3-year protection"],
+    showInProtectionStep: false,
+  }).returning();
   await db.insert(servicePricesTable).values([
-    { serviceId: wtr.id, vehicleType: "car", price: "199" },
-    { serviceId: wtr.id, vehicleType: "suv", price: "229" },
-    { serviceId: wtr.id, vehicleType: "truck", price: "219" },
-    { serviceId: wtr.id, vehicleType: "van", price: "249" },
+    { serviceId: cg.id, vehicleType: "car", price: "999" },
+    { serviceId: cg.id, vehicleType: "suv", price: "1200" },
+    { serviceId: cg.id, vehicleType: "truck", price: "1300" },
+    { serviceId: cg.id, vehicleType: "van", price: "1400" },
   ]);
 
-  // 7. Paint Correction (quote_based)
-  const [pc] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Paint Correction",
-      category: "paint_correction",
-      pricingRule: "quote_based",
-      basePrice: null,
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 7,
-      description: "Single or multi-stage machine polishing to remove swirl marks, scratches, and oxidation.",
-      includes: ["Paint decontamination", "Machine polish", "Before/after photos", "Quote-based pricing"],
-      showInProtectionStep: true,
-    })
-    .returning();
+  const [ceg] = await db.insert(servicesTable).values({
+    name: "Vivid Ceramic Elite Guard",
+    category: "ceramic",
+    pricingRule: "admin_configurable",
+    basePrice: "1299",
+    isActive: true, isSeasonal: false, sortOrder: 7,
+    description: "Our most comprehensive ceramic package — 5-year durability covering paint, trim, and glass.",
+    includes: ["Everything in Ceramic Guard", "5-year ceramic durability", "Premium paint enhancement", "Glass ceramic included"],
+    showInProtectionStep: false,
+  }).returning();
+  await db.insert(servicePricesTable).values(
+    VEHICLE_TYPES.map(vt => ({ serviceId: ceg.id, vehicleType: vt, price: "1299" }))
+  );
 
-  // 8. PPF – Full Front (quote_based)
-  const [ppf] = await db
-    .insert(servicesTable)
-    .values({
-      name: "PPF – Full Front",
-      category: "ppf",
-      pricingRule: "quote_based",
-      basePrice: null,
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 8,
-      description: "Paint Protection Film on the full front end — hood, fenders, mirrors, bumper, A-pillars.",
-      includes: ["Hood", "Fenders", "Front bumper", "Side mirrors", "A-pillars", "Self-healing film"],
-      showInProtectionStep: true,
-    })
-    .returning();
+  const [ctr] = await db.insert(servicesTable).values({
+    name: "Vivid Ceramic Tint - Rear",
+    category: "tint",
+    pricingRule: "flat",
+    basePrice: "275",
+    isActive: true, isSeasonal: false, sortOrder: 8,
+    description: "Nano ceramic IR tint on back windows and rear windshield. Lifetime warranty.",
+    includes: ["Back side windows", "Rear windshield", "Nano ceramic IR film", "Lifetime warranty"],
+    showInProtectionStep: false,
+  }).returning();
+  await db.insert(servicePricesTable).values(
+    VEHICLE_TYPES.map(vt => ({ serviceId: ctr.id, vehicleType: vt, price: "275" }))
+  );
 
-  // 9. PPF – Partial Hood (quote_based)
-  const [ppfp] = await db
-    .insert(servicesTable)
-    .values({
-      name: "PPF – Partial Hood",
-      category: "ppf",
-      pricingRule: "quote_based",
-      basePrice: null,
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 9,
-      description: "Protect the leading edge and partial hood from rock chips and road debris.",
-      includes: ["Partial hood (18\"/24\")", "Front bumper", "Self-healing film", "10-year warranty"],
-      showInProtectionStep: false,
-    })
-    .returning();
+  const [ctf] = await db.insert(servicesTable).values({
+    name: "Vivid Ceramic Tint - Full",
+    category: "tint",
+    pricingRule: "flat",
+    basePrice: "350",
+    isActive: true, isSeasonal: false, sortOrder: 9,
+    description: "Full vehicle nano ceramic IR tint — rear + all front side windows. Lifetime warranty.",
+    includes: ["All side windows", "Rear windshield", "Nano ceramic IR film", "Lifetime warranty"],
+    showInProtectionStep: false,
+  }).returning();
+  await db.insert(servicePricesTable).values(
+    VEHICLE_TYPES.map(vt => ({ serviceId: ctf.id, vehicleType: vt, price: "350" }))
+  );
 
-  // 10. Headlight Restoration (flat)
-  const [hlr] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Headlight Restoration",
-      category: "detailing",
-      pricingRule: "flat",
-      basePrice: "89",
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 10,
-      description: "Polish and seal yellowed or foggy headlights to restore clarity and improve visibility.",
-      includes: ["Wet sand & polish", "UV sealant coat", "Both headlights"],
-      showInProtectionStep: false,
-    })
-    .returning();
+  const [wet] = await db.insert(servicesTable).values({
+    name: "Windshield Eyebrow Tint",
+    category: "tint",
+    pricingRule: "flat",
+    basePrice: "50",
+    isActive: true, isSeasonal: false, sortOrder: 10,
+    description: "A tinted visor strip along the top of the windshield to cut sun glare.",
+    includes: ["Top 6\" windshield strip", "Carbon or ceramic film", "Lifetime warranty"],
+    showInProtectionStep: false,
+  }).returning();
+  await db.insert(servicePricesTable).values(
+    VEHICLE_TYPES.map(vt => ({ serviceId: wet.id, vehicleType: vt, price: "50" }))
+  );
 
-  // 11. Windshield Eyebrow Tint (flat)
-  const [wet] = await db
-    .insert(servicesTable)
-    .values({
-      name: "Windshield Eyebrow Tint",
-      category: "tint",
-      pricingRule: "flat",
-      basePrice: "79",
-      isActive: true,
-      isSeasonal: false,
-      sortOrder: 11,
-      description: "A tinted visor strip along the top of the windshield for glare reduction.",
-      includes: ["Top 6\" strip", "Carbon or ceramic film", "Lifetime film warranty"],
-      showInProtectionStep: false,
-    })
-    .returning();
+  const [pc] = await db.insert(servicesTable).values({
+    name: "Paint Correction",
+    category: "paint_correction",
+    pricingRule: "quote_based",
+    basePrice: null,
+    isActive: true, isSeasonal: false, sortOrder: 11,
+    description: "Single or multi-stage machine polishing to remove swirl marks, scratches, and oxidation. Priced after inspection.",
+    includes: ["Paint decontamination", "Machine polish", "Before/after photos", "Quote-based pricing"],
+    showInProtectionStep: false,
+  }).returning();
+
+  await db.insert(servicesTable).values({
+    name: "PPF - Full Front",
+    category: "ppf",
+    pricingRule: "quote_based",
+    basePrice: null,
+    isActive: true, isSeasonal: false, sortOrder: 12,
+    description: "Paint Protection Film on the full front end — hood, fenders, mirrors, bumper, A-pillars.",
+    includes: ["Hood", "Fenders", "Front bumper", "Side mirrors", "A-pillars", "Self-healing film"],
+    showInProtectionStep: false,
+  }).returning();
 
   console.log("Services seeded.");
 
   // ── ADD-ONS ──────────────────────────────────────────────────
 
-  const addOnDefs = [
+  const addOnDefs: Array<{
+    name: string;
+    group: string;
+    prices: Record<typeof VEHICLE_TYPES[number], number>;
+    showInProtectionStep: boolean;
+  }> = [
     // Interior Upgrades
-    { name: "Odour Elimination (Ozone)", group: "Interior Upgrades", prices: { car: 49, suv: 59, truck: 59, van: 69 }, showInProtectionStep: false },
-    { name: "Leather Conditioning", group: "Interior Upgrades", prices: { car: 39, suv: 49, truck: 49, van: 55 }, showInProtectionStep: false },
-    { name: "Stain Guard (Fabric Seats)", group: "Interior Upgrades", prices: { car: 59, suv: 69, truck: 69, van: 79 }, showInProtectionStep: false },
-    { name: "Pet Hair Removal", group: "Interior Upgrades", prices: { car: 45, suv: 55, truck: 55, van: 65 }, showInProtectionStep: false },
-    { name: "Engine Bay Detailing", group: "Interior Upgrades", prices: { car: 89, suv: 99, truck: 99, van: 109 }, showInProtectionStep: false },
+    { name: "Pet Hair Removal",               group: "Interior Upgrades", prices: { car: 50,  suv: 60,  truck: 70,  van: 80  }, showInProtectionStep: false },
+    { name: "Steam Cleaning Interior",        group: "Interior Upgrades", prices: { car: 40,  suv: 50,  truck: 60,  van: 70  }, showInProtectionStep: false },
+    { name: "Shampoo Upholstery",             group: "Interior Upgrades", prices: { car: 30,  suv: 40,  truck: 40,  van: 60  }, showInProtectionStep: false },
+    { name: "Headliner Cleaning",             group: "Interior Upgrades", prices: { car: 40,  suv: 50,  truck: 60,  van: 70  }, showInProtectionStep: false },
+    { name: "Ozone Treatment / Deodorizer",   group: "Interior Upgrades", prices: { car: 95,  suv: 105, truck: 105, van: 135 }, showInProtectionStep: false },
+    { name: "Child Seat Clean & Sanitize",    group: "Interior Upgrades", prices: { car: 10,  suv: 10,  truck: 10,  van: 10  }, showInProtectionStep: false },
+    { name: "Additional Mats",                group: "Interior Upgrades", prices: { car: 15,  suv: 15,  truck: 15,  van: 25  }, showInProtectionStep: false },
+    { name: "Vivid Interior LVP",             group: "Interior Upgrades", prices: { car: 199, suv: 240, truck: 260, van: 280 }, showInProtectionStep: true  },
     // Exterior Upgrades
-    { name: "Clay Bar Decontamination", group: "Exterior Upgrades", prices: { car: 49, suv: 59, truck: 59, van: 69 }, showInProtectionStep: true },
-    { name: "Iron Fallout Removal", group: "Exterior Upgrades", prices: { car: 39, suv: 49, truck: 49, van: 55 }, showInProtectionStep: false },
-    { name: "Spray Wax / Paint Sealant", group: "Exterior Upgrades", prices: { car: 59, suv: 69, truck: 69, van: 79 }, showInProtectionStep: true },
-    { name: "Wheel & Tire Detail", group: "Exterior Upgrades", prices: { car: 49, suv: 59, truck: 59, van: 69 }, showInProtectionStep: false },
-    { name: "Tar & Adhesive Removal", group: "Exterior Upgrades", prices: { car: 45, suv: 55, truck: 55, van: 65 }, showInProtectionStep: false },
-    { name: "Convertible Roof Treatment", group: "Exterior Upgrades", prices: { car: 79, suv: 79, truck: 79, van: 79 }, showInProtectionStep: false },
+    { name: "Headlight Restoration",          group: "Exterior Upgrades", prices: { car: 60,  suv: 60,  truck: 60,  van: 60  }, showInProtectionStep: false },
+    { name: "Engine Shampoo",                 group: "Exterior Upgrades", prices: { car: 75,  suv: 85,  truck: 85,  van: 105 }, showInProtectionStep: false },
+    { name: "Ceramic Rims",                   group: "Exterior Upgrades", prices: { car: 60,  suv: 70,  truck: 80,  van: 70  }, showInProtectionStep: false },
+    { name: "Paint Decontamination",          group: "Exterior Upgrades", prices: { car: 150, suv: 175, truck: 200, van: 200 }, showInProtectionStep: false },
+    { name: "Paint Sealant",                  group: "Exterior Upgrades", prices: { car: 150, suv: 175, truck: 200, van: 200 }, showInProtectionStep: false },
+    { name: "Minor Scratch/Blemish Correction", group: "Exterior Upgrades", prices: { car: 150, suv: 175, truck: 200, van: 200 }, showInProtectionStep: false },
+    { name: "Windshield Hydrophobic Coating", group: "Exterior Upgrades", prices: { car: 120, suv: 140, truck: 160, van: 160 }, showInProtectionStep: false },
+    { name: "Soft Top / Tonneau Cover Protection", group: "Exterior Upgrades", prices: { car: 95, suv: 95, truck: 95, van: 95 }, showInProtectionStep: false },
+    { name: "Vivid Ceramic Glass - Full Vehicle", group: "Exterior Upgrades", prices: { car: 129, suv: 129, truck: 129, van: 129 }, showInProtectionStep: true  },
+    { name: "Windshield Ceramic",             group: "Exterior Upgrades", prices: { car: 89,  suv: 89,  truck: 89,  van: 89  }, showInProtectionStep: true  },
   ];
 
   let addonOrder = 1;
   for (const def of addOnDefs) {
-    const [addon] = await db
-      .insert(addOnsTable)
-      .values({
-        name: def.name,
-        categoryGroup: def.group,
-        isActive: true,
-        showInProtectionStep: def.showInProtectionStep,
-        sortOrder: addonOrder++,
-      })
-      .returning();
+    const [addon] = await db.insert(addOnsTable).values({
+      name: def.name,
+      categoryGroup: def.group,
+      isActive: true,
+      showInProtectionStep: def.showInProtectionStep,
+      sortOrder: addonOrder++,
+    }).returning();
 
     await db.insert(addOnPricesTable).values(
-      VEHICLE_TYPES.map((vt) => ({
+      VEHICLE_TYPES.map(vt => ({
         addOnId: addon.id,
         vehicleType: vt,
         price: String(def.prices[vt]),
@@ -286,20 +249,6 @@ async function seed() {
   }
 
   console.log("Add-ons seeded.");
-
-  // ── SEASONAL PROMOS ──────────────────────────────────────────
-
-  await db.insert(seasonalPromosTable).values({
-    name: "Summer Special Ceramic",
-    basePrice: "249",
-    isActive: true,
-    validFrom: "2025-06-01",
-    validTo: "2025-08-31",
-    description: "Our signature ceramic coating at a summer-exclusive flat rate. Any vehicle, one price.",
-    includes: ["Paint decontamination", "Single-stage polish", "Ceramic coating", "1-year protection", "Free maintenance wash"],
-  });
-
-  console.log("Seasonal promos seeded.");
   console.log("Database seeded successfully.");
   process.exit(0);
 }

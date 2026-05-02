@@ -125,6 +125,31 @@ const slideVariants = {
   exit: (d: number) => ({ x: d < 0 ? 800 : -800, opacity: 0, zIndex: 0 }),
 };
 
+const SERVICE_SCOPE: Record<string, "interior" | "exterior" | "both"> = {
+  "Vivid Interior":                    "interior",
+  "Vivid Luster":                      "both",
+  "Vivid Glow":                        "both",
+  "Summer Special Ceramic Exterior":   "exterior",
+  "Vivid Ceramic Gloss Pro":           "exterior",
+  "Vivid Ceramic Guard":               "both",
+  "Vivid Ceramic Elite Guard":         "both",
+  "Vivid Ceramic Tint - Rear":         "exterior",
+  "Vivid Ceramic Tint - Full":         "exterior",
+  "Windshield Eyebrow Tint":           "exterior",
+  "Paint Correction":                  "both",
+};
+
+const SMART_RECS: Record<string, string[]> = {
+  "Vivid Interior":                  ["Pet Hair Removal", "Ozone Treatment / Deodorizer", "Vivid Interior LVP"],
+  "Vivid Luster":                    ["Paint Sealant", "Vivid Ceramic Glass - Full Vehicle", "Engine Shampoo"],
+  "Vivid Glow":                      ["Vivid Ceramic Glass - Full Vehicle", "Windshield Hydrophobic Coating", "Vivid Interior LVP"],
+  "Summer Special Ceramic Exterior": ["Vivid Ceramic Glass - Full Vehicle", "Windshield Ceramic", "Ceramic Rims"],
+  "Vivid Ceramic Gloss Pro":         ["Vivid Ceramic Glass - Full Vehicle", "Windshield Ceramic", "Ceramic Rims"],
+  "Vivid Ceramic Guard":             ["Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP", "Ceramic Rims"],
+  "Vivid Ceramic Elite Guard":       ["Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP", "Ceramic Rims"],
+  "Vivid Ceramic Tint - Full":       ["Windshield Eyebrow Tint", "Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP"],
+};
+
 export default function BookingFlow() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
@@ -135,6 +160,7 @@ export default function BookingFlow() {
 
   const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
   const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false });
+  const [recsApplied, setRecsApplied] = useState(false);
 
   const { data: services = [] } = useListServices(
     state.intent ? { goal: state.intent } : {}
@@ -166,6 +192,31 @@ export default function BookingFlow() {
       setCurrentPricing(null);
     }
   }, [state.vehicle.type, state.serviceIds, state.addOnIds]);
+
+  // Derived: service scope determines which add-on groups to display
+  const selectedServiceNames = (services as any[])
+    .filter(s => state.serviceIds.includes(s.id))
+    .map(s => s.name as string);
+  const serviceScopes = selectedServiceNames.map(n => SERVICE_SCOPE[n] ?? "both");
+  const showInteriorAddons = serviceScopes.length === 0 || serviceScopes.some(s => s === "interior" || s === "both");
+  const showExteriorAddons = serviceScopes.length === 0 || serviceScopes.some(s => s === "exterior" || s === "both");
+
+  // Protection add-ons shown in step 3 for the "protect" goal
+  const protectionStepAddons = (addOns as any[]).filter(a => a.showInProtectionStep);
+
+  // Auto-apply smart recommendations when customer reaches step 5
+  useEffect(() => {
+    if (step === 5 && !recsApplied && (services as any[]).length > 0 && (addOns as any[]).length > 0) {
+      const recNames = new Set(selectedServiceNames.flatMap(n => SMART_RECS[n] ?? []));
+      const recIds = (addOns as any[]).filter(a => recNames.has(a.name)).map((a: any) => a.id);
+      if (recIds.length > 0) {
+        setState(s => ({ ...s, addOnIds: [...new Set([...s.addOnIds, ...recIds])] }));
+      }
+      setRecsApplied(true);
+    }
+    if (step !== 5) setRecsApplied(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, (services as any[]).length, (addOns as any[]).length]);
 
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
@@ -227,7 +278,7 @@ export default function BookingFlow() {
   const canNext =
     (step === 1 && !!state.customer.name && !!state.customer.phone && state.vehicleTypeSelected && !!state.vehicle.yearMakeModel) ||
     (step === 2 && !!state.intent) ||
-    (step === 3 && (state.serviceIds.length > 0 || state.promoIds.length > 0)) ||
+    (step === 3 && (state.serviceIds.length > 0 || (state.intent === "protect" && state.addOnIds.length > 0))) ||
     (step === 4) ||
     (step === 5) ||
     (step === 6) ||
@@ -415,143 +466,195 @@ export default function BookingFlow() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Recommended Services</h2>
-                    <p className="text-muted-foreground">Select one or more base services.</p>
+                    <p className="text-muted-foreground">Select one or more services below.</p>
                   </div>
 
-                  {state.intent === "protect" && (
-                    <Card className="border-primary bg-primary/5 relative overflow-hidden mb-2">
-                      <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-xs font-bold px-3 py-1 rounded-bl-lg">
-                        SUMMER SPECIAL
-                      </div>
-                      <CardContent className="p-5">
-                        <div className="flex justify-between items-start mb-2">
-                          <h3 className="text-lg font-bold text-primary">Summer Special Ceramic</h3>
-                          <span className="font-bold text-primary">$249</span>
-                        </div>
-                        <p className="text-sm text-muted-foreground mb-4">1-year ceramic coating applied to all painted surfaces.</p>
-                        <Button
-                          variant={state.promoIds.includes("summer-special") ? "default" : "outline"}
-                          className="w-full"
-                          onClick={() => setState(s => ({ ...s, promoIds: s.promoIds.includes("summer-special") ? [] : ["summer-special"] }))}
-                        >
-                          {state.promoIds.includes("summer-special") ? <><Check className="mr-2 h-4 w-4" />Selected</> : "Select Special"}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )}
-
                   <div className="grid gap-4">
-                    {services.map(svc => (
-                      <Card
-                        key={svc.id}
-                        className={`transition-all cursor-pointer ${state.serviceIds.includes(svc.id) ? "border-primary bg-primary/5" : "hover:border-primary/40"}`}
-                        onClick={() => toggleService(svc.id)}
-                      >
-                        <CardContent className="p-4">
-                          <div className="flex justify-between items-start gap-3">
-                            <div className="flex-1">
-                              <h3 className="font-bold text-primary">{svc.name}</h3>
-                              <p className="text-sm text-muted-foreground mt-1">{svc.description}</p>
-                              {svc.includes?.length > 0 && (
-                                <ul className="mt-2 space-y-0.5">
-                                  {svc.includes.map((inc: string) => (
-                                    <li key={inc} className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                      <Check size={11} className="text-primary shrink-0" />{inc}
-                                    </li>
-                                  ))}
-                                </ul>
-                              )}
+                    {(services as any[]).map((svc: any) => {
+                      const selected = state.serviceIds.includes(svc.id);
+                      const price = svc.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? svc.basePrice;
+                      return (
+                        <Card
+                          key={svc.id}
+                          className={`transition-all cursor-pointer relative overflow-hidden ${selected ? "border-primary bg-primary/5 ring-1 ring-primary/50" : "hover:border-primary/40"} ${svc.isSeasonal ? "border-primary/60" : ""}`}
+                          onClick={() => toggleService(svc.id)}
+                        >
+                          {svc.isSeasonal && (
+                            <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2.5 py-1 rounded-bl-lg tracking-wide">
+                              SUMMER SPECIAL
                             </div>
-                            <div className="text-right shrink-0">
-                              <span className="font-bold text-primary text-lg">
-                                ${svc.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? svc.basePrice ?? "—"}
-                              </span>
-                              {state.serviceIds.includes(svc.id)
-                                ? <div className="mt-2 flex items-center justify-end gap-1 text-primary text-xs font-semibold"><Check size={12} />Selected</div>
-                                : <div className="mt-2 text-xs text-muted-foreground">Tap to select</div>
-                              }
+                          )}
+                          <CardContent className="p-4">
+                            <div className="flex justify-between items-start gap-3">
+                              <div className="flex-1">
+                                <h3 className="font-bold text-primary">{svc.name}</h3>
+                                <p className="text-sm text-muted-foreground mt-1">{svc.description}</p>
+                                {svc.includes?.length > 0 && (
+                                  <ul className="mt-2 space-y-0.5">
+                                    {svc.includes.map((inc: string) => (
+                                      <li key={inc} className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                        <Check size={11} className="text-primary shrink-0" />{inc}
+                                      </li>
+                                    ))}
+                                  </ul>
+                                )}
+                              </div>
+                              <div className="text-right shrink-0">
+                                {svc.pricingRule === "quote_based" ? (
+                                  <span className="font-bold text-primary text-base">Quote</span>
+                                ) : (
+                                  <span className="font-bold text-primary text-lg">${price ?? "—"}</span>
+                                )}
+                                {selected
+                                  ? <div className="mt-2 flex items-center justify-end gap-1 text-primary text-xs font-semibold"><Check size={12} />Selected</div>
+                                  : <div className="mt-2 text-xs text-muted-foreground">Tap to select</div>
+                                }
+                              </div>
                             </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {services.length === 0 && (
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                    {(services as any[]).length === 0 && (
                       <p className="text-center text-muted-foreground py-12">No services found. Please go back and select a goal.</p>
                     )}
                   </div>
+
+                  {state.intent === "protect" && protectionStepAddons.length > 0 && (
+                    <div className="mt-2">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 border-b border-border pb-2">
+                        Individual Protection Add-ons
+                      </h3>
+                      <div className="grid gap-3">
+                        {protectionStepAddons.map((addon: any) => {
+                          const selected = state.addOnIds.includes(addon.id);
+                          const price = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? addon.prices[0]?.price;
+                          return (
+                            <Card
+                              key={addon.id}
+                              className={`transition-all cursor-pointer ${selected ? "border-primary bg-primary/5 ring-1 ring-primary/50" : "hover:border-primary/40"}`}
+                              onClick={() => toggleAddon(addon.id)}
+                            >
+                              <CardContent className="flex justify-between items-center p-4">
+                                <div className="flex items-center gap-3">
+                                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 ${selected ? "bg-primary border-primary" : "border-muted-foreground"}`}>
+                                    {selected && <Check size={10} className="text-primary-foreground" />}
+                                  </div>
+                                  <span className="font-medium text-sm">{addon.name}</span>
+                                </div>
+                                <span className="font-bold text-primary text-sm">${price ?? "—"}</span>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 
               {/* ── Step 4: Add-ons ── */}
               {step === 4 && (
-                <div className="space-y-6">
+                <div className="space-y-5">
                   <div>
-                    <h2 className="text-3xl font-bold mb-2">Enhance Your Package</h2>
-                    <p className="text-muted-foreground">Optional add-ons to complete the detail.</p>
+                    <h2 className="text-3xl font-bold mb-2">Optional Add-ons</h2>
+                    <p className="text-muted-foreground text-sm">Extras to round out your service. All optional.</p>
                   </div>
-                  <div className="space-y-6">
-                    {["Interior", "Exterior"].map(group => {
-                      const grouped = addOns.filter((a: any) => a.categoryGroup === group);
+                  <div className="space-y-5">
+                    {[
+                      { key: "Interior Upgrades", show: showInteriorAddons },
+                      { key: "Exterior Upgrades", show: showExteriorAddons },
+                    ].map(({ key, show }) => {
+                      if (!show) return null;
+                      const grouped = (addOns as any[]).filter(a => a.categoryGroup === key);
                       if (!grouped.length) return null;
                       return (
-                        <div key={group}>
-                          <h3 className="text-base font-semibold mb-3 border-b border-border pb-2">{group} Upgrades</h3>
-                          <div className="grid gap-2">
-                            {grouped.map((addon: any) => (
-                              <label key={addon.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:border-primary/50 cursor-pointer">
-                                <div className="flex items-center gap-3">
-                                  <Checkbox
-                                    checked={state.addOnIds.includes(addon.id)}
-                                    onCheckedChange={c => toggleAddon(addon.id)}
-                                  />
-                                  <span className="font-medium text-sm">{addon.name}</span>
-                                </div>
-                                <span className="text-sm font-semibold text-primary">
-                                  +${addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0}
-                                </span>
-                              </label>
-                            ))}
+                        <div key={key}>
+                          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-2 border-b border-border/50 pb-1.5">{key}</h3>
+                          <div className="divide-y divide-border/40">
+                            {grouped.map((addon: any) => {
+                              const price = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0;
+                              const checked = state.addOnIds.includes(addon.id);
+                              return (
+                                <label
+                                  key={addon.id}
+                                  className={`flex items-center justify-between py-2.5 px-1 cursor-pointer rounded transition-colors ${checked ? "text-primary" : "hover:bg-accent/40"}`}
+                                >
+                                  <div className="flex items-center gap-3">
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={() => toggleAddon(addon.id)}
+                                      className="h-4 w-4"
+                                    />
+                                    <span className={`text-sm ${checked ? "font-medium text-primary" : "text-foreground"}`}>{addon.name}</span>
+                                  </div>
+                                  <span className={`text-xs font-semibold shrink-0 ml-4 ${checked ? "text-primary" : "text-muted-foreground"}`}>
+                                    +${price}
+                                  </span>
+                                </label>
+                              );
+                            })}
                           </div>
                         </div>
                       );
                     })}
-                    {addOns.length === 0 && <p className="text-muted-foreground text-center py-8">No add-ons available.</p>}
+                    {(addOns as any[]).length === 0 && <p className="text-muted-foreground text-center py-8 text-sm">No add-ons available.</p>}
                   </div>
                 </div>
               )}
 
               {/* ── Step 5: Smart Recommendations ── */}
-              {step === 5 && (
-                <div className="space-y-6">
-                  <div>
-                    <h2 className="text-3xl font-bold mb-2">Smart Recommendations</h2>
-                    <p className="text-muted-foreground">Based on your selection, you might also benefit from these.</p>
+              {step === 5 && (() => {
+                const recNames = new Set(selectedServiceNames.flatMap(n => SMART_RECS[n] ?? []));
+                const recAddons = (addOns as any[]).filter(a => recNames.has(a.name));
+                return (
+                  <div className="space-y-6">
+                    <div>
+                      <h2 className="text-3xl font-bold mb-2">Recommended Add-ons</h2>
+                      <p className="text-muted-foreground text-sm">
+                        {recAddons.length > 0
+                          ? "Based on your selected service, here's what we recommend adding."
+                          : "Your selection looks complete — no additional recommendations."}
+                      </p>
+                    </div>
+                    <div className="grid gap-3">
+                      {recAddons.map((addon: any) => {
+                        const added = state.addOnIds.includes(addon.id);
+                        const price = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0;
+                        return (
+                          <Card key={addon.id} className={`transition-all ${added ? "border-primary bg-primary/5" : "border-border"}`}>
+                            <CardContent className="p-4 flex justify-between items-center gap-4">
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-semibold text-sm">{addon.name}</span>
+                                  <Badge className="bg-primary/15 text-primary border-0 text-[10px] px-1.5 py-0">Recommended</Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-0.5">Pairs well with your selected service.</p>
+                              </div>
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="font-bold text-primary text-sm">+${price}</span>
+                                <Button
+                                  size="sm"
+                                  variant={added ? "default" : "outline"}
+                                  className="h-8 px-3 text-xs"
+                                  onClick={() => toggleAddon(addon.id)}
+                                >
+                                  {added ? "Remove" : "Add"}
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                    {recAddons.length > 0 && (
+                      <p className="text-xs text-muted-foreground text-center pt-2">
+                        You can also adjust add-ons in the previous step.
+                      </p>
+                    )}
                   </div>
-                  <div className="grid gap-4">
-                    {addOns.slice(0, 2).map((addon: any) => (
-                      <Card key={addon.id} className="border-primary/40 bg-primary/5">
-                        <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
-                          <CardTitle className="text-base">{addon.name}</CardTitle>
-                          <Badge className="bg-primary/20 text-primary border-0">Recommended</Badge>
-                        </CardHeader>
-                        <CardContent>
-                          <div className="flex justify-between items-center">
-                            <span className="text-sm text-muted-foreground">Highly suggested for {state.vehicle.type}s.</span>
-                            <div className="flex items-center gap-3">
-                              <span className="font-bold text-primary">+${addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0}</span>
-                              <Button size="sm" variant={state.addOnIds.includes(addon.id) ? "default" : "outline"}
-                                onClick={() => toggleAddon(addon.id)}>
-                                {state.addOnIds.includes(addon.id) ? "Remove" : "Add"}
-                              </Button>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
-                    {addOns.length === 0 && <p className="text-muted-foreground text-sm">Nothing to recommend at this time — your selection looks great!</p>}
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* ── Step 6: Review Estimate ── */}
               {step === 6 && (

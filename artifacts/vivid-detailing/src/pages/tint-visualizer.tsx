@@ -9,29 +9,38 @@ const VLT_LEVELS = [
   { vlt: 5,  label: "5% — Limo",       desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
   { vlt: 15, label: "15% — Very Dark", desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
   { vlt: 25, label: "25% — Dark",      desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
-  { vlt: 35, label: "35% — Medium",    desc: ["Legal for front windows in many provinces", "Good balance of privacy and visibility", "Elegant, understated finish"] },
-  { vlt: 50, label: "50% — Light",     desc: ["Light tint, highly visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
+  { vlt: 35, label: "35% — Medium",    desc: ["Legal limit for front windows in PEI", "Good balance of privacy and visibility", "Elegant, understated finish"] },
+  { vlt: 50, label: "50% — Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
 ];
+
+// VLT % → overlay opacity on the glass polygons only
+const VLT_OPACITY: Record<number, number> = {
+  5:  0.83,
+  15: 0.65,
+  25: 0.47,
+  35: 0.28,
+  50: 0.10,
+};
+
+/*
+  SVG viewBox is "0 0 100 56.25" (matches 16:9 image).
+  Polygon coordinates were traced from the generated photo:
+    - Front door glass (driver side)
+    - Rear door glass
+    - Small rear quarter glass
+  The dark B-pillar between windows is left untouched (it's already dark body panel).
+*/
+const WINDOW_PATHS = {
+  front: "8.5,5.5 44.5,4.8 44.8,32.2 8.8,32.8",
+  rear:  "47.5,4.8 82.2,5.5 82.2,32.0 47.5,31.8",
+  quarter: "82.5,7.2 92.8,12.0 92.8,31.5 82.5,31.5",
+};
 
 export default function TintVisualizer() {
   const [vlt, setVlt] = useState<number>(35);
 
-  // Convert VLT % → overlay opacity
-  // 5% VLT = very dark window → high overlay opacity
-  // 50% VLT = light window → low overlay opacity
-  const getOverlayOpacity = (vltValue: number) => {
-    const mapped: Record<number, number> = {
-      5: 0.80,
-      15: 0.62,
-      25: 0.46,
-      35: 0.30,
-      50: 0.14,
-    };
-    return mapped[vltValue] ?? 0.30;
-  };
-
   const currentLevel = VLT_LEVELS.find((l) => l.vlt === vlt) ?? VLT_LEVELS[3];
-  const overlayOpacity = getOverlayOpacity(vlt);
+  const opacity = VLT_OPACITY[vlt] ?? 0.28;
 
   return (
     <div className="container py-12 max-w-5xl">
@@ -39,45 +48,79 @@ export default function TintVisualizer() {
         <p className="text-sm font-semibold tracking-widest uppercase text-primary mb-3">Interactive Preview</p>
         <h1 className="text-4xl font-bold tracking-tight mb-4">Window Tint Visualizer</h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          Drag the slider to preview how different tint percentages look on a real vehicle. VLT (Visible Light Transmission) — the lower the number, the darker the tint.
+          Drag the slider to preview how different tint percentages look on real glass. VLT (Visible Light Transmission) — lower percentage means darker windows.
         </p>
       </div>
 
       <div className="grid md:grid-cols-2 gap-10 items-start mb-16">
 
-        {/* Car Photo with Tint Overlay */}
+        {/* Car Photo with precise glass overlay */}
         <div className="space-y-4">
           <div className="relative aspect-video rounded-xl border border-border overflow-hidden bg-black shadow-xl shadow-black/40">
-            {/* Real car photo */}
+            {/* Real car side-window photo */}
             <img
               src="/tint-car.png"
-              alt="Vehicle for tint preview"
+              alt="Vehicle side windows for tint preview"
               className="absolute inset-0 w-full h-full object-cover"
               draggable={false}
             />
 
-            {/* Tint overlay — dark blue-grey to mimic real window film */}
-            <div
-              className="absolute inset-0 transition-opacity duration-300 pointer-events-none"
-              style={{
-                background: "linear-gradient(160deg, rgba(8,18,35,1) 0%, rgba(15,28,55,0.95) 100%)",
-                opacity: overlayOpacity,
-                mixBlendMode: "multiply",
-              }}
-            />
+            {/*
+              SVG tint mask — sits perfectly over the photo.
+              viewBox matches 16:9 (100 × 56.25).
+              Each polygon covers only the glass area, leaving body panels untouched.
+            */}
+            <svg
+              className="absolute inset-0 w-full h-full pointer-events-none"
+              viewBox="0 0 100 56.25"
+              preserveAspectRatio="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <defs>
+                {/* Tint colour: deep blue-black, like real dark film */}
+                <linearGradient id="tintGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#03090F" />
+                  <stop offset="100%" stopColor="#060F1E" />
+                </linearGradient>
+              </defs>
 
-            {/* Logo watermark in corner */}
+              {/* Front door window */}
+              <polygon
+                points={WINDOW_PATHS.front}
+                fill="url(#tintGrad)"
+                opacity={opacity}
+                style={{ transition: "opacity 0.35s ease" }}
+              />
+
+              {/* Rear door window */}
+              <polygon
+                points={WINDOW_PATHS.rear}
+                fill="url(#tintGrad)"
+                opacity={opacity}
+                style={{ transition: "opacity 0.35s ease" }}
+              />
+
+              {/* Small rear quarter glass */}
+              <polygon
+                points={WINDOW_PATHS.quarter}
+                fill="url(#tintGrad)"
+                opacity={opacity}
+                style={{ transition: "opacity 0.35s ease" }}
+              />
+            </svg>
+
+            {/* Logo watermark */}
             <div className="absolute bottom-3 right-3 opacity-60">
               <img src="/logo.png" alt="Vivid Detailing" className="h-8 w-8 object-contain" />
             </div>
 
-            {/* VLT badge */}
+            {/* Live VLT badge */}
             <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1 text-xs font-bold text-white tracking-widest">
               {vlt}% VLT
             </div>
           </div>
 
-          {/* Quick-select VLT swatches */}
+          {/* Quick-select swatches */}
           <div className="flex items-center gap-2 justify-center">
             {VLT_LEVELS.map((l) => (
               <button
@@ -91,7 +134,7 @@ export default function TintVisualizer() {
               >
                 <span
                   className="w-6 h-4 rounded-sm border border-white/10"
-                  style={{ background: `rgba(8,18,35,${getOverlayOpacity(l.vlt)})` }}
+                  style={{ background: `rgba(3,9,15,${VLT_OPACITY[l.vlt]})` }}
                 />
                 {l.vlt}%
               </button>
@@ -104,7 +147,7 @@ export default function TintVisualizer() {
           <Card className="bg-card border-border">
             <CardHeader>
               <CardTitle className="text-2xl">{currentLevel.label}</CardTitle>
-              <CardDescription>Drag the slider or tap a percentage above to preview.</CardDescription>
+              <CardDescription>Drag the slider or tap a percentage to preview on real glass.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
@@ -154,10 +197,10 @@ export default function TintVisualizer() {
       {/* Feature cards */}
       <div className="grid md:grid-cols-4 gap-5">
         {[
-          { Icon: Sun,    title: "99% UV Rejection",        body: "Protects your interior from fading and your skin from harmful UV radiation." },
-          { Icon: Shield, title: "Heat Rejection",           body: "Ceramic films block infrared heat, keeping your cabin significantly cooler." },
-          { Icon: Eye,    title: "Glare Reduction",          body: "Reduces eye strain from sun and headlights for safer, more comfortable driving." },
-          { Icon: Droplet,title: "Carbon & Ceramic Films",   body: "Advanced color-stable films — will never turn purple, bubble, or delaminate." },
+          { Icon: Sun,     title: "99% UV Rejection",      body: "Protects your interior from fading and your skin from harmful UV radiation." },
+          { Icon: Shield,  title: "Heat Rejection",         body: "Ceramic films block infrared heat, keeping your cabin significantly cooler." },
+          { Icon: Eye,     title: "Glare Reduction",        body: "Reduces eye strain from sun and headlights for safer, more comfortable driving." },
+          { Icon: Droplet, title: "Carbon & Ceramic Films", body: "Advanced color-stable films — will never turn purple, bubble, or delaminate." },
         ].map(({ Icon, title, body }) => (
           <Card key={title} className="bg-card border-border">
             <CardContent className="pt-6">

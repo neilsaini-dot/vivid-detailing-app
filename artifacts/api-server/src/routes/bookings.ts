@@ -26,6 +26,21 @@ import { sendGhlWebhook, sendGhlBookingConfirmed } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 
+/** Formats an ISO date string as "Tuesday, May 5th at 2:00 PM" (Atlantic time) */
+function formatAppointment(isoString: string | null | undefined): string | null {
+  if (!isoString) return null;
+  const date = new Date(isoString);
+  const tz = "America/Halifax";
+  const weekday = new Intl.DateTimeFormat("en-CA", { timeZone: tz, weekday: "long" }).format(date);
+  const month   = new Intl.DateTimeFormat("en-CA", { timeZone: tz, month: "long" }).format(date);
+  const dayNum  = parseInt(new Intl.DateTimeFormat("en-CA", { timeZone: tz, day: "numeric" }).format(date), 10);
+  const time    = new Intl.DateTimeFormat("en-CA", { timeZone: tz, hour: "numeric", minute: "2-digit", hour12: true }).format(date);
+  const ord     = dayNum % 10 === 1 && dayNum !== 11 ? "st"
+                : dayNum % 10 === 2 && dayNum !== 12 ? "nd"
+                : dayNum % 10 === 3 && dayNum !== 13 ? "rd" : "th";
+  return `${weekday}, ${month} ${dayNum}${ord} at ${time}`;
+}
+
 const router = Router();
 
 // POST /api/bookings
@@ -243,7 +258,7 @@ router.post("/bookings", async (req, res) => {
         services: serviceNames,
         addons: addOnNames,
         vehicle: vehicleLabel,
-        appointment_at: body.appointmentAt ?? null,
+        appointment_at: formatAppointment(body.appointmentAt),
         total_estimate: total,
         is_quote_based: hasQuote,
         notes: body.notes ?? null,
@@ -379,7 +394,7 @@ router.post("/bookings/:id/abandon", async (req, res) => {
         package: "",
         addons: [],
         total_estimate: Number(booking.totalEstimate ?? 0),
-        appointment_at: booking.appointmentAt?.toISOString() ?? null,
+        appointment_at: formatAppointment(booking.appointmentAt?.toISOString()),
         notes: booking.notes ?? null,
         is_quote_based: false,
         last_step: lastStep,

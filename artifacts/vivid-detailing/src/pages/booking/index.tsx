@@ -141,14 +141,14 @@ const SERVICE_SCOPE: Record<string, "interior" | "exterior" | "both"> = {
 };
 
 const SMART_RECS: Record<string, string[]> = {
-  "Vivid Interior":                  ["Pet Hair Removal", "Ozone Treatment / Deodorizer", "Vivid Interior LVP"],
-  "Vivid Luster":                    ["Paint Sealant", "Vivid Ceramic Glass - Full Vehicle", "Engine Shampoo"],
-  "Vivid Glow":                      ["Vivid Ceramic Glass - Full Vehicle", "Windshield Hydrophobic Coating", "Vivid Interior LVP"],
-  "Summer Special Ceramic Exterior": ["Vivid Ceramic Glass - Full Vehicle", "Windshield Ceramic", "Ceramic Rims"],
-  "Vivid Ceramic Gloss Pro":         ["Vivid Ceramic Glass - Full Vehicle", "Windshield Ceramic", "Ceramic Rims"],
-  "Vivid Ceramic Guard":             ["Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP", "Ceramic Rims"],
-  "Vivid Ceramic Elite Guard":       ["Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP", "Ceramic Rims"],
-  "Vivid Ceramic Tint - Full":       ["Windshield Eyebrow Tint", "Vivid Ceramic Glass - Full Vehicle", "Vivid Interior LVP"],
+  "Vivid Interior":                  ["Ozone Treatment / Deodorizer"],
+  "Vivid Luster":                    ["Paint Sealant", "Windshield Hydrophobic Coating"],
+  "Vivid Glow":                      ["Vivid Ceramic Glass - Full Vehicle"],
+  "Summer Special Ceramic Exterior": ["Windshield Ceramic", "Ceramic Rims"],
+  "Vivid Ceramic Gloss Pro":         ["Windshield Ceramic", "Ceramic Rims"],
+  "Vivid Ceramic Guard":             ["Vivid Ceramic Glass - Full Vehicle", "Vivid Interior Ceramic Leather", "Ceramic Rims"],
+  "Vivid Ceramic Elite Guard":       ["Vivid Ceramic Glass - Full Vehicle", "Vivid Interior Ceramic Leather", "Ceramic Rims"],
+  "Vivid Ceramic Tint - Full":       ["Windshield Eyebrow Tint", "Vivid Ceramic Glass - Full Vehicle"],
 };
 
 // ── Time estimates ──────────────────────────────────────────────
@@ -176,7 +176,7 @@ const ADDON_TIMES: Record<string, { min: number; max: number }> = {
   "Ozone Treatment / Deodorizer":       { min: 2, max: 2 },
   "Child Seat Clean & Sanitize":        { min: 1, max: 1 },
   "Additional Mats":                    { min: 1, max: 1 },
-  "Vivid Interior LVP":                 { min: 2, max: 2 },
+  "Vivid Interior Ceramic Leather":     { min: 2, max: 2 },
   "Headlight Restoration":              { min: 2, max: 2 },
   "Engine Shampoo":                     { min: 1, max: 1 },
   "Ceramic Rims":                       { min: 1, max: 1 },
@@ -221,7 +221,6 @@ export default function BookingFlow() {
 
   const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
   const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false });
-  const [recsApplied, setRecsApplied] = useState(false);
   const [totalFlash, setTotalFlash] = useState(false);
 
   const { data: services = [] } = useListServices(
@@ -308,19 +307,6 @@ export default function BookingFlow() {
     { query: { enabled: step === 7 && !!selectedDateStr } }
   );
 
-  // Auto-apply smart recommendations when customer reaches step 5
-  useEffect(() => {
-    if (step === 5 && !recsApplied && (services as any[]).length > 0 && (addOns as any[]).length > 0) {
-      const recNames = new Set(selectedServiceNames.flatMap(n => SMART_RECS[n] ?? []));
-      const recIds = (addOns as any[]).filter(a => recNames.has(a.name)).map((a: any) => a.id);
-      if (recIds.length > 0) {
-        setState(s => ({ ...s, addOnIds: [...new Set([...s.addOnIds, ...recIds])] }));
-      }
-      setRecsApplied(true);
-    }
-    if (step !== 5) setRecsApplied(false);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, (services as any[]).length, (addOns as any[]).length]);
 
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
@@ -741,56 +727,89 @@ export default function BookingFlow() {
               {step === 5 && (() => {
                 const recNames = new Set(selectedServiceNames.flatMap(n => SMART_RECS[n] ?? []));
                 const recAddons = (addOns as any[]).filter(a => recNames.has(a.name));
+                const anyAdded = recAddons.some((a: any) => state.addOnIds.includes(a.id));
                 return (
-                  <div className="space-y-6">
+                  <div className="space-y-5">
                     <div>
                       <h2 className="text-3xl font-bold mb-2">Recommended Add-ons</h2>
                       <p className="text-muted-foreground text-sm">
                         {recAddons.length > 0
-                          ? "Based on your selected service, here's what we recommend adding."
+                          ? "Pair with your service for best results. Add what you'd like — nothing is selected by default."
                           : "Your selection looks complete. No additional recommendations."}
                       </p>
                     </div>
-                    <div className="grid gap-3">
-                      {recAddons.map((addon: any) => {
-                        const added = state.addOnIds.includes(addon.id);
-                        const price = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0;
-                        return (
-                          <Card key={addon.id} className={`transition-all ${added ? "border-primary bg-primary/5" : "border-border"}`}>
-                            <CardContent className="p-4 flex justify-between items-center gap-4">
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-semibold text-sm">{addon.name}</span>
-                                  <Badge className="bg-primary/15 text-primary border-0 text-[10px] px-1.5 py-0">Recommended</Badge>
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-0.5">Pairs well with your selected service.</p>
-                                {ADDON_DISCLAIMERS[addon.name] && (
-                                  <p className="text-[10px] text-amber-500/90 mt-1 leading-tight">
-                                    ⚠ {ADDON_DISCLAIMERS[addon.name]}
-                                  </p>
-                                )}
-                              </div>
-                              <div className="flex items-center gap-3 shrink-0">
-                                <span className="font-bold text-primary text-sm">+${price}</span>
-                                <Button
-                                  size="sm"
-                                  variant={added ? "default" : "outline"}
-                                  className="h-8 px-3 text-xs"
-                                  onClick={() => toggleAddon(addon.id)}
-                                >
-                                  {added ? "Remove" : "Add"}
-                                </Button>
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
+
                     {recAddons.length > 0 && (
-                      <p className="text-xs text-muted-foreground text-center pt-2">
-                        You can also adjust add-ons in the previous step.
-                      </p>
+                      <div className="grid gap-3">
+                        {recAddons.map((addon: any) => {
+                          const added = state.addOnIds.includes(addon.id);
+                          const price = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0;
+                          return (
+                            <Card
+                              key={addon.id}
+                              className={`transition-all border ${added ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/30"}`}
+                            >
+                              <CardContent className="p-4 flex justify-between items-center gap-4">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-sm">{addon.name}</span>
+                                    <Badge className="bg-primary/15 text-primary border-0 text-[10px] px-1.5 py-0">Recommended</Badge>
+                                  </div>
+                                  {ADDON_DISCLAIMERS[addon.name] && (
+                                    <p className="text-[10px] text-amber-500/90 mt-1 leading-tight">
+                                      ⚠ {ADDON_DISCLAIMERS[addon.name]}
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-3 shrink-0">
+                                  <span className="font-bold text-primary text-sm">+${price}</span>
+                                  <Button
+                                    size="sm"
+                                    variant={added ? "default" : "outline"}
+                                    className={`h-8 px-4 text-xs font-semibold min-w-[72px] ${added ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border-primary/40 text-primary hover:bg-primary/10 hover:border-primary"}`}
+                                    onClick={() => toggleAddon(addon.id)}
+                                  >
+                                    {added ? "✓ Added" : "Add"}
+                                  </Button>
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
                     )}
+
+                    {/* No thanks / continue section */}
+                    <div className="border-t border-border/50 pt-4 flex flex-col items-center gap-3">
+                      <Button
+                        size="lg"
+                        className="w-full bg-primary text-primary-foreground hover:bg-primary/90 font-semibold"
+                        onClick={() => go(1)}
+                      >
+                        {anyAdded ? "Continue to Review" : "Continue"}
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                      {anyAdded && (
+                        <button
+                          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                          onClick={() => {
+                            const recIds = recAddons.map((a: any) => a.id);
+                            setState(s => ({ ...s, addOnIds: s.addOnIds.filter(id => !recIds.includes(id)) }));
+                            go(1);
+                          }}
+                        >
+                          No thanks, skip all recommendations
+                        </button>
+                      )}
+                      {!anyAdded && (
+                        <button
+                          className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+                          onClick={() => go(1)}
+                        >
+                          No thanks, continue without adding
+                        </button>
+                      )}
+                    </div>
                   </div>
                 );
               })()}

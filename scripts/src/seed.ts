@@ -215,7 +215,7 @@ async function seed() {
     { name: "Ozone Treatment / Deodorizer",   group: "Interior Upgrades", prices: { car: 95,  suv: 105, truck: 105, van: 135 }, showInProtectionStep: false },
     { name: "Child Seat Clean & Sanitize",    group: "Interior Upgrades", prices: { car: 10,  suv: 10,  truck: 10,  van: 10  }, showInProtectionStep: false },
     { name: "Additional Mats",                group: "Interior Upgrades", prices: { car: 15,  suv: 15,  truck: 15,  van: 25  }, showInProtectionStep: false },
-    { name: "Vivid Interior LVP",             group: "Interior Upgrades", prices: { car: 199, suv: 240, truck: 260, van: 280 }, showInProtectionStep: true  },
+    { name: "Vivid Interior Ceramic Leather", group: "Interior Upgrades", prices: { car: 199, suv: 240, truck: 260, van: 280 }, showInProtectionStep: true  },
     // Exterior Upgrades
     { name: "Headlight Restoration",          group: "Exterior Upgrades", prices: { car: 60,  suv: 60,  truck: 60,  van: 60  }, showInProtectionStep: false },
     { name: "Engine Shampoo",                 group: "Exterior Upgrades", prices: { car: 75,  suv: 85,  truck: 85,  van: 105 }, showInProtectionStep: false },

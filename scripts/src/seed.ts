@@ -210,7 +210,7 @@ async function seed() {
     // Interior Upgrades
     { name: "Pet Hair Removal",               group: "Interior Upgrades", prices: { car: 50,  suv: 60,  truck: 70,  van: 80  }, showInProtectionStep: false },
     { name: "Steam Cleaning Interior",        group: "Interior Upgrades", prices: { car: 40,  suv: 50,  truck: 60,  van: 70  }, showInProtectionStep: false },
-    { name: "Shampoo Upholstery",             group: "Interior Upgrades", prices: { car: 30,  suv: 40,  truck: 40,  van: 60  }, showInProtectionStep: false },
+    { name: "Shampoo Upholstery",             group: "Interior Upgrades", prices: { car: 95,  suv: 105, truck: 105, van: 135 }, showInProtectionStep: false },
     { name: "Headliner Cleaning",             group: "Interior Upgrades", prices: { car: 40,  suv: 50,  truck: 60,  van: 70  }, showInProtectionStep: false },
     { name: "Ozone Treatment / Deodorizer",   group: "Interior Upgrades", prices: { car: 95,  suv: 105, truck: 105, van: 135 }, showInProtectionStep: false },
     { name: "Child Seat Clean & Sanitize",    group: "Interior Upgrades", prices: { car: 10,  suv: 10,  truck: 10,  van: 10  }, showInProtectionStep: false },

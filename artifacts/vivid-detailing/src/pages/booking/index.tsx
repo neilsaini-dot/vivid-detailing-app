@@ -189,6 +189,10 @@ const ADDON_TIMES: Record<string, { min: number; max: number }> = {
   "Windshield Ceramic":                 { min: 1, max: 1 },
 };
 
+const ADDON_DISCLAIMERS: Record<string, string> = {
+  "Shampoo Upholstery": "Only needed for heavy staining. Vehicle must be left overnight.",
+};
+
 function vehicleTimeMod(type: VehicleType): number {
   if (type === "suv" || type === "truck") return 1;
   if (type === "van") return 2;
@@ -706,6 +710,11 @@ export default function BookingFlow() {
                                           <Clock size={9} />{fmtTime(ADDON_TIMES[addon.name].min, ADDON_TIMES[addon.name].max)}
                                         </span>
                                       )}
+                                      {ADDON_DISCLAIMERS[addon.name] && (
+                                        <span className="block text-[10px] text-amber-500/90 mt-0.5 leading-tight">
+                                          ⚠ {ADDON_DISCLAIMERS[addon.name]}
+                                        </span>
+                                      )}
                                     </div>
                                   </div>
                                   <span className={`text-xs font-semibold shrink-0 ml-4 ${checked ? "text-primary" : "text-muted-foreground"}`}>
@@ -750,6 +759,11 @@ export default function BookingFlow() {
                                   <Badge className="bg-primary/15 text-primary border-0 text-[10px] px-1.5 py-0">Recommended</Badge>
                                 </div>
                                 <p className="text-xs text-muted-foreground mt-0.5">Pairs well with your selected service.</p>
+                                {ADDON_DISCLAIMERS[addon.name] && (
+                                  <p className="text-[10px] text-amber-500/90 mt-1 leading-tight">
+                                    ⚠ {ADDON_DISCLAIMERS[addon.name]}
+                                  </p>
+                                )}
                               </div>
                               <div className="flex items-center gap-3 shrink-0">
                                 <span className="font-bold text-primary text-sm">+${price}</span>

@@ -373,9 +373,11 @@ export default function BookingFlow() {
           serviceIds: state.serviceIds,
           addOnIds: state.addOnIds,
           promoIds: state.promoIds,
+          bundleAddonIds: state.bundleAddonIds.length > 0 ? state.bundleAddonIds : undefined,
+          bundleDiscount: bundleDiscount > 0 ? bundleDiscount : undefined,
           appointmentAt: dt?.toISOString(),
           notes: state.notes,
-          totalEstimate: currentPricing?.total,
+          totalEstimate: adjustedTotal,
         }
       });
       toast({ title: "Booking Confirmed", description: "Your appointment has been scheduled." });

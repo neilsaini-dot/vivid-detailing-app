@@ -201,6 +201,8 @@ export const CreateBookingBody = zod.object({
   notes: zod.string().nullish(),
   photoUrls: zod.array(zod.string()).optional(),
   totalEstimate: zod.number().nullish(),
+  bundleAddonIds: zod.array(zod.string()).optional(),
+  bundleDiscount: zod.number().nullish(),
 });
 
 /**

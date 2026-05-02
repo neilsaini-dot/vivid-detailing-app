@@ -144,7 +144,9 @@ router.post("/bookings", async (req, res) => {
     }
 
     const subtotal = items.reduce((s, i) => s + Number(i.unitPrice ?? 0), 0);
-    const total = Math.round(subtotal * (1 + HST_RATE) * 100) / 100;
+    const bundleDiscount = body.bundleDiscount ?? 0;
+    const discountedSubtotal = Math.max(0, subtotal - bundleDiscount);
+    const total = Math.round(discountedSubtotal * (1 + HST_RATE) * 100) / 100;
 
     // Create booking
     const [booking] = await db
@@ -195,11 +197,20 @@ router.post("/bookings", async (req, res) => {
 
     const opportunityTitle = `${serviceNames[0] ?? "Detailing"} - ${vehicleLabel}`;
 
+    // Bundle discount context
+    const bundleAddonNames = (body.bundleAddonIds ?? [])
+      .map((id) => addOns.find((a) => a.id === id)?.name ?? id)
+      .filter(Boolean);
+    const hasBundleDeal = bundleDiscount > 0 && bundleAddonNames.length > 0;
+
     const calendarDescription = [
       `Customer: ${customer.name ?? ""} | ${customer.phone ?? ""} | ${customer.email ?? ""}`,
       `Vehicle: ${vehicleLabel}`,
       `Services: ${serviceNames.join(", ") || "N/A"}`,
       addOnNames.length > 0 ? `Add-ons: ${addOnNames.join(", ")}` : null,
+      hasBundleDeal
+        ? `🏷 Bundle Deal (25% off): ${bundleAddonNames.join(", ")} — saved $${bundleDiscount.toFixed(2)} pre-tax ($${(bundleDiscount * (1 + HST_RATE)).toFixed(2)} incl. HST)`
+        : null,
       `Estimated Total (incl. HST): $${total.toFixed(2)}`,
       body.notes ? `Notes: ${body.notes}` : null,
       `Booking ID: ${booking.id}`,
@@ -221,7 +232,7 @@ router.post("/bookings", async (req, res) => {
         tags: ["Booking", "Vivid Detailing", ...serviceNames],
       },
       opportunity: {
-        title: opportunityTitle,
+        title: hasBundleDeal ? `${opportunityTitle} 🏷 Bundle Deal` : opportunityTitle,
         status: "won",
         monetaryValue: total,
         pipelineStageName: "Won",
@@ -236,6 +247,11 @@ router.post("/bookings", async (req, res) => {
         total_estimate: total,
         is_quote_based: hasQuote,
         notes: body.notes ?? null,
+        ...(hasBundleDeal && {
+          bundle_addons: bundleAddonNames,
+          bundle_discount_pretax: bundleDiscount,
+          bundle_discount_total: Math.round(bundleDiscount * (1 + HST_RATE) * 100) / 100,
+        }),
       },
       source: "vivid-app",
     }).catch(() => {});

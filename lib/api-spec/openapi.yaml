@@ -930,6 +930,15 @@ components:
         totalEstimate:
           type: number
           nullable: true
+        bundleAddonIds:
+          type: array
+          items:
+            type: string
+          description: Add-on IDs that received the 25% bundle deal discount
+        bundleDiscount:
+          type: number
+          nullable: true
+          description: Total pre-tax bundle discount applied (25% off selected add-ons)
       required: [customer, vehicle, serviceIds, addOnIds, promoIds]
 
     UpdateBookingBody:

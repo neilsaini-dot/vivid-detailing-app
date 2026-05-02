@@ -2,9 +2,8 @@ import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
 
 const CALENDAR_ID = "primary";
-const SHOP_OPEN_HOUR = 8;
-const SHOP_CLOSE_HOUR = 18;
-// Max vehicles accepted per day via online booking
+const SHOP_OPEN_HOUR = 9;        // Earliest booking start: 9 am
+const LATEST_START_HOUR = 16;    // Latest booking start: 4 pm (end time is unrestricted)
 const MAX_BOOKINGS_PER_DAY = 3;
 
 export interface CalendarEventInput {
@@ -52,6 +51,15 @@ export interface TimeSlot {
   bookingsToday: number;
 }
 
+export interface NextAvailableSlot {
+  date: string;
+  start: string;
+  end: string;
+  label: string;
+  bookingsToday: number;
+}
+
+/** Fetch all timed events for a given date and return slot availability. */
 export async function getAvailableSlots(
   date: string,
   durationHours: number
@@ -61,7 +69,6 @@ export async function getAvailableSlots(
   const dayStart = new Date(`${date}T00:00:00`);
   const dayEnd = new Date(`${date}T23:59:59`);
 
-  // Fetch all events for the day to count total bookings
   const eventsResponse = await connectors.proxy(
     "google-calendar",
     `/calendars/${encodeURIComponent(CALENDAR_ID)}/events?timeMin=${dayStart.toISOString()}&timeMax=${dayEnd.toISOString()}&singleEvents=true&orderBy=startTime`,
@@ -82,20 +89,92 @@ export async function getAvailableSlots(
 
   const slots: TimeSlot[] = [];
 
-  for (let hour = SHOP_OPEN_HOUR; hour + durationHours <= SHOP_CLOSE_HOUR; hour++) {
+  // Generate one slot per hour from SHOP_OPEN_HOUR to LATEST_START_HOUR.
+  // No end-time restriction — jobs can run as long as needed.
+  for (let hour = SHOP_OPEN_HOUR; hour <= LATEST_START_HOUR; hour++) {
     const hh = String(hour).padStart(2, "0");
     const totalEndHours = hour + durationHours;
     const endHH = String(Math.floor(totalEndHours)).padStart(2, "0");
     const endMM = String(Math.round((totalEndHours % 1) * 60)).padStart(2, "0");
 
+    const startLabel = formatHour(hour);
+
     slots.push({
       start: `${hh}:00`,
       end: `${endHH}:${endMM}`,
-      label: `${hh}:00`,
+      label: startLabel,
       available: !dayFull,
       bookingsToday,
     });
   }
 
   return slots;
+}
+
+/**
+ * Find the next `count` available booking slots across upcoming days.
+ * Skips slots that are already in the past (for today) and fully-booked days.
+ */
+export async function getNextAvailableSlots(
+  durationHours: number,
+  count: number = 3
+): Promise<NextAvailableSlot[]> {
+  const results: NextAvailableSlot[] = [];
+
+  // Current time in Halifax (Atlantic Time)
+  const nowHalifax = currentHalifaxDate();
+  const todayStr = toDateStr(nowHalifax);
+
+  let cursor = new Date(nowHalifax);
+  cursor.setHours(0, 0, 0, 0);
+
+  const maxDays = 60;
+  let daysTried = 0;
+
+  while (results.length < count && daysTried < maxDays) {
+    const dateStr = toDateStr(cursor);
+    const isToday = dateStr === todayStr;
+
+    const slots = await getAvailableSlots(dateStr, durationHours);
+
+    for (const slot of slots) {
+      if (results.length >= count) break;
+      if (!slot.available) continue;
+
+      // For today: skip slots whose start hour has already passed (leave 1 hr buffer)
+      if (isToday) {
+        const [slotHour] = slot.start.split(":").map(Number);
+        const currentHour = nowHalifax.getHours();
+        if (slotHour <= currentHour) continue;
+      }
+
+      results.push({ date: dateStr, start: slot.start, end: slot.end, label: slot.label, bookingsToday: slot.bookingsToday });
+    }
+
+    cursor.setDate(cursor.getDate() + 1);
+    daysTried++;
+  }
+
+  return results;
+}
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function currentHalifaxDate(): Date {
+  // Returns a Date object whose .getHours() / .getDate() etc. reflect Halifax local time
+  const halifaxStr = new Date().toLocaleString("en-US", { timeZone: "America/Halifax" });
+  return new Date(halifaxStr);
+}
+
+function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function formatHour(hour: number): string {
+  const suffix = hour < 12 ? "AM" : "PM";
+  const h = hour % 12 === 0 ? 12 : hour % 12;
+  return `${h}:00 ${suffix}`;
 }

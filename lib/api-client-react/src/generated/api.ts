@@ -36,10 +36,12 @@ import type {
   CustomerDashboard,
   GetAnalyticsParams,
   GetCalendarAvailabilityParams,
+  GetCalendarNextSlotsParams,
   HealthStatus,
   ListAddOnsParams,
   ListServicesParams,
   LoyaltyInfo,
+  NextSlotsResponse,
   PriceCalculateBody,
   PriceResult,
   QuoteRequest,
@@ -230,6 +232,106 @@ export function useGetCalendarAvailability<
   },
 ): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getGetCalendarAvailabilityQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Get the next N available booking slots across upcoming days
+ */
+export const getGetCalendarNextSlotsUrl = (
+  params?: GetCalendarNextSlotsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/calendar/next-slots?${stringifiedParams}`
+    : `/api/calendar/next-slots`;
+};
+
+export const getCalendarNextSlots = async (
+  params?: GetCalendarNextSlotsParams,
+  options?: RequestInit,
+): Promise<NextSlotsResponse> => {
+  return customFetch<NextSlotsResponse>(getGetCalendarNextSlotsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetCalendarNextSlotsQueryKey = (
+  params?: GetCalendarNextSlotsParams,
+) => {
+  return [`/api/calendar/next-slots`, ...(params ? [params] : [])] as const;
+};
+
+export const getGetCalendarNextSlotsQueryOptions = <
+  TData = Awaited<ReturnType<typeof getCalendarNextSlots>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetCalendarNextSlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCalendarNextSlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetCalendarNextSlotsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getCalendarNextSlots>>
+  > = ({ signal }) =>
+    getCalendarNextSlots(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getCalendarNextSlots>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetCalendarNextSlotsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getCalendarNextSlots>>
+>;
+export type GetCalendarNextSlotsQueryError = ErrorType<void>;
+
+/**
+ * @summary Get the next N available booking slots across upcoming days
+ */
+
+export function useGetCalendarNextSlots<
+  TData = Awaited<ReturnType<typeof getCalendarNextSlots>>,
+  TError = ErrorType<void>,
+>(
+  params?: GetCalendarNextSlotsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getCalendarNextSlots>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetCalendarNextSlotsQueryOptions(params, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

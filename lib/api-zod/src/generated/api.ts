@@ -36,6 +36,28 @@ export const GetCalendarAvailabilityResponse = zod.object({
 });
 
 /**
+ * @summary Get the next N available booking slots across upcoming days
+ */
+export const GetCalendarNextSlotsQueryParams = zod.object({
+  duration: zod.coerce.number().optional(),
+  count: zod.coerce.number().optional(),
+});
+
+export const GetCalendarNextSlotsResponse = zod.object({
+  duration: zod.number(),
+  count: zod.number(),
+  slots: zod.array(
+    zod.object({
+      date: zod.string(),
+      start: zod.string(),
+      end: zod.string(),
+      label: zod.string(),
+      bookingsToday: zod.number(),
+    }),
+  ),
+});
+
+/**
  * @summary List all active services
  */
 export const ListServicesQueryParams = zod.object({
@@ -201,8 +223,16 @@ export const CreateBookingBody = zod.object({
   notes: zod.string().nullish(),
   photoUrls: zod.array(zod.string()).optional(),
   totalEstimate: zod.number().nullish(),
-  bundleAddonIds: zod.array(zod.string()).optional(),
-  bundleDiscount: zod.number().nullish(),
+  bundleAddonIds: zod
+    .array(zod.string())
+    .optional()
+    .describe("Add-on IDs that received the 25% bundle deal discount"),
+  bundleDiscount: zod
+    .number()
+    .nullish()
+    .describe(
+      "Total pre-tax bundle discount applied (25% off selected add-ons)",
+    ),
 });
 
 /**

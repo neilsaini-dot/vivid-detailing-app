@@ -197,6 +197,10 @@ export interface CreateBookingBody {
   notes?: string | null;
   photoUrls?: string[];
   totalEstimate?: number | null;
+  /** Add-on IDs that received the 25% bundle deal discount */
+  bundleAddonIds?: string[];
+  /** Total pre-tax bundle discount applied (25% off selected add-ons) */
+  bundleDiscount?: number | null;
 }
 
 export type UpdateBookingBodyStatus =
@@ -359,6 +363,20 @@ export interface CalendarAvailability {
   slots: TimeSlot[];
 }
 
+export interface NextAvailableSlot {
+  date: string;
+  start: string;
+  end: string;
+  label: string;
+  bookingsToday: number;
+}
+
+export interface NextSlotsResponse {
+  duration: number;
+  count: number;
+  slots: NextAvailableSlot[];
+}
+
 export interface CaptureLeadBody {
   name: string;
   phone: string;
@@ -373,6 +391,17 @@ export type GetCalendarAvailabilityParams = {
    * Service duration in hours
    */
   duration?: number;
+};
+
+export type GetCalendarNextSlotsParams = {
+  /**
+   * Service duration in hours
+   */
+  duration?: number;
+  /**
+   * Number of slots to return (default 3)
+   */
+  count?: number;
 };
 
 export type ListServicesParams = {

@@ -22,7 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 
 import {
   useListServices, useListAddOns, useCalculatePrice, useCreateBooking, useCaptureLead,
-  useGetCalendarAvailability,
+  useGetCalendarAvailability, useGetCalendarNextSlots,
   PriceCalculateBodyVehicleType, CreateVehicleBodyType
 } from "@workspace/api-client-react";
 
@@ -243,6 +243,7 @@ export default function BookingFlow() {
   const [totalFlash, setTotalFlash] = useState(false);
 
   const [tintSubStep, setTintSubStep] = useState(false);
+  const [showCustomDate, setShowCustomDate] = useState(false);
   const [tintSplitPos, setTintSplitPos] = useState(50);
   const [tintDragging, setTintDragging] = useState(false);
   const tintContainerRef = useRef<HTMLDivElement>(null);
@@ -372,7 +373,12 @@ export default function BookingFlow() {
   const calDuration = hasCustomTime ? 4 : Math.max(runTimeMax || 2, 0.25);
   const { data: calData, isFetching: calFetching } = useGetCalendarAvailability(
     { date: selectedDateStr!, duration: calDuration },
-    { query: { enabled: step === 7 && !!selectedDateStr } }
+    { query: { enabled: step === 7 && showCustomDate && !!selectedDateStr } }
+  );
+  // Next 3 available slots — auto-fetched on step 7 entry
+  const { data: nextSlotsData, isFetching: nextSlotsFetching } = useGetCalendarNextSlots(
+    { duration: calDuration, count: 3 },
+    { query: { enabled: step === 7 } }
   );
 
 
@@ -1198,95 +1204,152 @@ export default function BookingFlow() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Choose a Date & Time</h2>
-                    <p className="text-muted-foreground">Pick your preferred slot and confirm your email.</p>
+                    <p className="text-muted-foreground">Pick a slot below and confirm your email.</p>
                   </div>
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-3">
-                      <Label>Appointment Date</Label>
-                      <Card className="p-2 border-border bg-card">
-                        <Calendar
-                          mode="single"
-                          selected={state.appointmentAt}
-                          onSelect={d => setState(s => ({ ...s, appointmentAt: d, timeSlot: undefined }))}
-                          disabled={date => {
-                            const today = new Date();
-                            today.setHours(0, 0, 0, 0);
-                            return date < today;
-                          }}
-                          className="rounded-md"
-                        />
-                      </Card>
+
+                  {/* ── Quick-pick: Next 3 available slots ── */}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label>Next available appointments</Label>
+                      {timeEstimate && (
+                        <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                          <Clock size={10} />{timeEstimate} est.
+                        </span>
+                      )}
                     </div>
-                    <div className="space-y-4">
-                      <div className="space-y-2">
-                        <div className="flex items-center justify-between">
-                          <Label>Available Time Slots</Label>
-                          {timeEstimate && (
-                            <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                              <Clock size={10} />{timeEstimate} est.
-                            </span>
+
+                    {nextSlotsFetching ? (
+                      <div className="grid gap-3">
+                        {[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-lg bg-accent animate-pulse" />)}
+                      </div>
+                    ) : nextSlotsData?.slots && nextSlotsData.slots.length > 0 ? (
+                      <div className="grid gap-3">
+                        {nextSlotsData.slots.map(slot => {
+                          const isQuickSelected = !showCustomDate && state.timeSlot === slot.start && selectedDateStr === slot.date;
+                          return (
+                            <button
+                              key={`${slot.date}-${slot.start}`}
+                              type="button"
+                              onClick={() => {
+                                const d = new Date(slot.date + "T00:00:00");
+                                setState(s => ({ ...s, appointmentAt: d, timeSlot: slot.start }));
+                                setShowCustomDate(false);
+                              }}
+                              className={`flex items-center justify-between w-full px-4 py-3 rounded-lg border text-sm font-medium transition-all
+                                ${isQuickSelected
+                                  ? "border-primary bg-primary text-primary-foreground shadow-[0_0_12px_rgba(41,184,217,0.3)]"
+                                  : "border-border hover:border-primary/60 hover:bg-primary/5 text-foreground"}`}
+                            >
+                              <div className="flex items-center gap-3">
+                                <CalendarIcon size={15} className={isQuickSelected ? "text-primary-foreground/80" : "text-primary"} />
+                                <span>{format(new Date(slot.date + "T12:00:00"), "EEEE, MMM d")}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <span className={isQuickSelected ? "text-primary-foreground/80" : "text-muted-foreground"}>{slot.label}</span>
+                                {isQuickSelected && <Check size={14} />}
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : !nextSlotsFetching ? (
+                      <p className="text-sm text-muted-foreground py-4 text-center">No upcoming availability found. Try choosing a date below.</p>
+                    ) : null}
+
+                    {/* Toggle to custom date picker */}
+                    <button
+                      type="button"
+                      className="flex items-center gap-1.5 text-sm text-primary hover:underline w-full justify-center py-1 mt-1"
+                      onClick={() => setShowCustomDate(v => !v)}
+                    >
+                      {showCustomDate ? <ChevronLeft size={14} /> : <ChevronRight size={14} />}
+                      {showCustomDate ? "Hide calendar" : "Choose a different date"}
+                    </button>
+
+                    {/* Custom date + slot picker */}
+                    {showCustomDate && (
+                      <div className="grid md:grid-cols-2 gap-4 pt-3 border-t border-border">
+                        <div className="space-y-2">
+                          <Label>Select date</Label>
+                          <Card className="p-2 border-border bg-card">
+                            <Calendar
+                              mode="single"
+                              selected={showCustomDate ? state.appointmentAt : undefined}
+                              onSelect={d => setState(s => ({ ...s, appointmentAt: d, timeSlot: undefined }))}
+                              disabled={date => {
+                                const today = new Date();
+                                today.setHours(0, 0, 0, 0);
+                                return date < today;
+                              }}
+                              className="rounded-md"
+                            />
+                          </Card>
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Available times</Label>
+                          {!state.appointmentAt ? (
+                            <p className="text-sm text-muted-foreground py-4 text-center">Select a date first.</p>
+                          ) : calFetching ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {[...Array(6)].map((_, i) => <div key={i} className="h-10 rounded-md bg-accent animate-pulse" />)}
+                            </div>
+                          ) : calData?.slots && calData.slots.length > 0 ? (
+                            <div className="grid grid-cols-2 gap-2">
+                              {calData.slots.map(slot => {
+                                const isSelected = showCustomDate && state.timeSlot === slot.start;
+                                return (
+                                  <button
+                                    key={slot.start}
+                                    type="button"
+                                    disabled={!slot.available}
+                                    onClick={() => setState(s => ({ ...s, timeSlot: slot.start }))}
+                                    className={`relative h-10 rounded-md border text-sm font-medium transition-all
+                                      ${!slot.available
+                                        ? "border-border/30 text-muted-foreground/30 cursor-not-allowed line-through bg-transparent"
+                                        : isSelected
+                                          ? "border-primary bg-primary text-primary-foreground shadow-[0_0_8px_rgba(41,184,217,0.4)]"
+                                          : "border-border hover:border-primary/60 hover:bg-primary/5 text-foreground"
+                                      }`}
+                                  >
+                                    {slot.label}
+                                    {!slot.available && (
+                                      <span className="absolute inset-0 flex items-center justify-center text-[9px] text-muted-foreground/40 mt-4">booked</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-muted-foreground py-4 text-center">No available slots for this date.</p>
                           )}
                         </div>
-                        {!state.appointmentAt ? (
-                          <p className="text-sm text-muted-foreground py-4 text-center">Select a date to see available slots.</p>
-                        ) : calFetching ? (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            {[...Array(6)].map((_, i) => (
-                              <div key={i} className="h-10 rounded-md bg-accent animate-pulse" />
-                            ))}
-                          </div>
-                        ) : calData?.slots && calData.slots.length > 0 ? (
-                          <div className="grid grid-cols-2 gap-2 pt-1">
-                            {calData.slots.map(slot => {
-                              const isSelected = state.timeSlot === slot.start;
-                              return (
-                                <button
-                                  key={slot.start}
-                                  type="button"
-                                  disabled={!slot.available}
-                                  onClick={() => setState(s => ({ ...s, timeSlot: slot.start }))}
-                                  className={`relative h-10 rounded-md border text-sm font-medium transition-all
-                                    ${!slot.available
-                                      ? "border-border/30 text-muted-foreground/30 cursor-not-allowed line-through bg-transparent"
-                                      : isSelected
-                                        ? "border-primary bg-primary text-primary-foreground shadow-[0_0_8px_rgba(41,184,217,0.4)]"
-                                        : "border-border hover:border-primary/60 hover:bg-primary/5 text-foreground"
-                                    }`}
-                                >
-                                  {slot.label}
-                                  {!slot.available && (
-                                    <span className="absolute inset-0 flex items-center justify-center text-[9px] text-muted-foreground/40 mt-4">booked</span>
-                                  )}
-                                </button>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-muted-foreground py-4 text-center">No available slots for this date.</p>
-                        )}
                       </div>
-                      <div className="space-y-2">
-                        <Label>Email</Label>
-                        <Input
-                          type="email"
-                          placeholder="jane@example.com"
-                          className={touched.email && !isValidEmail(state.customer.email) ? "border-destructive focus-visible:ring-destructive" : ""}
-                          value={state.customer.email}
-                          onChange={e => updateCustomer({ email: e.target.value })}
-                          onBlur={() => setTouched(t => ({ ...t, email: true }))}
-                        />
-                        {touched.email && !isValidEmail(state.customer.email) && (
-                          <p className="text-xs text-destructive">
-                            {state.customer.email ? "Please enter a valid email address" : "Please enter your email address"}
-                          </p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Notes (Optional)</Label>
-                        <Textarea placeholder="Any specific concerns or requests?"
-                          value={state.notes}
-                          onChange={e => setState(s => ({ ...s, notes: e.target.value }))} />
-                      </div>
+                    )}
+                  </div>
+
+                  {/* Email + Notes */}
+                  <div className="grid gap-4">
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input
+                        type="email"
+                        placeholder="jane@example.com"
+                        className={touched.email && !isValidEmail(state.customer.email) ? "border-destructive focus-visible:ring-destructive" : ""}
+                        value={state.customer.email}
+                        onChange={e => updateCustomer({ email: e.target.value })}
+                        onBlur={() => setTouched(t => ({ ...t, email: true }))}
+                      />
+                      {touched.email && !isValidEmail(state.customer.email) && (
+                        <p className="text-xs text-destructive">
+                          {state.customer.email ? "Please enter a valid email address" : "Please enter your email address"}
+                        </p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Notes (Optional)</Label>
+                      <Textarea placeholder="Any specific concerns or requests?"
+                        value={state.notes}
+                        onChange={e => setState(s => ({ ...s, notes: e.target.value }))} />
                     </div>
                   </div>
                 </div>

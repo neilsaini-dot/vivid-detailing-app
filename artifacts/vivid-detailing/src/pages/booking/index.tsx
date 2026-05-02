@@ -36,6 +36,7 @@ interface BookingState {
   intent?: Intent;
   serviceIds: string[];
   addOnIds: string[];
+  bundleAddonIds: string[];
   promoIds: string[];
   appointmentAt?: Date;
   timeSlot?: string;
@@ -47,7 +48,7 @@ const initialState: BookingState = {
   customer: { name: "", email: "", phone: "" },
   vehicle: { type: "car", yearMakeModel: "", colour: "" },
   vehicleTypeSelected: false,
-  serviceIds: [], addOnIds: [], promoIds: [],
+  serviceIds: [], addOnIds: [], bundleAddonIds: [], promoIds: [],
   notes: "", depositPaid: false,
 };
 
@@ -278,6 +279,13 @@ export default function BookingFlow() {
   const vMod = vehicleTimeMod(state.vehicle.type);
   const selSvcs = (services as any[]).filter(s => state.serviceIds.includes(s.id));
   const selAddons = (addOns as any[]).filter(a => state.addOnIds.includes(a.id));
+  const bundleDiscount = selAddons
+    .filter(a => state.bundleAddonIds.includes(a.id))
+    .reduce((sum, a) => {
+      const p = a.prices.find((pr: any) => pr.vehicleType === state.vehicle.type)?.price ?? 0;
+      return sum + Math.round(p * 0.25 * 100) / 100;
+    }, 0);
+  const adjustedTotal = Math.max(0, ((currentPricing?.total ?? 0) - bundleDiscount * 1.15));
   const hasCustomTime = selSvcs.some(s => SERVICE_TIMES[s.name]?.custom);
   let runTimeMin = 0, runTimeMax = 0;
   if (!hasCustomTime) {
@@ -329,7 +337,19 @@ export default function BookingFlow() {
   const updateCustomer = (d: Partial<BookingState["customer"]>) => setState(s => ({ ...s, customer: { ...s.customer, ...d } }));
   const updateVehicle = (d: Partial<BookingState["vehicle"]>) => setState(s => ({ ...s, vehicle: { ...s.vehicle, ...d } }));
   const toggleService = (id: string) => setState(s => ({ ...s, serviceIds: s.serviceIds.includes(id) ? s.serviceIds.filter(x => x !== id) : [...s.serviceIds, id] }));
-  const toggleAddon = (id: string) => setState(s => ({ ...s, addOnIds: s.addOnIds.includes(id) ? s.addOnIds.filter(x => x !== id) : [...s.addOnIds, id] }));
+  const toggleAddon = (id: string) => setState(s => ({
+    ...s,
+    addOnIds: s.addOnIds.includes(id) ? s.addOnIds.filter(x => x !== id) : [...s.addOnIds, id],
+    bundleAddonIds: s.addOnIds.includes(id) ? s.bundleAddonIds.filter(x => x !== id) : s.bundleAddonIds,
+  }));
+  const toggleBundleAddon = (id: string) => setState(s => {
+    const adding = !s.addOnIds.includes(id);
+    return {
+      ...s,
+      addOnIds: adding ? [...s.addOnIds, id] : s.addOnIds.filter(x => x !== id),
+      bundleAddonIds: adding ? [...s.bundleAddonIds, id] : s.bundleAddonIds.filter(x => x !== id),
+    };
+  });
 
   const handleSubmit = async () => {
     try {
@@ -723,60 +743,89 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 5: Smart Recommendations ── */}
+              {/* ── Step 5: Bundle Offer ── */}
               {step === 5 && (() => {
                 const recNames = new Set(selectedServiceNames.flatMap(n => SMART_RECS[n] ?? []));
                 const recAddons = (addOns as any[]).filter(a => recNames.has(a.name));
                 const anyAdded = recAddons.some((a: any) => state.addOnIds.includes(a.id));
+                const stepSavings = recAddons
+                  .filter((a: any) => state.addOnIds.includes(a.id))
+                  .reduce((sum: number, a: any) => {
+                    const p = a.prices.find((pr: any) => pr.vehicleType === state.vehicle.type)?.price ?? 0;
+                    return sum + Math.round(p * 0.25 * 100) / 100;
+                  }, 0);
                 return (
                   <div className="space-y-5">
                     <div>
-                      <h2 className="text-3xl font-bold mb-2">Recommended Add-ons</h2>
+                      <div className="flex items-center gap-2 mb-2">
+                        <h2 className="text-3xl font-bold">Exclusive Bundle Offer</h2>
+                        <Badge className="bg-emerald-500/15 text-emerald-400 border-0 text-xs px-2 py-0.5 font-bold">25% OFF</Badge>
+                      </div>
                       <p className="text-muted-foreground text-sm">
                         {recAddons.length > 0
-                          ? "Pair with your service for best results. Add what you'd like — nothing is selected by default."
-                          : "Your selection looks complete. No additional recommendations."}
+                          ? "Add any of these to your booking today and save 25% off the regular price. This deal is only available at time of booking."
+                          : "Your selection looks complete. No additional add-ons to bundle."}
                       </p>
                     </div>
 
                     {recAddons.length > 0 && (
-                      <div className="grid gap-3">
-                        {recAddons.map((addon: any) => {
-                          const added = state.addOnIds.includes(addon.id);
-                          const price = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0;
-                          return (
-                            <Card
-                              key={addon.id}
-                              className={`transition-all border ${added ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "border-border hover:border-primary/30"}`}
-                            >
-                              <CardContent className="p-4 flex justify-between items-center gap-4">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-semibold text-sm">{addon.name}</span>
-                                    <Badge className="bg-primary/15 text-primary border-0 text-[10px] px-1.5 py-0">Recommended</Badge>
+                      <>
+                        <div className="grid gap-3">
+                          {recAddons.map((addon: any) => {
+                            const added = state.addOnIds.includes(addon.id);
+                            const fullPrice = addon.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? 0;
+                            const discPrice = Math.round(fullPrice * 0.75 * 100) / 100;
+                            const savings = fullPrice - discPrice;
+                            return (
+                              <Card
+                                key={addon.id}
+                                className={`transition-all border ${added ? "border-emerald-500/50 bg-emerald-500/5 ring-1 ring-emerald-500/20" : "border-border hover:border-emerald-500/30"}`}
+                              >
+                                <CardContent className="p-4 flex justify-between items-center gap-4">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-semibold text-sm">{addon.name}</span>
+                                      {added && (
+                                        <Badge className="bg-emerald-500/15 text-emerald-400 border-0 text-[10px] px-1.5 py-0">
+                                          Saving ${savings.toFixed(0)}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                    {ADDON_DISCLAIMERS[addon.name] && (
+                                      <p className="text-[10px] text-amber-500/90 mt-1 leading-tight">
+                                        ⚠ {ADDON_DISCLAIMERS[addon.name]}
+                                      </p>
+                                    )}
                                   </div>
-                                  {ADDON_DISCLAIMERS[addon.name] && (
-                                    <p className="text-[10px] text-amber-500/90 mt-1 leading-tight">
-                                      ⚠ {ADDON_DISCLAIMERS[addon.name]}
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-3 shrink-0">
-                                  <span className="font-bold text-primary text-sm">+${price}</span>
-                                  <Button
-                                    size="sm"
-                                    variant={added ? "default" : "outline"}
-                                    className={`h-8 px-4 text-xs font-semibold min-w-[72px] ${added ? "bg-primary text-primary-foreground hover:bg-primary/90" : "border-primary/40 text-primary hover:bg-primary/10 hover:border-primary"}`}
-                                    onClick={() => toggleAddon(addon.id)}
-                                  >
-                                    {added ? "✓ Added" : "Add"}
-                                  </Button>
-                                </div>
-                              </CardContent>
-                            </Card>
-                          );
-                        })}
-                      </div>
+                                  <div className="flex items-center gap-3 shrink-0">
+                                    <div className="text-right">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-muted-foreground line-through">${fullPrice}</span>
+                                        <span className="font-bold text-emerald-400 text-sm">+${discPrice.toFixed(0)}</span>
+                                      </div>
+                                    </div>
+                                    <Button
+                                      size="sm"
+                                      variant={added ? "default" : "outline"}
+                                      className={`h-8 px-4 text-xs font-semibold min-w-[72px] ${added ? "bg-emerald-600 text-white hover:bg-emerald-700 border-0" : "border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/10 hover:border-emerald-400"}`}
+                                      onClick={() => toggleBundleAddon(addon.id)}
+                                    >
+                                      {added ? "✓ Added" : "Add"}
+                                    </Button>
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+
+                        {anyAdded && (
+                          <div className="rounded-lg bg-emerald-500/10 border border-emerald-500/20 px-4 py-3 flex items-center justify-between">
+                            <span className="text-sm text-emerald-400 font-medium">Bundle savings</span>
+                            <span className="text-sm font-bold text-emerald-400">−${stepSavings.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </>
                     )}
 
                     {/* No thanks / continue section */}
@@ -794,11 +843,15 @@ export default function BookingFlow() {
                           className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
                           onClick={() => {
                             const recIds = recAddons.map((a: any) => a.id);
-                            setState(s => ({ ...s, addOnIds: s.addOnIds.filter(id => !recIds.includes(id)) }));
+                            setState(s => ({
+                              ...s,
+                              addOnIds: s.addOnIds.filter(id => !recIds.includes(id)),
+                              bundleAddonIds: s.bundleAddonIds.filter(id => !recIds.includes(id)),
+                            }));
                             go(1);
                           }}
                         >
-                          No thanks, skip all recommendations
+                          No thanks, skip all
                         </button>
                       )}
                       {!anyAdded && (
@@ -837,14 +890,28 @@ export default function BookingFlow() {
                           <span className="text-muted-foreground">Subtotal</span>
                           <span>${currentPricing?.subtotal?.toFixed(2) ?? "0.00"}</span>
                         </div>
+                        {bundleDiscount > 0 && (
+                          <div className="flex justify-between text-sm">
+                            <span className="text-emerald-400 flex items-center gap-1">
+                              <span>Bundle Deal (25% off)</span>
+                              <Badge className="bg-emerald-500/15 text-emerald-400 border-0 text-[10px] px-1.5 py-0">SAVED</Badge>
+                            </span>
+                            <span className="text-emerald-400 font-medium">−${bundleDiscount.toFixed(2)}</span>
+                          </div>
+                        )}
                         <div className="flex justify-between text-sm">
                           <span className="text-muted-foreground">HST (15%)</span>
-                          <span>${currentPricing?.tax?.toFixed(2) ?? "0.00"}</span>
+                          <span>${(Math.max(0, (currentPricing?.subtotal ?? 0) - bundleDiscount) * 0.15).toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between font-bold text-xl pt-2 border-t border-border mt-2">
                           <span>Total</span>
-                          <span className="text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</span>
+                          <span className="text-primary">${adjustedTotal.toFixed(2)}</span>
                         </div>
+                        {bundleDiscount > 0 && (
+                          <p className="text-xs text-emerald-400 text-right">
+                            You saved ${(bundleDiscount * 1.15).toFixed(2)} with the bundle deal!
+                          </p>
+                        )}
                       </div>
 
                       {currentPricing?.hasQuoteItems && (
@@ -1027,19 +1094,25 @@ export default function BookingFlow() {
             </div>
             <div className={`border-t pt-3 space-y-1.5 transition-colors duration-300 ${totalFlash ? "border-primary/50" : "border-border"}`}>
               <div className="flex justify-between text-sm"><span className="text-muted-foreground">Subtotal</span><span>${currentPricing?.subtotal?.toFixed(2) ?? "0.00"}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-muted-foreground">HST (15%)</span><span>${currentPricing?.tax?.toFixed(2) ?? "0.00"}</span></div>
+              {bundleDiscount > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-emerald-400">Bundle Deal (25% off)</span>
+                  <span className="text-emerald-400">−${bundleDiscount.toFixed(2)}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-sm"><span className="text-muted-foreground">HST (15%)</span><span>${(Math.max(0, (currentPricing?.subtotal ?? 0) - bundleDiscount) * 0.15).toFixed(2)}</span></div>
               <div className="flex justify-between font-bold text-lg pt-1 items-center">
                 <span>Total</span>
                 <AnimatePresence mode="popLayout">
                   <motion.span
-                    key={currentPricing?.total ?? 0}
+                    key={adjustedTotal}
                     initial={{ opacity: 0, scale: 0.85 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.85 }}
                     transition={{ type: "spring", stiffness: 500, damping: 28 }}
                     className={`text-primary tabular-nums transition-colors duration-300 ${totalFlash ? "drop-shadow-[0_0_8px_rgba(41,184,217,0.6)]" : ""}`}
                   >
-                    ${currentPricing?.total?.toFixed(2) ?? "0.00"}
+                    ${adjustedTotal.toFixed(2)}
                   </motion.span>
                 </AnimatePresence>
               </div>
@@ -1090,14 +1163,14 @@ export default function BookingFlow() {
                   <div className="flex items-baseline gap-1.5">
                     <AnimatePresence mode="popLayout">
                       <motion.span
-                        key={currentPricing?.total ?? 0}
+                        key={adjustedTotal}
                         initial={{ opacity: 0, y: -8 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, y: 8 }}
                         transition={{ type: "spring", stiffness: 500, damping: 30 }}
                         className="text-xl font-bold text-primary tabular-nums"
                       >
-                        ${currentPricing?.total?.toFixed(2) ?? "0.00"}
+                        ${adjustedTotal.toFixed(2)}
                       </motion.span>
                     </AnimatePresence>
                     <span className="text-[10px] text-muted-foreground">incl. HST</span>
@@ -1120,7 +1193,7 @@ export default function BookingFlow() {
               ) : (
                 <>
                   <p className="text-xs text-muted-foreground">Estimated Total</p>
-                  <p className="text-lg font-bold text-primary">${currentPricing?.total?.toFixed(2) ?? "0.00"}</p>
+                  <p className="text-lg font-bold text-primary">${adjustedTotal.toFixed(2)}</p>
                 </>
               )}
             </div>

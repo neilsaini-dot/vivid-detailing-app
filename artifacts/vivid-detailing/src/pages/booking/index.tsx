@@ -322,6 +322,44 @@ export default function BookingFlow() {
   const createBooking = useCreateBooking();
   const captureLead = useCaptureLead();
 
+  const [confirmedBookingId, setConfirmedBookingId] = useState<string | null>(null);
+  const [magicLinkSent, setMagicLinkSent] = useState(false);
+  const [sendingMagicLink, setSendingMagicLink] = useState(false);
+
+  const handleAddToCalendar = () => {
+    const dt = state.appointmentAt ? new Date(state.appointmentAt) : null;
+    if (dt && state.timeSlot) {
+      const [h, m] = state.timeSlot.split(":");
+      dt.setHours(parseInt(h), parseInt(m), 0, 0);
+    }
+    if (!dt) return;
+    const pad = (n: number) => String(n).padStart(2, "0");
+    const fmt = (d: Date) =>
+      `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+    const end = new Date(dt.getTime() + 2 * 60 * 60 * 1000);
+    const title  = encodeURIComponent(`Vivid Detailing – ${state.customer.name}`);
+    const detail = encodeURIComponent("Your detailing appointment at Vivid Detailing, Charlottetown PEI. Questions? Call (902) 555-0100.");
+    const loc    = encodeURIComponent("Vivid Detailing, Charlottetown, PE, Canada");
+    window.open(
+      `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(dt)}/${fmt(end)}&details=${detail}&location=${loc}`,
+      "_blank"
+    );
+  };
+
+  const handleSendMagicLink = async () => {
+    if (!confirmedBookingId || magicLinkSent) return;
+    setSendingMagicLink(true);
+    try {
+      await fetch(`/api/bookings/${confirmedBookingId}/magic-link`, { method: "POST" });
+      setMagicLinkSent(true);
+      toast({ title: "Magic link sent!", description: `Check ${state.customer.email} for your login link.` });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to send", description: "Please try again." });
+    } finally {
+      setSendingMagicLink(false);
+    }
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const intentParam = params.get("intent") as Intent;
@@ -517,7 +555,7 @@ export default function BookingFlow() {
         dt.setHours(parseInt(h), parseInt(m), 0, 0);
       }
       const ymm = parseYMM(state.vehicle.yearMakeModel);
-      await createBooking.mutateAsync({
+      const bookingResult = await createBooking.mutateAsync({
         data: {
           existingCustomerId: capturedLeadId ?? undefined,
           customer: state.customer,
@@ -540,6 +578,7 @@ export default function BookingFlow() {
           totalEstimate: adjustedTotal,
         }
       });
+      setConfirmedBookingId((bookingResult as any)?.id ?? null);
       toast({ title: "Booking Confirmed", description: "Your appointment has been scheduled." });
       go(1);
     } catch {
@@ -1626,7 +1665,7 @@ export default function BookingFlow() {
                     Your appointment is set. We'll send a confirmation to {state.customer.email}.
                   </p>
                   <div className="max-w-sm mx-auto space-y-4">
-                    <Button variant="outline" className="w-full">
+                    <Button variant="outline" className="w-full" onClick={handleAddToCalendar} disabled={!state.appointmentAt}>
                       <CalendarIcon className="mr-2 h-4 w-4" /> Add to Calendar
                     </Button>
                     <Button className="w-full bg-primary text-primary-foreground" onClick={() => setLocation("/dashboard")}>
@@ -1636,7 +1675,14 @@ export default function BookingFlow() {
                   <div className="mt-12 p-6 bg-card border border-border rounded-xl max-w-md mx-auto">
                     <h3 className="font-semibold mb-2">Create an Account</h3>
                     <p className="text-sm text-muted-foreground mb-4">Track your service history and earn loyalty rewards.</p>
-                    <Button variant="secondary" className="w-full">Send Magic Link</Button>
+                    <Button
+                      variant="secondary"
+                      className="w-full"
+                      onClick={handleSendMagicLink}
+                      disabled={sendingMagicLink || magicLinkSent || !confirmedBookingId}
+                    >
+                      {magicLinkSent ? "✓ Link Sent — Check Your Email" : sendingMagicLink ? "Sending..." : "Send Magic Link"}
+                    </Button>
                   </div>
                 </div>
               )}

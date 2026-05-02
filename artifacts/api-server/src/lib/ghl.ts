@@ -7,7 +7,8 @@ export type GhlEvent =
   | "booking_confirmed"
   | "booking_created"
   | "ppf_quote_request"
-  | "booking_abandoned";
+  | "booking_abandoned"
+  | "magic_link_requested";
 
 // Full booking confirmation payload — triggers contact upsert + opportunity won in GHL
 export interface GhlBookingConfirmedPayload {

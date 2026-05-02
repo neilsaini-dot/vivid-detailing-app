@@ -410,4 +410,39 @@ router.post("/bookings/:id/abandon", async (req, res) => {
   }
 });
 
+// POST /api/bookings/:id/magic-link — fires a GHL workflow to email the customer a login link
+router.post("/bookings/:id/magic-link", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const booking = (await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0];
+    if (!booking) return res.status(404).json({ error: "Not found" });
+
+    const customer = booking.customerId
+      ? (await db.select().from(customersTable).where(eq(customersTable.id, booking.customerId)))[0]
+      : null;
+
+    sendGhlWebhook({
+      event: "magic_link_requested",
+      customer: { name: customer?.name ?? "", email: customer?.email ?? "", phone: customer?.phone ?? "" },
+      vehicle: { type: "car" },
+      booking: {
+        service_category: "",
+        package: "Magic Link",
+        addons: [],
+        total_estimate: Number(booking.totalEstimate ?? 0),
+        appointment_at: formatAppointment(booking.appointmentAt?.toISOString()),
+        notes: null,
+        is_quote_based: false,
+      },
+      tags: ["Magic Link Requested"],
+      source: "vivid-app",
+    }).catch(() => {});
+
+    res.json({ success: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to send magic link");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 export default router;

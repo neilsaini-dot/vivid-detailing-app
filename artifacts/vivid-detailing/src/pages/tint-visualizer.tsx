@@ -1,192 +1,199 @@
-import { useState } from "react";
-import { Slider } from "@/components/ui/slider";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Sun, Shield, Eye, Droplet } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Sun, Shield, Eye, Droplet, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
 const VLT_LEVELS = [
-  { vlt: 5,  label: "5% — Limo",       desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
-  { vlt: 15, label: "15% — Very Dark", desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
-  { vlt: 25, label: "25% — Dark",      desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
-  { vlt: 35, label: "35% — Medium",    desc: ["Legal limit for front windows in PEI", "Good balance of privacy and visibility", "Elegant, understated finish"] },
-  { vlt: 50, label: "50% — Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
+  { vlt: 5,  label: "5% — Limo",        desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
+  { vlt: 15, label: "15% — Very Dark",  desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
+  { vlt: 25, label: "25% — Dark",       desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
+  { vlt: 35, label: "35% — Medium",     desc: ["Good balance of privacy and visibility", "Elegant, understated finish", "Popular all-around choice"] },
+  { vlt: 50, label: "50% — Light",      desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
 ];
 
-// VLT % → overlay opacity on the glass polygons only
 const VLT_OPACITY: Record<number, number> = {
-  5:  0.83,
-  15: 0.65,
-  25: 0.47,
-  35: 0.28,
-  50: 0.10,
+  5: 0.83, 15: 0.65, 25: 0.47, 35: 0.28, 50: 0.10,
 };
 
-/*
-  SVG viewBox is "0 0 100 56.25" (matches 16:9 image).
-  Polygon coordinates were traced from the generated photo:
-    - Front door glass (driver side)
-    - Rear door glass
-    - Small rear quarter glass
-  The dark B-pillar between windows is left untouched (it's already dark body panel).
-*/
+// SVG viewBox "0 0 100 56.25" — polygons traced from the car photo
 const WINDOW_PATHS = {
-  front: "8.5,5.5 44.5,4.8 44.8,32.2 8.8,32.8",
-  rear:  "47.5,4.8 82.2,5.5 82.2,32.0 47.5,31.8",
+  front:   "8.5,5.5 44.5,4.8 44.8,32.2 8.8,32.8",
+  rear:    "47.5,4.8 82.2,5.5 82.2,32.0 47.5,31.8",
   quarter: "82.5,7.2 92.8,12.0 92.8,31.5 82.5,31.5",
 };
 
+function TintSVG({ opacity }: { opacity: number }) {
+  return (
+    <svg
+      className="absolute inset-0 w-full h-full pointer-events-none"
+      viewBox="0 0 100 56.25"
+      preserveAspectRatio="none"
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <linearGradient id="tintGrad2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#03090F" />
+          <stop offset="100%" stopColor="#060F1E" />
+        </linearGradient>
+      </defs>
+      <polygon points={WINDOW_PATHS.front}   fill="url(#tintGrad2)" opacity={opacity} />
+      <polygon points={WINDOW_PATHS.rear}    fill="url(#tintGrad2)" opacity={opacity} />
+      <polygon points={WINDOW_PATHS.quarter} fill="url(#tintGrad2)" opacity={opacity} />
+    </svg>
+  );
+}
+
 export default function TintVisualizer() {
   const [vlt, setVlt] = useState<number>(35);
+  const [splitPos, setSplitPos] = useState<number>(50); // 0–100 %
+  const [dragging, setDragging] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const currentLevel = VLT_LEVELS.find((l) => l.vlt === vlt) ?? VLT_LEVELS[3];
   const opacity = VLT_OPACITY[vlt] ?? 0.28;
 
+  const updateSplit = useCallback((clientX: number) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const pct = ((clientX - rect.left) / rect.width) * 100;
+    setSplitPos(Math.min(95, Math.max(5, pct)));
+  }, []);
+
+  const onMouseMove = useCallback((e: React.MouseEvent) => {
+    if (!dragging) return;
+    updateSplit(e.clientX);
+  }, [dragging, updateSplit]);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    updateSplit(e.touches[0].clientX);
+  }, [updateSplit]);
+
   return (
     <div className="container py-12 max-w-5xl">
+      {/* Header */}
       <div className="mb-10 text-center">
         <p className="text-sm font-semibold tracking-widest uppercase text-primary mb-3">Interactive Preview</p>
         <h1 className="text-4xl font-bold tracking-tight mb-4">Window Tint Visualizer</h1>
         <p className="text-muted-foreground max-w-2xl mx-auto">
-          Drag the slider to preview how different tint percentages look on real glass. VLT (Visible Light Transmission) — lower percentage means darker windows.
+          Drag the divider to compare tinted vs. clear glass in real time. Use the percentage buttons to choose your film darkness.
         </p>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-10 items-start mb-16">
+      {/* Before / After Reveal — full width */}
+      <div
+        ref={containerRef}
+        className="relative aspect-video rounded-xl border border-border overflow-hidden bg-black shadow-xl shadow-black/50 mb-5 select-none"
+        style={{ cursor: dragging ? "col-resize" : "ew-resize" }}
+        onMouseMove={onMouseMove}
+        onMouseUp={() => setDragging(false)}
+        onMouseLeave={() => setDragging(false)}
+        onTouchMove={onTouchMove}
+        onTouchEnd={() => setDragging(false)}
+      >
+        {/* ── BEFORE (clear glass) — always full width beneath ── */}
+        <div className="absolute inset-0">
+          <img src="/tint-car.png" alt="Clear glass" className="w-full h-full object-cover" draggable={false} />
+        </div>
 
-        {/* Car Photo with precise glass overlay */}
-        <div className="space-y-4">
-          <div className="relative aspect-video rounded-xl border border-border overflow-hidden bg-black shadow-xl shadow-black/40">
-            {/* Real car side-window photo */}
-            <img
-              src="/tint-car.png"
-              alt="Vehicle side windows for tint preview"
-              className="absolute inset-0 w-full h-full object-cover"
-              draggable={false}
+        {/* ── AFTER (tinted glass) — clipped to right of divider ── */}
+        <div
+          className="absolute inset-0"
+          style={{ clipPath: `inset(0 0 0 ${splitPos}%)` }}
+        >
+          <img src="/tint-car.png" alt="Tinted glass" className="w-full h-full object-cover" draggable={false} />
+          <TintSVG opacity={opacity} />
+        </div>
+
+        {/* ── Divider line ── */}
+        <div
+          className="absolute top-0 bottom-0 w-px bg-white/80 shadow-[0_0_8px_rgba(255,255,255,0.6)]"
+          style={{ left: `${splitPos}%` }}
+        />
+
+        {/* ── Drag handle circle ── */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 z-20 flex items-center justify-center w-10 h-10 rounded-full bg-white shadow-lg shadow-black/40 cursor-col-resize"
+          style={{ left: `${splitPos}%` }}
+          onMouseDown={(e) => { e.preventDefault(); setDragging(true); }}
+          onTouchStart={(e) => { e.preventDefault(); setDragging(true); }}
+        >
+          <ChevronLeft size={14} className="text-gray-700 -mr-0.5" />
+          <ChevronRight size={14} className="text-gray-700 -ml-0.5" />
+        </div>
+
+        {/* ── Before / After labels ── */}
+        <div
+          className="absolute top-3 text-xs font-bold text-white bg-black/55 backdrop-blur-sm rounded-full px-3 py-1 tracking-widest pointer-events-none transition-opacity"
+          style={{ left: "12px", opacity: splitPos > 15 ? 1 : 0 }}
+        >
+          BEFORE
+        </div>
+        <div
+          className="absolute top-3 text-xs font-bold text-white bg-black/55 backdrop-blur-sm rounded-full px-3 py-1 tracking-widest pointer-events-none transition-opacity"
+          style={{ right: "12px", opacity: splitPos < 85 ? 1 : 0 }}
+        >
+          {vlt}% VLT
+        </div>
+
+        {/* ── Logo watermark ── */}
+        <div className="absolute bottom-3 right-3 opacity-50 pointer-events-none">
+          <img src="/logo.png" alt="Vivid Detailing" className="h-7 w-7 object-contain" />
+        </div>
+      </div>
+
+      {/* VLT selector row */}
+      <div className="flex items-center justify-center gap-2 mb-10">
+        {VLT_LEVELS.map((l) => (
+          <button
+            key={l.vlt}
+            onClick={() => setVlt(l.vlt)}
+            className={`flex flex-col items-center gap-1.5 px-3 py-2 rounded-lg border text-xs font-semibold transition-all ${
+              vlt === l.vlt
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+            }`}
+          >
+            <span
+              className="w-8 h-5 rounded border border-white/10"
+              style={{ background: `rgba(3,9,15,${VLT_OPACITY[l.vlt]})` }}
             />
+            {l.vlt}%
+          </button>
+        ))}
+      </div>
 
-            {/*
-              SVG tint mask — sits perfectly over the photo.
-              viewBox matches 16:9 (100 × 56.25).
-              Each polygon covers only the glass area, leaving body panels untouched.
-            */}
-            <svg
-              className="absolute inset-0 w-full h-full pointer-events-none"
-              viewBox="0 0 100 56.25"
-              preserveAspectRatio="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <defs>
-                {/* Tint colour: deep blue-black, like real dark film */}
-                <linearGradient id="tintGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#03090F" />
-                  <stop offset="100%" stopColor="#060F1E" />
-                </linearGradient>
-              </defs>
-
-              {/* Front door window */}
-              <polygon
-                points={WINDOW_PATHS.front}
-                fill="url(#tintGrad)"
-                opacity={opacity}
-                style={{ transition: "opacity 0.35s ease" }}
-              />
-
-              {/* Rear door window */}
-              <polygon
-                points={WINDOW_PATHS.rear}
-                fill="url(#tintGrad)"
-                opacity={opacity}
-                style={{ transition: "opacity 0.35s ease" }}
-              />
-
-              {/* Small rear quarter glass */}
-              <polygon
-                points={WINDOW_PATHS.quarter}
-                fill="url(#tintGrad)"
-                opacity={opacity}
-                style={{ transition: "opacity 0.35s ease" }}
-              />
-            </svg>
-
-            {/* Logo watermark */}
-            <div className="absolute bottom-3 right-3 opacity-60">
-              <img src="/logo.png" alt="Vivid Detailing" className="h-8 w-8 object-contain" />
-            </div>
-
-            {/* Live VLT badge */}
-            <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-sm border border-white/10 rounded-full px-3 py-1 text-xs font-bold text-white tracking-widest">
-              {vlt}% VLT
-            </div>
-          </div>
-
-          {/* Quick-select swatches */}
-          <div className="flex items-center gap-2 justify-center">
-            {VLT_LEVELS.map((l) => (
-              <button
-                key={l.vlt}
-                onClick={() => setVlt(l.vlt)}
-                className={`flex flex-col items-center gap-1 px-3 py-2 rounded-lg border text-xs font-medium transition-all ${
-                  vlt === l.vlt
-                    ? "border-primary bg-primary/10 text-primary"
-                    : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
-                }`}
-              >
-                <span
-                  className="w-6 h-4 rounded-sm border border-white/10"
-                  style={{ background: `rgba(3,9,15,${VLT_OPACITY[l.vlt]})` }}
-                />
-                {l.vlt}%
-              </button>
+      {/* Info + CTA */}
+      <div className="grid md:grid-cols-2 gap-8 mb-12">
+        <Card className="bg-card border-border">
+          <CardContent className="pt-6 space-y-3">
+            <h3 className="text-lg font-bold">{currentLevel.label}</h3>
+            {currentLevel.desc.map((d) => (
+              <div key={d} className="flex items-start gap-2 text-sm text-muted-foreground">
+                <span className="text-primary mt-0.5">•</span>
+                <span>{d}</span>
+              </div>
             ))}
-          </div>
-        </div>
+          </CardContent>
+        </Card>
 
-        {/* Controls & Info */}
-        <div className="space-y-6">
-          <Card className="bg-card border-border">
-            <CardHeader>
-              <CardTitle className="text-2xl">{currentLevel.label}</CardTitle>
-              <CardDescription>Drag the slider or tap a percentage to preview on real glass.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-3">
-                <Slider
-                  defaultValue={[35]}
-                  max={50}
-                  min={5}
-                  step={10}
-                  value={[vlt]}
-                  onValueChange={(val) => setVlt(val[0])}
-                  className="py-2"
-                />
-                <div className="flex justify-between text-xs text-muted-foreground">
-                  <span>5%</span>
-                  <span>15%</span>
-                  <span>25%</span>
-                  <span>35%</span>
-                  <span>50%</span>
-                </div>
-              </div>
-
-              <div className="pt-2 border-t border-border space-y-2">
-                <h4 className="font-semibold text-sm mb-3">At {vlt}% VLT:</h4>
-                {currentLevel.desc.map((d) => (
-                  <div key={d} className="flex items-start gap-2 text-sm text-muted-foreground">
-                    <span className="text-primary mt-0.5">•</span>
-                    <span>{d}</span>
-                  </div>
-                ))}
-              </div>
-
-              <Link href={`/book?intent=tint&vlt=${vlt}`}>
-                <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
-                  Book Tinting at {vlt}% VLT
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="bg-card border-border flex flex-col justify-between">
+          <CardContent className="pt-6 space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Happy with how <span className="text-foreground font-semibold">{vlt}% VLT</span> looks? Lock in your appointment and we'll have it installed in a single visit.
+            </p>
+            <Link href={`/book?intent=tint&vlt=${vlt}`}>
+              <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+                Book Tinting at {vlt}% VLT
+              </Button>
+            </Link>
+            <Link href="/quote">
+              <Button variant="outline" className="w-full border-border hover:border-primary/40">
+                Request a Custom Quote
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Feature cards */}

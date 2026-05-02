@@ -12,14 +12,14 @@ export default function Home() {
         <div className="container relative z-10 mx-auto px-4 md:px-6 text-center">
           <div className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 text-sm text-primary mb-8 backdrop-blur-sm font-medium tracking-wide">
             <Sparkles className="mr-2 h-4 w-4" />
-            Summer Special: Ceramic Coating — $249 Flat
+            Summer Special: Ceramic Coating - $249 Flat
           </div>
           <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-6 text-foreground leading-tight">
             Your Vehicle<br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-primary to-primary/50">Deserves the Best</span>
           </h1>
           <p className="max-w-2xl mx-auto text-lg md:text-xl text-muted-foreground mb-10">
-            Premium automotive detailing in Charlottetown & Borden-Carleton, PEI. Ceramic coatings, window tinting, paint correction — done right.
+            Premium automotive detailing in Charlottetown & Borden-Carleton, PEI. Ceramic coatings, window tinting, and paint correction done right.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/book">
@@ -54,7 +54,7 @@ export default function Home() {
             <p className="text-sm font-semibold tracking-widest uppercase text-[#29B8D9] mb-3">Detailing Services</p>
             <h2 className="text-3xl md:text-4xl font-extrabold mb-4 text-[#0A1628]">What Can We Do For You?</h2>
             <p className="text-[#4A6280] max-w-2xl mx-auto text-base">
-              Select a category below to begin your booking — prices adjust to your vehicle size automatically.
+              Select a category below to begin your booking. Prices adjust to your vehicle size automatically.
             </p>
           </div>
 
@@ -96,7 +96,7 @@ export default function Home() {
               { name: "Interior Refresh", price: "$149+", highlight: false, desc: "Vacuum, wipe-down, windows cleaned, mats cleaned." },
               { name: "Interior Deep Clean", price: "$199+", highlight: false, desc: "Everything in Refresh + carpet & upholstery steam, leather conditioning." },
               { name: "Vivid Luster", price: "$219+", highlight: true, desc: "Full interior + exterior hand wash, tire shine, wheel cleaning, hand wax." },
-              { name: "Vivid Glow", price: "$329+", highlight: false, desc: "Ultimate package — decontamination wash, steam clean, paint sealant." },
+              { name: "Vivid Glow", price: "$329+", highlight: false, desc: "Ultimate package: decontamination wash, steam clean, paint sealant." },
             ].map(({ name, price, highlight, desc }) => (
               <Card key={name} className={`border transition-all ${highlight ? "border-primary/60 bg-primary/5 shadow-lg shadow-primary/10" : "border-border bg-card"}`}>
                 <CardContent className="p-6">
@@ -134,7 +134,7 @@ export default function Home() {
             {[
               { icon: CheckCircle2, title: "Premium Products Only", body: "We use industry-leading chemicals and tools. No shortcuts, no compromise on your paint or interior." },
               { icon: Shield, title: "Fully Insured", body: "Your vehicle is covered under comprehensive garage keepers liability insurance throughout your appointment." },
-              { icon: Sparkles, title: "Trained Technicians", body: "Continuous education in the latest detailing techniques — ceramic application, tint installation, PPF." },
+              { icon: Sparkles, title: "Trained Technicians", body: "Continuous education in the latest detailing techniques: ceramic application, tint installation, PPF." },
             ].map(({ icon: Icon, title, body }) => (
               <div key={title} className="space-y-4">
                 <div className="mx-auto w-14 h-14 flex items-center justify-center rounded-full bg-[#E8F6FB] border border-[#C0DFF0]">

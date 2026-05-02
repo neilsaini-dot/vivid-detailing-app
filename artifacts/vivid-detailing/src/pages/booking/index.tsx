@@ -405,7 +405,7 @@ export default function BookingFlow() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Let's get started</h2>
-                    <p className="text-muted-foreground">Your info and vehicle — takes under a minute.</p>
+                    <p className="text-muted-foreground">Your info and vehicle. Takes under a minute.</p>
                   </div>
 
                   {/* Name + Phone */}
@@ -598,7 +598,7 @@ export default function BookingFlow() {
                                 {svc.pricingRule === "quote_based" ? (
                                   <span className="font-bold text-primary text-base">Quote</span>
                                 ) : (
-                                  <span className="font-bold text-primary text-lg">${price ?? "—"}</span>
+                                  <span className="font-bold text-primary text-lg">${price ?? "-"}</span>
                                 )}
                                 {(() => {
                                   const t = SERVICE_TIMES[svc.name];
@@ -655,7 +655,7 @@ export default function BookingFlow() {
                                     )}
                                   </div>
                                 </div>
-                                <span className="font-bold text-primary text-sm">${price ?? "—"}</span>
+                                <span className="font-bold text-primary text-sm">${price ?? "-"}</span>
                               </CardContent>
                             </Card>
                           );
@@ -734,7 +734,7 @@ export default function BookingFlow() {
                       <p className="text-muted-foreground text-sm">
                         {recAddons.length > 0
                           ? "Based on your selected service, here's what we recommend adding."
-                          : "Your selection looks complete — no additional recommendations."}
+                          : "Your selection looks complete. No additional recommendations."}
                       </p>
                     </div>
                     <div className="grid gap-3">

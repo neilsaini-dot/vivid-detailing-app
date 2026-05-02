@@ -5,11 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
 
 const VLT_LEVELS = [
-  { vlt: 5,  label: "5% — Limo",       desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
-  { vlt: 15, label: "15% — Very Dark", desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
-  { vlt: 25, label: "25% — Dark",      desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
-  { vlt: 35, label: "35% — Medium",    desc: ["Good balance of privacy and visibility", "Elegant, understated finish", "Popular all-around choice"] },
-  { vlt: 50, label: "50% — Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
+  { vlt: 5,  label: "5% - Limo",       desc: ["Maximum privacy (\"Limo Tint\")", "Excellent heat rejection", "Hardest to see out of at night"] },
+  { vlt: 15, label: "15% - Very Dark", desc: ["High privacy level", "Matches most factory rear window tints", "Great glare reduction"] },
+  { vlt: 25, label: "25% - Dark",      desc: ["Popular choice for side windows", "Strong privacy and heat rejection", "Sleek, aggressive look"] },
+  { vlt: 35, label: "35% - Medium",    desc: ["Good balance of privacy and visibility", "Elegant, understated finish", "Popular all-around choice"] },
+  { vlt: 50, label: "50% - Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
 ];
 
 /*
@@ -206,7 +206,7 @@ export default function TintVisualizer() {
           { Icon: Sun,     title: "99% UV Rejection",      body: "Protects your interior from fading and your skin from harmful UV radiation." },
           { Icon: Shield,  title: "Heat Rejection",         body: "Ceramic films block infrared heat, keeping your cabin significantly cooler." },
           { Icon: Eye,     title: "Glare Reduction",        body: "Reduces eye strain from sun and headlights for safer, more comfortable driving." },
-          { Icon: Droplet, title: "Carbon & Ceramic Films", body: "Advanced color-stable films — will never turn purple, bubble, or delaminate." },
+          { Icon: Droplet, title: "Carbon & Ceramic Films", body: "Advanced color-stable films that will never turn purple, bubble, or delaminate." },
         ].map(({ Icon, title, body }) => (
           <Card key={title} className="bg-card border-border">
             <CardContent className="pt-6">

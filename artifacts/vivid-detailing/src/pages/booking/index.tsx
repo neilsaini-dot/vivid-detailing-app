@@ -726,6 +726,29 @@ export default function BookingFlow() {
                     <p className="text-muted-foreground">Select one or more services below.</p>
                   </div>
 
+                  {state.intent === "tint" && (
+                    <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className="w-8 h-6 rounded border border-white/10 shrink-0"
+                          style={{ background: `rgba(8,12,20,${VLT_OPACITY[state.selectedVlt] ?? 0.38})` }}
+                        />
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            Your selection: {state.selectedVlt}% VLT — {VLT_LEVELS.find(l => l.vlt === state.selectedVlt)?.label.split("—")[1]?.trim()}
+                          </p>
+                          <p className="text-xs text-muted-foreground">This will be noted on your booking</p>
+                        </div>
+                      </div>
+                      <button
+                        className="text-xs text-primary font-semibold hover:underline shrink-0"
+                        onClick={() => { setDir(-1); setTintSubStep(true); setStep(2); }}
+                      >
+                        Change
+                      </button>
+                    </div>
+                  )}
+
                   <div className="grid gap-4">
                     {(services as any[]).map((svc: any) => {
                       const selected = state.serviceIds.includes(svc.id);
@@ -739,6 +762,15 @@ export default function BookingFlow() {
                           {svc.isSeasonal && (
                             <div className="absolute top-0 right-0 bg-primary text-primary-foreground text-[10px] font-bold px-2.5 py-1 rounded-bl-lg tracking-wide">
                               SUMMER SPECIAL
+                            </div>
+                          )}
+                          {!svc.isSeasonal && state.intent === "tint" && (
+                            <div className="absolute top-0 right-0 flex items-center gap-1.5 bg-card border-l border-b border-border text-[10px] font-bold px-2.5 py-1 rounded-bl-lg tracking-wide text-muted-foreground">
+                              <span
+                                className="w-4 h-3 rounded-sm border border-white/10 inline-block"
+                                style={{ background: `rgba(8,12,20,${VLT_OPACITY[state.selectedVlt] ?? 0.38})` }}
+                              />
+                              {state.selectedVlt}% VLT
                             </div>
                           )}
                           <CardContent className="p-4">

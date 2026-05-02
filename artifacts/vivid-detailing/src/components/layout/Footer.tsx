@@ -6,11 +6,9 @@ export function Footer() {
     <footer className="border-t border-border bg-card py-12 md:py-16">
       <div className="container grid gap-8 md:grid-cols-4">
         <div className="space-y-4">
-          <div className="flex items-center space-x-2">
-            <span className="font-bold text-xl tracking-tight flex items-center">
-              <span className="text-primary mr-1 text-2xl">V</span>
-              Vivid Detailing
-            </span>
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
+            <span className="font-bold text-lg tracking-tight">Vivid Detailing</span>
           </div>
           <p className="text-sm text-muted-foreground max-w-xs">
             Precision automotive appearance shop in Charlottetown. Dark, technical, confident.

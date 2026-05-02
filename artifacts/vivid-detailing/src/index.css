@@ -67,49 +67,56 @@
 }
 
 :root, .dark {
-  --background: 0 0% 4%; /* #0A0A0A */
-  --foreground: 0 0% 100%; /* #FFFFFF */
-  
-  --card: 0 0% 7%; /* #111111 */
-  --card-foreground: 0 0% 100%;
-  --card-border: 0 0% 16%; /* #2A2A2A */
-  
-  --popover: 0 0% 7%;
-  --popover-foreground: 0 0% 100%;
-  --popover-border: 0 0% 16%;
-  
-  --primary: 191 70% 51%; /* #29B8D9 */
-  --primary-foreground: 0 0% 0%;
-  
-  --secondary: 0 0% 10%; /* #1A1A1A */
-  --secondary-foreground: 0 0% 100%;
-  
-  --muted: 0 0% 10%; /* #1A1A1A */
-  --muted-foreground: 0 0% 54%; /* #8A8A8A */
-  
-  --accent: 0 0% 10%;
-  --accent-foreground: 0 0% 100%;
-  
+  /* Deep navy background — matches brand dark sections */
+  --background: 214 52% 8%;    /* #09131F */
+  --foreground: 210 40% 98%;   /* near-white */
+
+  /* Cards: dark navy, not pure black */
+  --card: 214 48% 12%;         /* #0F1E2F */
+  --card-foreground: 210 40% 98%;
+  --card-border: 214 40% 20%;  /* #1B2F47 */
+
+  --popover: 214 48% 12%;
+  --popover-foreground: 210 40% 98%;
+  --popover-border: 214 40% 20%;
+
+  /* Teal accent — unchanged from brand */
+  --primary: 191 70% 51%;      /* #29B8D9 */
+  --primary-foreground: 214 52% 8%;
+
+  /* Secondary: mid navy */
+  --secondary: 214 44% 18%;    /* #182A3E */
+  --secondary-foreground: 210 40% 98%;
+
+  /* Muted: lighter navy with blue-gray tint */
+  --muted: 214 40% 16%;        /* #152435 */
+  --muted-foreground: 210 28% 62%; /* #8AABC4 — blue-gray, not flat gray */
+
+  /* Accent hover surface */
+  --accent: 214 40% 20%;       /* #1B2F47 */
+  --accent-foreground: 210 40% 98%;
+
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 100%;
 
-  --border: 0 0% 16%; /* #2A2A2A */
-  --input: 0 0% 16%;
+  --border: 214 40% 20%;       /* #1B2F47 */
+  --input: 214 40% 20%;
   --ring: 191 70% 51%;
-  
+
+  /* Charts */
   --chart-1: 191 70% 51%;
   --chart-2: 191 50% 40%;
   --chart-3: 191 30% 30%;
   --chart-4: 191 80% 60%;
   --chart-5: 191 90% 70%;
 
-  --sidebar: 0 0% 7%;
-  --sidebar-foreground: 0 0% 100%;
-  --sidebar-border: 0 0% 16%;
+  --sidebar: 214 48% 12%;
+  --sidebar-foreground: 210 40% 98%;
+  --sidebar-border: 214 40% 20%;
   --sidebar-primary: 191 70% 51%;
-  --sidebar-primary-foreground: 0 0% 0%;
-  --sidebar-accent: 0 0% 10%;
-  --sidebar-accent-foreground: 0 0% 100%;
+  --sidebar-primary-foreground: 214 52% 8%;
+  --sidebar-accent: 214 44% 18%;
+  --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-ring: 191 70% 51%;
 
   --app-font-sans: 'Inter', sans-serif;
@@ -117,14 +124,14 @@
   --app-font-mono: Menlo, monospace;
   --radius: 0.5rem;
 
-  --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.2);
-  --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.2);
-  --shadow-sm: 0px 2px 0px 0px hsl(0 0% 0% / 0.2), 0px 1px 2px -1px hsl(0 0% 0% / 0.2);
-  --shadow: 0px 2px 0px 0px hsl(0 0% 0% / 0.2), 0px 1px 2px -1px hsl(0 0% 0% / 0.2);
-  --shadow-md: 0px 2px 0px 0px hsl(0 0% 0% / 0.2), 0px 2px 4px -1px hsl(0 0% 0% / 0.2);
-  --shadow-lg: 0px 2px 0px 0px hsl(0 0% 0% / 0.2), 0px 4px 6px -1px hsl(0 0% 0% / 0.2);
-  --shadow-xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.2), 0px 8px 10px -1px hsl(0 0% 0% / 0.2);
-  --shadow-2xl: 0px 2px 0px 0px hsl(0 0% 0% / 0.2);
+  --shadow-2xs: 0px 2px 0px 0px hsl(214 52% 4% / 0.4);
+  --shadow-xs: 0px 2px 0px 0px hsl(214 52% 4% / 0.4);
+  --shadow-sm: 0px 2px 0px 0px hsl(214 52% 4% / 0.4), 0px 1px 2px -1px hsl(214 52% 4% / 0.3);
+  --shadow: 0px 2px 0px 0px hsl(214 52% 4% / 0.4), 0px 1px 2px -1px hsl(214 52% 4% / 0.3);
+  --shadow-md: 0px 2px 0px 0px hsl(214 52% 4% / 0.4), 0px 2px 4px -1px hsl(214 52% 4% / 0.3);
+  --shadow-lg: 0px 2px 0px 0px hsl(214 52% 4% / 0.4), 0px 4px 6px -1px hsl(214 52% 4% / 0.3);
+  --shadow-xl: 0px 2px 0px 0px hsl(214 52% 4% / 0.4), 0px 8px 10px -1px hsl(214 52% 4% / 0.3);
+  --shadow-2xl: 0px 2px 0px 0px hsl(214 52% 4% / 0.5);
 
   --sidebar-primary-border: hsl(var(--sidebar-primary));
   --sidebar-accent-border: hsl(var(--sidebar-accent));
@@ -134,11 +141,23 @@
   --accent-border: hsl(var(--accent));
   --destructive-border: hsl(var(--destructive));
 
-  --button-outline: rgba(255,255,255, .10);
-  --badge-outline: rgba(255,255,255, .05);
+  --button-outline: rgba(255,255,255, .12);
+  --badge-outline: rgba(255,255,255, .07);
   --opaque-button-border-intensity: 9;
-  --elevate-1: rgba(255,255,255, .04);
-  --elevate-2: rgba(255,255,255, .09);
+  --elevate-1: rgba(255,255,255, .05);
+  --elevate-2: rgba(255,255,255, .10);
+}
+
+/* Light section utility — for alternating white sections matching brand materials */
+.section-light {
+  background-color: #F0F5FA;
+  color: #0A1628;
+}
+.section-light .text-muted-foreground {
+  color: #4A6280;
+}
+.section-light .border-border {
+  border-color: #D0DCE8;
 }
 
 @layer base {

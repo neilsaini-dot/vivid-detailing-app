@@ -22,7 +22,8 @@ import {
   AbandonBookingBody,
 } from "@workspace/api-zod";
 import { calculateServicePrice, HST_RATE, getLoyaltyTier } from "../lib/pricing";
-import { sendGhlWebhook } from "../lib/ghl";
+import { sendGhlWebhook, sendGhlBookingConfirmed } from "../lib/ghl";
+import { createCalendarEvent } from "../lib/googleCalendar";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 
 const router = Router();
@@ -176,7 +177,7 @@ router.post("/bookings", async (req, res) => {
       });
     }
 
-    // Fire GHL webhook async (don't await)
+    // Build shared context for async side-effects
     const serviceNames = body.serviceIds
       .map((id) => services.find((s) => s.id === id)?.name ?? id)
       .filter(Boolean);
@@ -185,31 +186,69 @@ router.post("/bookings", async (req, res) => {
       .filter(Boolean);
     const hasQuote = items.some((i) => i.isQuoteBased);
 
-    sendGhlWebhook({
-      event: "booking_created",
-      customer: {
-        name: customer.name ?? "",
+    const vehicleLabel = [vehicle.year, vehicle.make, vehicle.model]
+      .filter(Boolean)
+      .join(" ") || vehicle.type;
+
+    const [firstName, ...rest] = (customer.name ?? "Guest").trim().split(" ");
+    const lastName = rest.join(" ") || "";
+
+    const opportunityTitle = `${serviceNames[0] ?? "Detailing"} - ${vehicleLabel}`;
+
+    const calendarDescription = [
+      `Customer: ${customer.name ?? ""} | ${customer.phone ?? ""} | ${customer.email ?? ""}`,
+      `Vehicle: ${vehicleLabel}`,
+      `Services: ${serviceNames.join(", ") || "N/A"}`,
+      addOnNames.length > 0 ? `Add-ons: ${addOnNames.join(", ")}` : null,
+      `Estimated Total (incl. HST): $${total.toFixed(2)}`,
+      body.notes ? `Notes: ${body.notes}` : null,
+      `Booking ID: ${booking.id}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    // Rough duration estimate: 2 h base + 1 h per additional service, cap 6 h
+    const durationHours = Math.min(2 + Math.max(0, serviceNames.length - 1), 6);
+
+    // Fire GHL booking-confirmed webhook (creates contact + marks opportunity won)
+    sendGhlBookingConfirmed({
+      event: "booking_confirmed",
+      contact: {
+        firstName,
+        lastName,
         email: customer.email ?? "",
         phone: customer.phone ?? "",
+        tags: ["Booking", "Vivid Detailing", ...serviceNames],
       },
-      vehicle: {
-        type: vehicle.type,
-        year: vehicle.year?.toString() ?? "",
-        make: vehicle.make ?? "",
-        model: vehicle.model ?? "",
+      opportunity: {
+        title: opportunityTitle,
+        status: "won",
+        monetaryValue: total,
+        pipelineStageName: "Won",
+        notes: calendarDescription,
       },
       booking: {
-        service_category: services.find((s) => s.id === body.serviceIds[0])?.category ?? "",
-        package: serviceNames[0] ?? "",
+        id: booking.id,
+        services: serviceNames,
         addons: addOnNames,
-        total_estimate: total,
+        vehicle: vehicleLabel,
         appointment_at: body.appointmentAt ?? null,
-        notes: body.notes ?? null,
+        total_estimate: total,
         is_quote_based: hasQuote,
+        notes: body.notes ?? null,
       },
-      tags: serviceNames.length > 0 ? [serviceNames[0]] : ["Booking"],
       source: "vivid-app",
     }).catch(() => {});
+
+    // Create Google Calendar event (non-blocking)
+    if (body.appointmentAt) {
+      createCalendarEvent({
+        summary: `Vivid Detailing - ${customer.name ?? "Customer"} - ${serviceNames.join(", ") || "Appointment"}`,
+        description: calendarDescription,
+        startIso: body.appointmentAt,
+        durationHours,
+      }).catch(() => {});
+    }
 
     const savedItems = await db
       .select()

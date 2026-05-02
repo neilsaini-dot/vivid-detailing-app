@@ -1,10 +1,48 @@
 import { ReplitConnectors } from "@replit/connectors-sdk";
+import { logger } from "./logger";
 
 const CALENDAR_ID = "primary";
 const SHOP_OPEN_HOUR = 8;
 const SHOP_CLOSE_HOUR = 18;
 // Max vehicles accepted per day via online booking
 const MAX_BOOKINGS_PER_DAY = 3;
+
+export interface CalendarEventInput {
+  summary: string;
+  description: string;
+  startIso: string;
+  durationHours: number;
+}
+
+export async function createCalendarEvent(input: CalendarEventInput): Promise<void> {
+  const connectors = new ReplitConnectors();
+  const startDate = new Date(input.startIso);
+  const endDate = new Date(startDate.getTime() + input.durationHours * 60 * 60 * 1000);
+
+  try {
+    const res = await connectors.proxy(
+      "google-calendar",
+      `/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          summary: input.summary,
+          description: input.description,
+          start: { dateTime: startDate.toISOString(), timeZone: "America/Halifax" },
+          end: { dateTime: endDate.toISOString(), timeZone: "America/Halifax" },
+        }),
+      }
+    );
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      logger.warn({ status: res.status, body }, "Google Calendar event creation returned non-200");
+    } else {
+      logger.info({ summary: input.summary }, "Google Calendar event created");
+    }
+  } catch (err) {
+    logger.error({ err }, "Failed to create Google Calendar event");
+  }
+}
 
 export interface TimeSlot {
   start: string;

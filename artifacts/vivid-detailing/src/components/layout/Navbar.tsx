@@ -7,6 +7,8 @@ export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
   const isBooking = location === "/book";
+  const isDashboard = location === "/dashboard";
+  const isSimple = isBooking || isDashboard;
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -16,7 +18,7 @@ export function Navbar() {
             <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
             <span className="font-bold text-lg tracking-tight hidden sm:block">Vivid Detailing</span>
           </Link>
-          {!isBooking && (
+          {!isSimple && (
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
               <Link href="/book" className="transition-colors hover:text-primary">Services</Link>
               <Link href="/tint-visualizer" className="transition-colors hover:text-primary">Tint Visualizer</Link>
@@ -27,14 +29,25 @@ export function Navbar() {
         {!isBooking && (
           <>
             <div className="hidden md:flex items-center gap-4">
-              <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-primary">
-                Dashboard
-              </Link>
-              <Link href="/book">
-                <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
-                  Book Now
-                </Button>
-              </Link>
+              {!isDashboard && (
+                <Link href="/dashboard" className="text-sm font-medium text-muted-foreground hover:text-primary">
+                  Dashboard
+                </Link>
+              )}
+              {!isDashboard && (
+                <Link href="/book">
+                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    Book Now
+                  </Button>
+                </Link>
+              )}
+              {isDashboard && (
+                <Link href="/book">
+                  <Button className="bg-primary text-primary-foreground hover:bg-primary/90">
+                    Book New Service
+                  </Button>
+                </Link>
+              )}
             </div>
             <button
               className="md:hidden p-2 text-muted-foreground"
@@ -45,7 +58,7 @@ export function Navbar() {
           </>
         )}
       </div>
-      {!isBooking && isOpen && (
+      {!isSimple && isOpen && (
         <div className="md:hidden border-b border-border bg-background px-4 py-4 space-y-4">
           <Link href="/book" className="block text-sm font-medium hover:text-primary">Services</Link>
           <Link href="/tint-visualizer" className="block text-sm font-medium hover:text-primary">Tint Visualizer</Link>
@@ -54,6 +67,15 @@ export function Navbar() {
           <Link href="/book" className="block">
             <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
               Book Now
+            </Button>
+          </Link>
+        </div>
+      )}
+      {isDashboard && isOpen && (
+        <div className="md:hidden border-b border-border bg-background px-4 py-4 space-y-4">
+          <Link href="/book" className="block">
+            <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90">
+              Book New Service
             </Button>
           </Link>
         </div>

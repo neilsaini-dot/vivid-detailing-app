@@ -4,11 +4,13 @@ import { MapPin, Phone, Mail } from "lucide-react";
 export function Footer() {
   const [location] = useLocation();
   const isBooking = location === "/book";
+  const isDashboard = location === "/dashboard";
+  const isSimple = isBooking || isDashboard;
 
   return (
     <footer className="border-t border-border bg-card py-12 md:py-16">
-      <div className={`container grid gap-8 ${isBooking ? "md:grid-cols-2" : "md:grid-cols-4"}`}>
-        {!isBooking && (
+      <div className={`container grid gap-8 ${isSimple ? "md:grid-cols-1 max-w-sm" : "md:grid-cols-4"}`}>
+        {!isSimple && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
               <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
@@ -19,7 +21,7 @@ export function Footer() {
             </p>
           </div>
         )}
-        {!isBooking && (
+        {!isSimple && (
           <div className="space-y-4">
             <h3 className="text-sm font-medium">Services</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
@@ -30,7 +32,7 @@ export function Footer() {
             </ul>
           </div>
         )}
-        {!isBooking && (
+        {!isSimple && (
           <div className="space-y-4">
             <h3 className="text-sm font-medium">Company</h3>
             <ul className="space-y-2 text-sm text-muted-foreground">
@@ -60,7 +62,7 @@ export function Footer() {
       </div>
       <div className="container mt-12 pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
         <p>© {new Date().getFullYear()} Vivid Detailing. All rights reserved.</p>
-        {!isBooking && (
+        {!isSimple && (
           <div className="flex items-center gap-4">
             <span>Terms of Service</span>
             <span>Privacy Policy</span>

@@ -33,7 +33,7 @@ interface BookingState {
   customer: { name: string; email: string; phone: string; };
   vehicle: { type: VehicleType; yearMakeModel: string; colour: string; };
   vehicleTypeSelected: boolean;
-  intent?: Intent;
+  intents: Intent[];
   selectedVlt: number;
   serviceIds: string[];
   addOnIds: string[];
@@ -49,6 +49,7 @@ const initialState: BookingState = {
   customer: { name: "", email: "", phone: "" },
   vehicle: { type: "car", yearMakeModel: "", colour: "" },
   vehicleTypeSelected: false,
+  intents: [],
   selectedVlt: 35, serviceIds: [], addOnIds: [], bundleAddonIds: [], promoIds: [],
   notes: "", depositPaid: false,
 };
@@ -64,6 +65,13 @@ const VLT_LEVELS = [
   { vlt: 50, label: "50% — Light",     desc: ["Light tint, visible interior", "Excellent nighttime visibility", "Still provides UV and heat protection"] },
 ];
 const VLT_OPACITY: Record<number, number> = { 5: 0.92, 15: 0.76, 25: 0.58, 35: 0.38, 50: 0.15 };
+
+const INTENT_LABELS: Record<string, string> = {
+  clean:   "Detailing",
+  protect: "Protection",
+  tint:    "Window Tinting",
+  paint:   "Paint & Correction",
+};
 
 /* ── Vehicle silhouette SVGs ── */
 function CarIcon({ active }: { active: boolean }) {
@@ -255,9 +263,24 @@ export default function BookingFlow() {
     updateTintSplit(e.touches[0].clientX);
   }, [updateTintSplit]);
 
-  const { data: services = [] } = useListServices(
-    state.intent ? { goal: state.intent } : {}
-  );
+  const { data: servicesClean = [] } = useListServices({ goal: "clean" });
+  const { data: servicesProtect = [] } = useListServices({ goal: "protect" });
+  const { data: servicesTint = [] } = useListServices({ goal: "tint" });
+  const { data: servicesPaint = [] } = useListServices({ goal: "paint" });
+
+  const intentServiceMap: Record<string, any[]> = {
+    clean: servicesClean as any[],
+    protect: servicesProtect as any[],
+    tint: servicesTint as any[],
+    paint: servicesPaint as any[],
+  };
+
+  const allServices: any[] = [...new Map(
+    state.intents.flatMap(i => intentServiceMap[i] ?? []).map((s: any) => [s.id, s])
+  ).values()];
+
+  const isMultiIntent = state.intents.length > 1;
+
   const { data: addOns = [] } = useListAddOns({ vehicleType: state.vehicle.type as any });
   const calculatePrice = useCalculatePrice();
   const createBooking = useCreateBooking();
@@ -268,7 +291,7 @@ export default function BookingFlow() {
     const intentParam = params.get("intent") as Intent;
     const vltParam = params.get("vlt");
     if (intentParam && ["clean", "protect", "tint", "paint"].includes(intentParam)) {
-      setState(s => ({ ...s, intent: intentParam }));
+      setState(s => ({ ...s, intents: [intentParam] }));
     }
     if (vltParam) {
       const parsed = parseInt(vltParam, 10);
@@ -302,9 +325,9 @@ export default function BookingFlow() {
   }, [currentPricing?.total]);
 
   // Derived: service scope determines which add-on groups to display
-  const selectedServiceNames = (services as any[])
-    .filter(s => state.serviceIds.includes(s.id))
-    .map(s => s.name as string);
+  const selectedServiceNames = allServices
+    .filter((s: any) => state.serviceIds.includes(s.id))
+    .map((s: any) => s.name as string);
   const serviceScopes = selectedServiceNames.map(n => SERVICE_SCOPE[n] ?? "both");
   const showInteriorAddons = serviceScopes.length === 0 || serviceScopes.some(s => s === "interior" || s === "both");
   const showExteriorAddons = serviceScopes.length === 0 || serviceScopes.some(s => s === "exterior" || s === "both");
@@ -314,7 +337,7 @@ export default function BookingFlow() {
 
   // ── Running time estimate ──────────────────────────────────────
   const vMod = vehicleTimeMod(state.vehicle.type);
-  const selSvcs = (services as any[]).filter(s => state.serviceIds.includes(s.id));
+  const selSvcs = allServices.filter((s: any) => state.serviceIds.includes(s.id));
   const selAddons = (addOns as any[]).filter(a => state.addOnIds.includes(a.id));
   const bundleDiscount = selAddons
     .filter(a => state.bundleAddonIds.includes(a.id))
@@ -423,7 +446,7 @@ export default function BookingFlow() {
           bundleAddonIds: state.bundleAddonIds.length > 0 ? state.bundleAddonIds : undefined,
           bundleDiscount: bundleDiscount > 0 ? bundleDiscount : undefined,
           appointmentAt: dt?.toISOString(),
-          notes: state.intent === "tint"
+          notes: state.intents.includes("tint")
             ? `VLT: ${state.selectedVlt}%${state.notes ? ` | ${state.notes}` : ""}`
             : state.notes,
           totalEstimate: adjustedTotal,
@@ -439,18 +462,35 @@ export default function BookingFlow() {
   const handleBack = () => {
     if (tintSubStep) {
       setTintSubStep(false);
-    } else if (step === 3 && state.intent === "tint") {
+    } else if (step === 3 && state.intents.includes("tint")) {
       setDir(-1);
       setTintSubStep(true);
+    } else if (step === 5 && isMultiIntent) {
+      setDir(-1);
+      setStep(3);
     } else {
       go(-1);
     }
   };
 
+  const handleNext = () => {
+    if (step === 2 && state.intents.includes("tint") && !tintSubStep) {
+      setTintSubStep(true);
+    } else if (step === 2 && tintSubStep) {
+      setTintSubStep(false);
+      go(1);
+    } else if (step === 3 && isMultiIntent) {
+      setDir(1);
+      setStep(5);
+    } else {
+      go(1);
+    }
+  };
+
   const canNext =
     (step === 1 && !!state.customer.name && isValidPhone(state.customer.phone) && state.vehicleTypeSelected && !!state.vehicle.yearMakeModel) ||
-    (step === 2 && !!state.intent) ||
-    (step === 3 && (state.serviceIds.length > 0 || (state.intent === "protect" && state.addOnIds.length > 0))) ||
+    (step === 2 && state.intents.length > 0) ||
+    (step === 3 && (state.serviceIds.length > 0 || (state.intents.includes("protect") && state.addOnIds.length > 0))) ||
     (step === 4) ||
     (step === 5) ||
     (step === 6) ||
@@ -595,7 +635,7 @@ export default function BookingFlow() {
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">What brings you in?</h2>
-                    <p className="text-muted-foreground">Select your primary goal to see recommended services.</p>
+                    <p className="text-muted-foreground">Select one or more goals — we'll combine the recommendations.</p>
                   </div>
                   <div className="grid gap-4">
                     {[
@@ -603,24 +643,36 @@ export default function BookingFlow() {
                       { id: "protect", title: "Protect my vehicle",  desc: "Ceramic coatings & sealants",             icon: Shield  },
                       { id: "tint",    title: "Tint my windows",     desc: "Ceramic window films with UV & heat rejection", icon: Sun },
                       { id: "paint",   title: "Improve paint/gloss", desc: "Paint correction & polishing",            icon: Settings },
-                    ].map(intent => (
+                    ].map(intent => {
+                      const active = state.intents.includes(intent.id as Intent);
+                      return (
                       <Card
                         key={intent.id}
-                        className={`cursor-pointer transition-all ${state.intent === intent.id ? "border-primary bg-primary/5" : "hover:border-primary/50"}`}
-                        onClick={() => { setState(s => ({ ...s, intent: intent.id as Intent })); if (intent.id !== "tint") setTintSubStep(false); }}
+                        className={`cursor-pointer transition-all ${active ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-primary/50"}`}
+                        onClick={() => {
+                          setState(s => ({
+                            ...s,
+                            intents: active
+                              ? s.intents.filter(i => i !== intent.id)
+                              : [...s.intents, intent.id as Intent],
+                          }));
+                          if (!active && intent.id !== "tint") setTintSubStep(false);
+                          if (active && intent.id === "tint") setTintSubStep(false);
+                        }}
                       >
                         <CardContent className="flex items-center p-4 gap-4">
-                          <div className={`p-3 rounded-full ${state.intent === intent.id ? "bg-primary/20" : "bg-accent"}`}>
-                            <intent.icon size={22} className={state.intent === intent.id ? "text-primary" : "text-muted-foreground"} />
+                          <div className={`p-3 rounded-full ${active ? "bg-primary/20" : "bg-accent"}`}>
+                            <intent.icon size={22} className={active ? "text-primary" : "text-muted-foreground"} />
                           </div>
                           <div>
                             <h3 className="font-semibold">{intent.title}</h3>
                             <p className="text-sm text-muted-foreground">{intent.desc}</p>
                           </div>
-                          {state.intent === intent.id && <Check size={18} className="ml-auto text-primary shrink-0" />}
+                          {active && <Check size={18} className="ml-auto text-primary shrink-0" />}
                         </CardContent>
                       </Card>
-                    ))}
+                      );
+                    })}
                     <Card
                       className="cursor-pointer hover:border-primary/50 transition-all border-dashed"
                       onClick={() => setLocation("/quote")}
@@ -638,7 +690,7 @@ export default function BookingFlow() {
               )}
 
               {/* ── Tint Sub-step: VLT Visualizer ── */}
-              {step === 2 && tintSubStep && state.intent === "tint" && (
+              {step === 2 && tintSubStep && state.intents.includes("tint") && (
                 <div className="space-y-6">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Preview Your Tint</h2>
@@ -726,7 +778,7 @@ export default function BookingFlow() {
                     <p className="text-muted-foreground">Select one or more services below.</p>
                   </div>
 
-                  {state.intent === "tint" && (
+                  {state.intents.includes("tint") && (
                     <div className="flex items-center justify-between gap-3 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
                       <div className="flex items-center gap-3">
                         <span
@@ -749,10 +801,11 @@ export default function BookingFlow() {
                     </div>
                   )}
 
-                  <div className="grid gap-4">
-                    {(services as any[]).map((svc: any) => {
+                  {(() => {
+                    const renderCard = (svc: any, groupIntent?: string) => {
                       const selected = state.serviceIds.includes(svc.id);
                       const price = svc.prices.find((p: any) => p.vehicleType === state.vehicle.type)?.price ?? svc.basePrice;
+                      const isTintGroup = groupIntent === "tint" || (!groupIntent && state.intents.includes("tint"));
                       return (
                         <Card
                           key={svc.id}
@@ -764,12 +817,9 @@ export default function BookingFlow() {
                               SUMMER SPECIAL
                             </div>
                           )}
-                          {!svc.isSeasonal && state.intent === "tint" && (
+                          {!svc.isSeasonal && isTintGroup && (
                             <div className="absolute top-0 right-0 flex items-center gap-1.5 bg-card border-l border-b border-border text-[10px] font-bold px-2.5 py-1 rounded-bl-lg tracking-wide text-muted-foreground">
-                              <span
-                                className="w-4 h-3 rounded-sm border border-white/10 inline-block"
-                                style={{ background: `rgba(8,12,20,${VLT_OPACITY[state.selectedVlt] ?? 0.38})` }}
-                              />
+                              <span className="w-4 h-3 rounded-sm border border-white/10 inline-block" style={{ background: `rgba(8,12,20,${VLT_OPACITY[state.selectedVlt] ?? 0.38})` }} />
                               {state.selectedVlt}% VLT
                             </div>
                           )}
@@ -800,8 +850,7 @@ export default function BookingFlow() {
                                   const svcMax = t && !t.custom ? t.max + vMod : t?.max ?? 0;
                                   return t ? (
                                     <div className="flex items-center justify-end gap-1 mt-1 text-muted-foreground text-xs">
-                                      <Clock size={10} />
-                                      <span>{fmtTime(svcMin, svcMax, t.custom)}</span>
+                                      <Clock size={10} /><span>{fmtTime(svcMin, svcMax, t.custom)}</span>
                                     </div>
                                   ) : null;
                                 })()}
@@ -814,13 +863,45 @@ export default function BookingFlow() {
                           </CardContent>
                         </Card>
                       );
-                    })}
-                    {(services as any[]).length === 0 && (
-                      <p className="text-center text-muted-foreground py-12">No services found. Please go back and select a goal.</p>
-                    )}
-                  </div>
+                    };
 
-                  {state.intent === "protect" && protectionStepAddons.length > 0 && (
+                    if (isMultiIntent) {
+                      const seen = new Set<string>();
+                      const groups = state.intents.map(intent => ({
+                        intent,
+                        label: INTENT_LABELS[intent] ?? intent,
+                        svcs: (intentServiceMap[intent] ?? []).filter((s: any) => {
+                          if (seen.has(s.id)) return false;
+                          seen.add(s.id);
+                          return true;
+                        }),
+                      })).filter(g => g.svcs.length > 0);
+
+                      return (
+                        <div className="space-y-5">
+                          {groups.map((group, idx) => (
+                            <div key={group.intent}>
+                              {idx > 0 && <div className="border-t border-border/50 pt-1" />}
+                              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mb-3 mt-1">{group.label}</h3>
+                              <div className="grid gap-3">
+                                {group.svcs.map((svc: any) => renderCard(svc, group.intent))}
+                              </div>
+                            </div>
+                          ))}
+                          {groups.length === 0 && <p className="text-center text-muted-foreground py-12">No services found.</p>}
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div className="grid gap-4">
+                        {allServices.map((svc: any) => renderCard(svc))}
+                        {allServices.length === 0 && <p className="text-center text-muted-foreground py-12">No services found. Please go back and select a goal.</p>}
+                      </div>
+                    );
+                  })()}
+
+                  {state.intents.includes("protect") && !isMultiIntent && protectionStepAddons.length > 0 && (
                     <div className="mt-2">
                       <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide mb-3 border-b border-border pb-2">
                         Individual Protection Add-ons
@@ -860,8 +941,8 @@ export default function BookingFlow() {
                 </div>
               )}
 
-              {/* ── Step 4: Add-ons ── */}
-              {step === 4 && (
+              {/* ── Step 4: Add-ons (single-intent only) ── */}
+              {step === 4 && !isMultiIntent && (
                 <div className="space-y-5">
                   <div>
                     <h2 className="text-3xl font-bold mb-2">Optional Add-ons</h2>
@@ -1249,16 +1330,10 @@ export default function BookingFlow() {
             </Button>
             <Button
               className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8"
-              onClick={
-                step === 7 ? handleSubmit :
-                step === 1 ? handleStep1Continue :
-                step === 2 && state.intent === "tint" && !tintSubStep ? () => setTintSubStep(true) :
-                step === 2 && tintSubStep ? () => { setTintSubStep(false); go(1); } :
-                () => go(1)
-              }
+              onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
               disabled={!canNext || (step === 1 && captureLead.isPending)}
             >
-              {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-4 h-4" />
+              {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : tintSubStep ? "Continue to Pricing" : "Continue"} <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
         )}
@@ -1394,12 +1469,7 @@ export default function BookingFlow() {
             </div>
             <Button
               className="bg-primary text-primary-foreground shrink-0"
-              onClick={
-                step === 7 ? handleSubmit :
-                step === 2 && state.intent === "tint" && !tintSubStep ? () => setTintSubStep(true) :
-                step === 2 && tintSubStep ? () => { setTintSubStep(false); go(1); } :
-                () => go(1)
-              }
+              onClick={step === 7 ? handleSubmit : handleNext}
               disabled={!canNext}
             >
               {step === 7 ? "Confirm" : tintSubStep ? "Continue to Pricing" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />

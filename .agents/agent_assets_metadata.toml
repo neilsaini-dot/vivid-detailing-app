@@ -17,7 +17,7 @@ title = "car dark 5pct limo tint"
 id = "vaUhsTNK0cEqFIH9hOCIe"
 uri = "file://artifacts/vivid-detailing/public/vehicle-sedan.png"
 type = "image"
-title = "sedan car realistic"
+title = "Sedan side profile"
 
 [[generated]]
 id = "-eC256_BDOG4p0vZr4Q5e"
@@ -29,7 +29,7 @@ title = "SUV crossover full view"
 id = "XXkYLRX8aQIYaT2tT5VAb"
 uri = "file://artifacts/vivid-detailing/public/vehicle-truck.png"
 type = "image"
-title = "pickup truck realistic"
+title = "Pickup truck side profile"
 
 [[generated]]
 id = "ebOqUeurDnQvPnOtoarjo"

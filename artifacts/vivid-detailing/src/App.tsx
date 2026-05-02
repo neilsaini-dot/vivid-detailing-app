@@ -23,7 +23,7 @@ function Router() {
       <Navbar />
       <main className="flex-1">
         <Switch>
-          <Route path="/" component={Home} />
+          <Route path="/">{() => { window.location.replace((import.meta.env.BASE_URL + "book").replace(/\/\//g, "/")); return null; }}</Route>
           <Route path="/book" component={BookingFlow} />
           <Route path="/tint-visualizer" component={TintVisualizer} />
           <Route path="/dashboard" component={Dashboard} />

@@ -534,11 +534,34 @@ export default function BookingFlow() {
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background flex flex-col md:flex-row">
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 py-8 relative">
-        <div className="mb-8">
+        <div className="mb-6">
           <Progress value={(step / STEPS) * 100} className="h-1.5" />
-          <p className="text-sm text-muted-foreground mt-2 font-medium">
-            {tintSubStep ? "Step 2 of 8 — Tint Preview" : `Step ${step} of ${STEPS}`}
-          </p>
+          <div className="flex items-center justify-between mt-3">
+            <p className="text-sm text-muted-foreground font-medium">
+              {tintSubStep ? "Step 2 of 8 — Tint Preview" : `Step ${step} of ${STEPS}`}
+            </p>
+            {step < 8 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleBack}
+                  disabled={step === 1 && !tintSubStep}
+                  className="gap-1.5 h-8 px-3"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 h-8 px-4"
+                  onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
+                  disabled={!canNext || (step === 1 && captureLead.isPending)}
+                >
+                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : tintSubStep ? "Continue" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="overflow-x-hidden">
@@ -551,7 +574,7 @@ export default function BookingFlow() {
               animate="center"
               exit="exit"
               transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.15 } }}
-              className={`w-full ${step > 2 && step < 8 ? "pb-28 md:pb-0" : "pb-8"}`}
+              className={`w-full ${step > 2 && step < 8 ? "pb-16 md:pb-0" : "pb-8"}`}
             >
 
               {/* ── Step 1: Name + Phone + Vehicle ── */}
@@ -1443,21 +1466,6 @@ export default function BookingFlow() {
           </AnimatePresence>
         </div>
 
-        {/* Navigation */}
-        {step < 8 && (
-          <div className="flex justify-between items-center mt-6 pt-6 border-t border-border">
-            <Button variant="ghost" onClick={handleBack} disabled={step === 1 && !tintSubStep} className="gap-2">
-              <ArrowLeft className="w-4 h-4" /> Back
-            </Button>
-            <Button
-              className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 px-8"
-              onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
-              disabled={!canNext || (step === 1 && captureLead.isPending)}
-            >
-              {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : tintSubStep ? "Continue to Pricing" : "Continue"} <ChevronRight className="w-4 h-4" />
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Desktop Sidebar */}
@@ -1541,7 +1549,7 @@ export default function BookingFlow() {
       {/* Mobile sticky bar */}
       {step > 2 && step < 8 && (
         <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-sm border-t z-50 transition-colors duration-300 ${totalFlash && step >= 3 && step <= 5 ? "border-primary/60" : "border-border"}`}>
-          <div className="flex justify-between items-center p-4 gap-4">
+          <div className="flex items-center p-4 gap-4">
             <div className="min-w-0">
               {step >= 3 && step <= 5 && (state.serviceIds.length > 0 || state.addOnIds.length > 0) ? (
                 <>
@@ -1588,13 +1596,6 @@ export default function BookingFlow() {
                 </>
               )}
             </div>
-            <Button
-              className="bg-primary text-primary-foreground shrink-0"
-              onClick={step === 7 ? handleSubmit : handleNext}
-              disabled={!canNext}
-            >
-              {step === 7 ? "Confirm" : tintSubStep ? "Continue to Pricing" : "Next"} <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
           </div>
         </div>
       )}

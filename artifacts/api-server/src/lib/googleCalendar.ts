@@ -116,8 +116,9 @@ export async function getAvailableSlots(
 }
 
 /**
- * Find the next `count` available booking slots across upcoming days.
- * Skips slots that are already in the past (for today) and fully-booked days.
+ * Find the next `count` available days and return the earliest open slot for each.
+ * One slot per day, across `count` separate days.
+ * Skips Sundays, fully-booked days, and past slots for today.
  */
 export async function getNextAvailableSlots(
   durationHours: number,
@@ -141,8 +142,8 @@ export async function getNextAvailableSlots(
 
     const slots = await getAvailableSlots(dateStr, durationHours);
 
+    // Pick only the first available slot on this day
     for (const slot of slots) {
-      if (results.length >= count) break;
       if (!slot.available) continue;
 
       // For today: skip slots whose start hour has already passed (leave 1 hr buffer)
@@ -152,7 +153,9 @@ export async function getNextAvailableSlots(
         if (slotHour <= currentHour) continue;
       }
 
+      // Take the earliest valid slot for this day and move to the next day
       results.push({ date: dateStr, start: slot.start, end: slot.end, label: slot.label, bookingsToday: slot.bookingsToday });
+      break;
     }
 
     cursor.setDate(cursor.getDate() + 1);

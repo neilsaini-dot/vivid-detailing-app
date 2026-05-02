@@ -179,11 +179,6 @@ export default function TintVisualizer() {
                 ))}
               </div>
 
-              <div className="bg-muted/50 rounded-lg p-4 text-sm text-muted-foreground border border-border">
-                <span className="font-semibold text-foreground block mb-1">PEI Legal Note</span>
-                Front side windows must allow at least 35% VLT. Rear windows and the back windshield have no restriction.
-              </div>
-
               <Link href={`/book?intent=tint&vlt=${vlt}`}>
                 <Button className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
                   Book Tinting at {vlt}% VLT

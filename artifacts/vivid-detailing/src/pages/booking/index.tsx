@@ -411,6 +411,14 @@ export default function BookingFlow() {
 
   const fmtCountdown = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 
+  // ── Scroll-triggered sticky Continue bar ──────────────────────────────────
+  const [isScrolled, setIsScrolled] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setIsScrolled(window.scrollY > 110);
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
   const isValidPhone = (p: string) => p.replace(/\D/g, "").length === 10;
@@ -533,6 +541,45 @@ export default function BookingFlow() {
 
   return (
     <div className="min-h-[calc(100vh-4rem)] bg-background flex flex-col md:flex-row">
+
+      {/* ── Scroll-triggered sticky Continue bar ── */}
+      <AnimatePresence>
+        {isScrolled && step < 8 && (
+          <motion.div
+            initial={{ y: -56, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: -56, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 400, damping: 35 }}
+            className="fixed top-16 left-0 right-0 z-40 bg-background/95 backdrop-blur border-b border-border shadow-sm"
+          >
+            <div className="max-w-3xl mx-auto px-4 py-2 flex items-center justify-between gap-3">
+              <p className="text-xs text-muted-foreground truncate">
+                {tintSubStep ? "Step 2 of 8 — Tint Preview" : `Step ${step} of ${STEPS}`}
+                {state.customer.name ? ` · ${state.customer.name}` : ""}
+              </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleBack}
+                  disabled={step === 1 && !tintSubStep}
+                  className="gap-1.5 h-8 px-3"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" /> Back
+                </Button>
+                <Button
+                  size="sm"
+                  className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 h-8 px-4"
+                  onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
+                  disabled={!canNext || (step === 1 && captureLead.isPending)}
+                >
+                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div className="flex-1 flex flex-col max-w-3xl mx-auto w-full px-4 py-8 relative">
         <div className="mb-6">
           <Progress value={(step / STEPS) * 100} className="h-1.5" />

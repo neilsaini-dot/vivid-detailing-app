@@ -44,7 +44,7 @@ router.get("/services", async (req, res) => {
         quote:   ["paint_correction", "ppf"],
       };
       const goalByName: Record<string, string[]> = {
-        paint: ["Vivid Glow", "Paint Correction", "Vivid Ceramic Guard", "Vivid Ceramic Elite Guard"],
+        paint: ["Vivid Ceramic Gloss Pro", "Paint Correction"],
       };
       if (goalByCategory[query.goal]) {
         const cats = goalByCategory[query.goal];

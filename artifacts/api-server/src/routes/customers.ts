@@ -23,6 +23,7 @@ import {
   getNextTier,
   getLoyaltyProgress,
 } from "../lib/pricing";
+import { sendGhlLeadWebhook } from "../lib/ghl";
 
 const router = Router();
 
@@ -37,6 +38,15 @@ router.post("/leads", async (req, res) => {
       .returning();
 
     req.log.info({ customerId: customer.id }, "Lead captured");
+
+    // Fire GHL webhook async — non-blocking
+    sendGhlLeadWebhook({
+      event: "lead_captured",
+      customer: { id: customer.id, name: customer.name ?? "", phone: customer.phone ?? "" },
+      tags: ["Lead", "Partial"],
+      source: "vivid-app",
+    }).catch(() => {});
+
     res.status(201).json(formatCustomer(customer));
   } catch (err) {
     req.log.error({ err }, "Failed to capture lead");

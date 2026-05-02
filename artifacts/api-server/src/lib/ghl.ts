@@ -3,6 +3,7 @@ import { logger } from "./logger";
 const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL;
 
 export type GhlEvent =
+  | "lead_captured"
   | "booking_created"
   | "ppf_quote_request"
   | "booking_abandoned";
@@ -24,6 +25,36 @@ export interface GhlPayload {
   };
   tags: string[];
   source: "vivid-app";
+}
+
+export interface GhlLeadPayload {
+  event: "lead_captured";
+  customer: { id: string; name: string; phone: string };
+  tags: ["Lead", "Partial"];
+  source: "vivid-app";
+}
+
+export async function sendGhlLeadWebhook(payload: GhlLeadPayload): Promise<void> {
+  if (!GHL_WEBHOOK_URL) {
+    logger.warn("GHL_WEBHOOK_URL not configured — skipping lead webhook");
+    return;
+  }
+
+  try {
+    const res = await fetch(GHL_WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      logger.warn({ status: res.status }, "GHL lead webhook returned non-200");
+    } else {
+      logger.info({ event: payload.event, customerId: payload.customer.id }, "GHL lead webhook sent");
+    }
+  } catch (err) {
+    logger.error({ err }, "Failed to send GHL lead webhook");
+  }
 }
 
 export async function sendGhlWebhook(payload: GhlPayload): Promise<void> {

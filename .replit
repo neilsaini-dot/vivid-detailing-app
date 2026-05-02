@@ -1,4 +1,4 @@
-modules = ["nodejs-24"]
+modules = ["nodejs-24", "postgresql-16"]
 
 [deployment]
 router = "application"
@@ -37,3 +37,6 @@ externalPort = 3000
 VITE_BUSINESS_PHONE = "902-267-7775"
 VITE_BUSINESS_EMAIL = "contact@vividpei.com"
 VITE_BUSINESS_ADDRESS = "2-70 Nicholas Lane, Charlottetown, PE"
+
+[nix]
+channel = "stable-25_05"

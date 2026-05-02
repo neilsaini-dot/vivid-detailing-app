@@ -134,6 +134,7 @@ export default function BookingFlow() {
   const [currentPricing, setCurrentPricing] = useState<any>(null);
 
   const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
+  const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false });
 
   const { data: services = [] } = useListServices(
     state.intent ? { goal: state.intent } : {}
@@ -169,6 +170,8 @@ export default function BookingFlow() {
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
   const handleStep1Continue = async () => {
+    setTouched({ name: true, phone: true, yearMakeModel: true });
+    if (!state.customer.name || !state.customer.phone || !state.vehicleTypeSelected || !state.vehicle.yearMakeModel) return;
     if (!capturedLeadId) {
       try {
         const result = await captureLead.mutateAsync({
@@ -238,7 +241,7 @@ export default function BookingFlow() {
           <p className="text-sm text-muted-foreground mt-2 font-medium">Step {step} of {STEPS}</p>
         </div>
 
-        <div className="flex-1 relative min-h-[480px]">
+        <div className="overflow-x-hidden">
           <AnimatePresence mode="wait" custom={dir}>
             <motion.div
               key={step}
@@ -248,7 +251,7 @@ export default function BookingFlow() {
               animate="center"
               exit="exit"
               transition={{ x: { type: "spring", stiffness: 300, damping: 30 }, opacity: { duration: 0.15 } }}
-              className="w-full absolute"
+              className={`w-full ${step > 2 && step < 8 ? "pb-28 md:pb-0" : "pb-8"}`}
             >
 
               {/* ── Step 1: Name + Phone + Vehicle ── */}
@@ -267,13 +270,17 @@ export default function BookingFlow() {
                         <User size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                         <Input
                           id="name"
-                          className="pl-9"
+                          className={`pl-9 ${touched.name && !state.customer.name ? "border-destructive focus-visible:ring-destructive" : ""}`}
                           placeholder="Jane Smith"
                           value={state.customer.name}
                           onChange={e => updateCustomer({ name: e.target.value })}
+                          onBlur={() => setTouched(t => ({ ...t, name: true }))}
                           autoFocus
                         />
                       </div>
+                      {touched.name && !state.customer.name && (
+                        <p className="text-xs text-destructive">Please enter your name</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="phone">Phone Number</Label>
@@ -282,12 +289,16 @@ export default function BookingFlow() {
                         <Input
                           id="phone"
                           type="tel"
-                          className="pl-9"
+                          className={`pl-9 ${touched.phone && !state.customer.phone ? "border-destructive focus-visible:ring-destructive" : ""}`}
                           placeholder="902-555-1234"
                           value={state.customer.phone}
                           onChange={e => updateCustomer({ phone: e.target.value })}
+                          onBlur={() => setTouched(t => ({ ...t, phone: true }))}
                         />
                       </div>
+                      {touched.phone && !state.customer.phone && (
+                        <p className="text-xs text-destructive">Please enter your phone number</p>
+                      )}
                     </div>
                   </div>
 
@@ -295,6 +306,7 @@ export default function BookingFlow() {
                   <div>
                     <Label className="mb-3 block">Vehicle Type</Label>
                     <div className="grid grid-cols-2 gap-3">
+
                       {([
                         { type: "car" as VehicleType, label: "Car / Sedan", img: "/vehicle-sedan.png" },
                         { type: "suv" as VehicleType, label: "SUV / Crossover", img: "/vehicle-suv.png" },
@@ -317,6 +329,9 @@ export default function BookingFlow() {
                         </Card>
                       ))}
                     </div>
+                    {touched.name && !state.vehicleTypeSelected && (
+                      <p className="text-xs text-destructive mt-2">Please select your vehicle type</p>
+                    )}
                   </div>
 
                   {/* Year / Make / Model + Colour */}
@@ -324,10 +339,15 @@ export default function BookingFlow() {
                     <div className="space-y-2">
                       <Label>Year, Make & Model</Label>
                       <Input
+                        className={touched.yearMakeModel && !state.vehicle.yearMakeModel ? "border-destructive focus-visible:ring-destructive" : ""}
                         placeholder="e.g. 2023 Honda Civic"
                         value={state.vehicle.yearMakeModel}
                         onChange={e => updateVehicle({ yearMakeModel: e.target.value })}
+                        onBlur={() => setTouched(t => ({ ...t, yearMakeModel: true }))}
                       />
+                      {touched.yearMakeModel && !state.vehicle.yearMakeModel && (
+                        <p className="text-xs text-destructive">Please enter your vehicle details</p>
+                      )}
                     </div>
                     <div className="space-y-2">
                       <Label>Colour</Label>
@@ -664,7 +684,7 @@ export default function BookingFlow() {
 
         {/* Navigation */}
         {step < 8 && (
-          <div className="flex justify-between items-center mt-16 pt-6 border-t border-border">
+          <div className="flex justify-between items-center mt-6 pt-6 border-t border-border">
             <Button variant="ghost" onClick={() => go(-1)} disabled={step === 1} className="gap-2">
               <ArrowLeft className="w-4 h-4" /> Back
             </Button>

@@ -217,7 +217,7 @@ router.get("/customers/:id/dashboard", async (req, res) => {
     // Handles cases where the same car was entered across multiple bookings.
     const seenVehicles = new Set<string>();
     const vehicles = allVehicles.filter((v) => {
-      const key = `${(v.year ?? "").toLowerCase()}|${(v.make ?? "").toLowerCase()}|${(v.model ?? "").toLowerCase()}`;
+      const key = `${String(v.year ?? "")}|${(v.make ?? "").toLowerCase()}|${(v.model ?? "").toLowerCase()}`;
       if (seenVehicles.has(key)) return false;
       seenVehicles.add(key);
       return true;

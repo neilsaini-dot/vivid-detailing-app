@@ -1074,6 +1074,19 @@ export const ListSeasonalPromosResponse = zod.array(
 );
 
 /**
+ * @summary Create a seasonal promo
+ */
+export const CreateSeasonalPromoBody = zod.object({
+  name: zod.string(),
+  basePrice: zod.number(),
+  description: zod.string().optional(),
+  validFrom: zod.string().nullish(),
+  validTo: zod.string().nullish(),
+  includes: zod.array(zod.string()).optional(),
+  isActive: zod.boolean().optional(),
+});
+
+/**
  * @summary Toggle or edit a seasonal promo
  */
 export const UpdateSeasonalPromoBody = zod.object({
@@ -1082,6 +1095,9 @@ export const UpdateSeasonalPromoBody = zod.object({
   basePrice: zod.number().optional(),
   name: zod.string().optional(),
   description: zod.string().optional(),
+  validFrom: zod.string().nullish(),
+  validTo: zod.string().nullish(),
+  includes: zod.array(zod.string()).optional(),
 });
 
 export const UpdateSeasonalPromoResponse = zod.object({
@@ -1093,4 +1109,11 @@ export const UpdateSeasonalPromoResponse = zod.object({
   validTo: zod.string().nullish(),
   description: zod.string().nullish(),
   includes: zod.array(zod.string()),
+});
+
+/**
+ * @summary Delete a seasonal promo
+ */
+export const DeleteSeasonalPromoParams = zod.object({
+  id: zod.coerce.string(),
 });

@@ -1,8 +1,8 @@
 import { useState } from "react";
 import {
   useAdminListBookings, useAdminListServices, useGetAnalytics,
-  useListSeasonalPromos, useUpdateSeasonalPromo, useAdminUpdateService,
-  useAdminUpdateBooking,
+  useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
+  useDeleteSeasonalPromo, useAdminUpdateService, useAdminUpdateBooking,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -21,7 +21,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   User, Car, CalendarDays, Package, CheckCircle2, RefreshCw,
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
-  Camera, Upload, X, Eye,
+  Camera, Upload, X, Eye, Plus, Trash2, Pencil, Tag, CalendarRange,
 } from "lucide-react";
 import { useRef, useEffect } from "react";
 
@@ -550,7 +550,16 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
 
 function AdminDashboard() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+
+  // Promo create form state
+  const [showCreatePromo, setShowCreatePromo] = useState(false);
+  const [newPromo, setNewPromo] = useState({
+    name: "", basePrice: "", description: "", validFrom: "", validTo: "", includes: "",
+  });
+  const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
+  const [editPromo, setEditPromo] = useState<any>({});
 
   const { data: bookings = [] } = useAdminListBookings({});
   const { data: services = [] } = useAdminListServices();
@@ -558,14 +567,77 @@ function AdminDashboard() {
   const { data: promos = [] } = useListSeasonalPromos();
 
   const updatePromo = useUpdateSeasonalPromo();
+  const createPromo = useCreateSeasonalPromo();
+  const deletePromo = useDeleteSeasonalPromo();
   const updateService = useAdminUpdateService();
+
+  const invalidatePromos = () => queryClient.invalidateQueries({ queryKey: ["listSeasonalPromos"] });
 
   const handleTogglePromo = async (id: string, current: boolean) => {
     try {
       await updatePromo.mutateAsync({ id, data: { isActive: !current } });
+      invalidatePromos();
+      toast({ title: current ? "Promo deactivated" : "Promo activated" });
+    } catch {
+      toast({ variant: "destructive", title: "Update failed" });
+    }
+  };
+
+  const handleCreatePromo = async () => {
+    if (!newPromo.name.trim() || !newPromo.basePrice) {
+      toast({ variant: "destructive", title: "Name and price are required" });
+      return;
+    }
+    try {
+      await createPromo.mutateAsync({
+        data: {
+          name: newPromo.name.trim(),
+          basePrice: parseFloat(newPromo.basePrice),
+          description: newPromo.description.trim() || undefined,
+          validFrom: newPromo.validFrom || null,
+          validTo: newPromo.validTo || null,
+          includes: newPromo.includes ? newPromo.includes.split(",").map(s => s.trim()).filter(Boolean) : [],
+          isActive: true,
+        },
+      });
+      invalidatePromos();
+      setNewPromo({ name: "", basePrice: "", description: "", validFrom: "", validTo: "", includes: "" });
+      setShowCreatePromo(false);
+      toast({ title: "Promo created" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to create promo" });
+    }
+  };
+
+  const handleSaveEditPromo = async (id: string) => {
+    try {
+      await updatePromo.mutateAsync({
+        id,
+        data: {
+          name: editPromo.name,
+          basePrice: parseFloat(editPromo.basePrice),
+          description: editPromo.description || undefined,
+          validFrom: editPromo.validFrom || null,
+          validTo: editPromo.validTo || null,
+          includes: editPromo.includes ? editPromo.includes.split(",").map((s: string) => s.trim()).filter(Boolean) : [],
+        } as any,
+      });
+      invalidatePromos();
+      setEditingPromoId(null);
       toast({ title: "Promo updated" });
     } catch {
       toast({ variant: "destructive", title: "Update failed" });
+    }
+  };
+
+  const handleDeletePromo = async (id: string, name: string) => {
+    if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await deletePromo.mutateAsync({ id });
+      invalidatePromos();
+      toast({ title: "Promo deleted" });
+    } catch {
+      toast({ variant: "destructive", title: "Delete failed" });
     }
   };
 
@@ -717,23 +789,212 @@ function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="promos">
-          <div className="grid gap-4">
+          <div className="space-y-4">
+            {/* Header row */}
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">{promos.length} promo{promos.length !== 1 ? "s" : ""} configured</p>
+              <Button
+                size="sm"
+                className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+                onClick={() => setShowCreatePromo(v => !v)}
+              >
+                <Plus className="h-4 w-4" />
+                {showCreatePromo ? "Cancel" : "Add Promo"}
+              </Button>
+            </div>
+
+            {/* Create form */}
+            {showCreatePromo && (
+              <Card className="bg-surface border-primary/30 border">
+                <CardContent className="p-6 space-y-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Tag className="h-4 w-4 text-primary" />
+                    <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">New Seasonal Promotion</h3>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Name *</label>
+                      <Input
+                        placeholder="e.g. Spring Refresh Special"
+                        value={newPromo.name}
+                        onChange={e => setNewPromo(p => ({ ...p, name: e.target.value }))}
+                        className="bg-surface-2 border-border"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground">Price ($) *</label>
+                      <Input
+                        type="number"
+                        placeholder="e.g. 149"
+                        value={newPromo.basePrice}
+                        onChange={e => setNewPromo(p => ({ ...p, basePrice: e.target.value }))}
+                        className="bg-surface-2 border-border"
+                      />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="text-xs text-muted-foreground">Description</label>
+                      <Input
+                        placeholder="Short description shown to customers"
+                        value={newPromo.description}
+                        onChange={e => setNewPromo(p => ({ ...p, description: e.target.value }))}
+                        className="bg-surface-2 border-border"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground flex items-center gap-1"><CalendarRange className="h-3 w-3" /> Valid From</label>
+                      <Input
+                        type="date"
+                        value={newPromo.validFrom}
+                        onChange={e => setNewPromo(p => ({ ...p, validFrom: e.target.value }))}
+                        className="bg-surface-2 border-border"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-xs text-muted-foreground flex items-center gap-1"><CalendarRange className="h-3 w-3" /> Valid To</label>
+                      <Input
+                        type="date"
+                        value={newPromo.validTo}
+                        onChange={e => setNewPromo(p => ({ ...p, validTo: e.target.value }))}
+                        className="bg-surface-2 border-border"
+                      />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <label className="text-xs text-muted-foreground">What's Included (comma-separated)</label>
+                      <Input
+                        placeholder="e.g. Exterior Wash, Interior Vacuum, Tire Shine"
+                        value={newPromo.includes}
+                        onChange={e => setNewPromo(p => ({ ...p, includes: e.target.value }))}
+                        className="bg-surface-2 border-border"
+                      />
+                    </div>
+                  </div>
+                  <Button
+                    className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                    onClick={handleCreatePromo}
+                    disabled={createPromo.isPending}
+                  >
+                    {createPromo.isPending ? "Creating..." : "Create Promotion"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Promo cards */}
             {promos.map((p: any) => (
               <Card key={p.id} className="bg-surface border-border">
-                <CardContent className="p-6 flex items-center justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold text-primary mb-1">{p.name}</h3>
-                    <p className="text-muted-foreground">{p.description}</p>
-                    <p className="font-bold mt-2">Price: ${p.basePrice}</p>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    <label className="text-sm">Active</label>
-                    <Switch checked={p.isActive} onCheckedChange={() => handleTogglePromo(p.id, p.isActive)} />
-                  </div>
+                <CardContent className="p-6">
+                  {editingPromoId === p.id ? (
+                    /* Edit mode */
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Name</label>
+                          <Input value={editPromo.name ?? ""} onChange={e => setEditPromo((ep: any) => ({ ...ep, name: e.target.value }))} className="bg-surface-2 border-border" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Price ($)</label>
+                          <Input type="number" value={editPromo.basePrice ?? ""} onChange={e => setEditPromo((ep: any) => ({ ...ep, basePrice: e.target.value }))} className="bg-surface-2 border-border" />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs text-muted-foreground">Description</label>
+                          <Input value={editPromo.description ?? ""} onChange={e => setEditPromo((ep: any) => ({ ...ep, description: e.target.value }))} className="bg-surface-2 border-border" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Valid From</label>
+                          <Input type="date" value={editPromo.validFrom ?? ""} onChange={e => setEditPromo((ep: any) => ({ ...ep, validFrom: e.target.value }))} className="bg-surface-2 border-border" />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-xs text-muted-foreground">Valid To</label>
+                          <Input type="date" value={editPromo.validTo ?? ""} onChange={e => setEditPromo((ep: any) => ({ ...ep, validTo: e.target.value }))} className="bg-surface-2 border-border" />
+                        </div>
+                        <div className="space-y-1 sm:col-span-2">
+                          <label className="text-xs text-muted-foreground">Includes (comma-separated)</label>
+                          <Input value={editPromo.includes ?? ""} onChange={e => setEditPromo((ep: any) => ({ ...ep, includes: e.target.value }))} className="bg-surface-2 border-border" />
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => handleSaveEditPromo(p.id)} disabled={updatePromo.isPending}>Save</Button>
+                        <Button size="sm" variant="ghost" onClick={() => setEditingPromoId(null)}>Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    /* View mode */
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h3 className="text-lg font-bold">{p.name}</h3>
+                          <Badge variant="outline" className={p.isActive ? "text-green-500 border-green-500/20 bg-green-500/10" : "text-muted-foreground border-border"}>
+                            {p.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </div>
+                        {p.description && <p className="text-muted-foreground text-sm mb-2">{p.description}</p>}
+                        <p className="text-2xl font-bold text-primary mb-2">${Number(p.basePrice).toFixed(2)}</p>
+                        {(p.validFrom || p.validTo) && (
+                          <p className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                            <CalendarRange className="h-3 w-3" />
+                            {p.validFrom ?? "—"} → {p.validTo ?? "—"}
+                          </p>
+                        )}
+                        {p.includes?.length > 0 && (
+                          <div className="flex flex-wrap gap-1 mt-2">
+                            {p.includes.map((item: string, i: number) => (
+                              <Badge key={i} variant="secondary" className="text-xs bg-surface-2 text-foreground">{item}</Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex flex-col items-end gap-3 shrink-0">
+                        <div className="flex items-center gap-2">
+                          <label className="text-sm text-muted-foreground">{p.isActive ? "Live" : "Off"}</label>
+                          <Switch checked={p.isActive} onCheckedChange={() => handleTogglePromo(p.id, p.isActive)} />
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 border-border hover:border-primary/40"
+                            onClick={() => {
+                              setEditingPromoId(p.id);
+                              setEditPromo({
+                                name: p.name,
+                                basePrice: String(p.basePrice),
+                                description: p.description ?? "",
+                                validFrom: p.validFrom ?? "",
+                                validTo: p.validTo ?? "",
+                                includes: (p.includes ?? []).join(", "),
+                              });
+                            }}
+                          >
+                            <Pencil className="h-3 w-3" /> Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="gap-1 border-red-500/20 text-red-400 hover:border-red-500/40 hover:bg-red-500/10"
+                            onClick={() => handleDeletePromo(p.id, p.name)}
+                            disabled={deletePromo.isPending}
+                          >
+                            <Trash2 className="h-3 w-3" /> Delete
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
-            {promos.length === 0 && <p className="text-muted-foreground p-4">No seasonal promos configured.</p>}
+
+            {promos.length === 0 && !showCreatePromo && (
+              <Card className="bg-surface border-border">
+                <CardContent className="p-12 text-center">
+                  <Tag className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+                  <p className="text-muted-foreground mb-4">No seasonal promotions yet. Create one to show special deals to customers during booking.</p>
+                  <Button size="sm" className="bg-primary text-primary-foreground" onClick={() => setShowCreatePromo(true)}>
+                    <Plus className="h-4 w-4 mr-1" /> Create First Promo
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
       </Tabs>

@@ -716,6 +716,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/SeasonalPromo"
+    post:
+      operationId: createSeasonalPromo
+      tags: [admin]
+      summary: Create a seasonal promo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSeasonalPromoBody"
+      responses:
+        "201":
+          description: Created promo
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SeasonalPromo"
     patch:
       operationId: updateSeasonalPromo
       tags: [admin]
@@ -733,6 +750,21 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SeasonalPromo"
+
+  /admin/seasonal-promos/{id}:
+    delete:
+      operationId: deleteSeasonalPromo
+      tags: [admin]
+      summary: Delete a seasonal promo
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
 
 components:
   schemas:
@@ -1315,6 +1347,29 @@ components:
             type: string
       required: [id, name, basePrice, isActive, includes]
 
+    CreateSeasonalPromoBody:
+      type: object
+      properties:
+        name:
+          type: string
+        basePrice:
+          type: number
+        description:
+          type: string
+        validFrom:
+          type: string
+          nullable: true
+        validTo:
+          type: string
+          nullable: true
+        includes:
+          type: array
+          items:
+            type: string
+        isActive:
+          type: boolean
+      required: [name, basePrice]
+
     UpdateSeasonalPromoBody:
       type: object
       properties:
@@ -1328,6 +1383,16 @@ components:
           type: string
         description:
           type: string
+        validFrom:
+          type: string
+          nullable: true
+        validTo:
+          type: string
+          nullable: true
+        includes:
+          type: array
+          items:
+            type: string
       required: [id]
 
     CalendarAvailability:

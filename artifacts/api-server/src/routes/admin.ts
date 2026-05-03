@@ -609,23 +609,58 @@ router.get("/admin/analytics", async (req, res) => {
 
 // ─── Seasonal Promos ─────────────────────────────────────────────────
 
+function formatPromo(p: typeof seasonalPromosTable.$inferSelect) {
+  return {
+    id: p.id,
+    name: p.name,
+    basePrice: Number(p.basePrice),
+    isActive: p.isActive,
+    validFrom: p.validFrom ?? null,
+    validTo: p.validTo ?? null,
+    description: p.description ?? null,
+    includes: p.includes ?? [],
+  };
+}
+
 router.get("/admin/seasonal-promos", async (req, res) => {
   try {
-    const promos = await db.select().from(seasonalPromosTable);
-    res.json(
-      promos.map((p) => ({
-        id: p.id,
-        name: p.name,
-        basePrice: Number(p.basePrice),
-        isActive: p.isActive,
-        validFrom: p.validFrom,
-        validTo: p.validTo,
-        description: p.description,
-        includes: p.includes ?? [],
-      }))
-    );
+    const promos = await db.select().from(seasonalPromosTable).orderBy(asc(seasonalPromosTable.createdAt));
+    res.json(promos.map(formatPromo));
   } catch (err) {
     req.log.error({ err }, "Failed to list promos");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/seasonal-promos", async (req, res) => {
+  try {
+    const body = req.body as {
+      name: string;
+      basePrice: number;
+      description?: string;
+      validFrom?: string | null;
+      validTo?: string | null;
+      includes?: string[];
+      isActive?: boolean;
+    };
+    if (!body.name || body.basePrice == null) {
+      return res.status(400).json({ error: "name and basePrice are required" });
+    }
+    const [created] = await db
+      .insert(seasonalPromosTable)
+      .values({
+        name: body.name,
+        basePrice: String(body.basePrice),
+        description: body.description ?? null,
+        validFrom: body.validFrom ?? null,
+        validTo: body.validTo ?? null,
+        includes: body.includes ?? [],
+        isActive: body.isActive ?? true,
+      })
+      .returning();
+    res.status(201).json(formatPromo(created));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create promo");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -638,6 +673,9 @@ router.patch("/admin/seasonal-promos", async (req, res) => {
     if (body.basePrice !== undefined) updates.basePrice = String(body.basePrice);
     if (body.name !== undefined) updates.name = body.name;
     if (body.description !== undefined) updates.description = body.description;
+    if ("validFrom" in body) updates.validFrom = (body as any).validFrom ?? null;
+    if ("validTo" in body) updates.validTo = (body as any).validTo ?? null;
+    if ((body as any).includes !== undefined) updates.includes = (body as any).includes;
 
     const [updated] = await db
       .update(seasonalPromosTable)
@@ -646,19 +684,20 @@ router.patch("/admin/seasonal-promos", async (req, res) => {
       .returning();
 
     if (!updated) return res.status(404).json({ error: "Not found" });
-
-    res.json({
-      id: updated.id,
-      name: updated.name,
-      basePrice: Number(updated.basePrice),
-      isActive: updated.isActive,
-      validFrom: updated.validFrom,
-      validTo: updated.validTo,
-      description: updated.description,
-      includes: updated.includes ?? [],
-    });
+    res.json(formatPromo(updated));
   } catch (err) {
     req.log.error({ err }, "Failed to update promo");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/seasonal-promos/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    await db.delete(seasonalPromosTable).where(eq(seasonalPromosTable.id, id));
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete promo");
     res.status(500).json({ error: "Internal server error" });
   }
 });

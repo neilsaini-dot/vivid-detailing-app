@@ -31,6 +31,7 @@ import type {
   CaptureLeadBody,
   CreateBookingBody,
   CreateQuoteBody,
+  CreateSeasonalPromoBody,
   CreateVehicleBody,
   Customer,
   CustomerDashboard,
@@ -2830,6 +2831,92 @@ export function useListSeasonalPromos<
 }
 
 /**
+ * @summary Create a seasonal promo
+ */
+export const getCreateSeasonalPromoUrl = () => {
+  return `/api/admin/seasonal-promos`;
+};
+
+export const createSeasonalPromo = async (
+  createSeasonalPromoBody: CreateSeasonalPromoBody,
+  options?: RequestInit,
+): Promise<SeasonalPromo> => {
+  return customFetch<SeasonalPromo>(getCreateSeasonalPromoUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createSeasonalPromoBody),
+  });
+};
+
+export const getCreateSeasonalPromoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSeasonalPromo>>,
+    TError,
+    { data: BodyType<CreateSeasonalPromoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createSeasonalPromo>>,
+  TError,
+  { data: BodyType<CreateSeasonalPromoBody> },
+  TContext
+> => {
+  const mutationKey = ["createSeasonalPromo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createSeasonalPromo>>,
+    { data: BodyType<CreateSeasonalPromoBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createSeasonalPromo(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateSeasonalPromoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createSeasonalPromo>>
+>;
+export type CreateSeasonalPromoMutationBody = BodyType<CreateSeasonalPromoBody>;
+export type CreateSeasonalPromoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a seasonal promo
+ */
+export const useCreateSeasonalPromo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createSeasonalPromo>>,
+    TError,
+    { data: BodyType<CreateSeasonalPromoBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createSeasonalPromo>>,
+  TError,
+  { data: BodyType<CreateSeasonalPromoBody> },
+  TContext
+> => {
+  return useMutation(getCreateSeasonalPromoMutationOptions(options));
+};
+
+/**
  * @summary Toggle or edit a seasonal promo
  */
 export const getUpdateSeasonalPromoUrl = () => {
@@ -2913,4 +3000,88 @@ export const useUpdateSeasonalPromo = <
   TContext
 > => {
   return useMutation(getUpdateSeasonalPromoMutationOptions(options));
+};
+
+/**
+ * @summary Delete a seasonal promo
+ */
+export const getDeleteSeasonalPromoUrl = (id: string) => {
+  return `/api/admin/seasonal-promos/${id}`;
+};
+
+export const deleteSeasonalPromo = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getDeleteSeasonalPromoUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteSeasonalPromoMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSeasonalPromo>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteSeasonalPromo>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteSeasonalPromo"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteSeasonalPromo>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteSeasonalPromo(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteSeasonalPromoMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteSeasonalPromo>>
+>;
+
+export type DeleteSeasonalPromoMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a seasonal promo
+ */
+export const useDeleteSeasonalPromo = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteSeasonalPromo>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteSeasonalPromo>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteSeasonalPromoMutationOptions(options));
 };

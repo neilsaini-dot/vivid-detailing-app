@@ -342,12 +342,25 @@ export interface SeasonalPromo {
   includes: string[];
 }
 
+export interface CreateSeasonalPromoBody {
+  name: string;
+  basePrice: number;
+  description?: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  includes?: string[];
+  isActive?: boolean;
+}
+
 export interface UpdateSeasonalPromoBody {
   id: string;
   isActive?: boolean;
   basePrice?: number;
   name?: string;
   description?: string;
+  validFrom?: string | null;
+  validTo?: string | null;
+  includes?: string[];
 }
 
 export interface TimeSlot {

@@ -427,6 +427,12 @@ router.post("/bookings/:id/magic-link", async (req, res) => {
       return res.status(500).json({ error: "Magic link webhook not configured" });
     }
 
+    // Build the magic link URL from the app's public domain
+    const domain = (process.env.REPLIT_DOMAINS ?? "").split(",")[0].trim();
+    const magicLinkTarget = domain
+      ? `https://${domain}/dashboard?ref=${id}`
+      : `/dashboard?ref=${id}`;
+
     const payload = {
       event: "magic_link_requested",
       customer: {
@@ -439,6 +445,7 @@ router.post("/bookings/:id/magic-link", async (req, res) => {
         appointment_at: formatAppointment(booking.appointmentAt?.toISOString()),
         total_estimate: Number(booking.totalEstimate ?? 0),
       },
+      magic_link_url: magicLinkTarget,
       tags: ["Magic Link Requested"],
       source: "vivid-app",
     };

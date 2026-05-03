@@ -14,17 +14,10 @@ export function Navbar() {
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="container flex h-16 items-center justify-between">
         <div className="flex items-center gap-6">
-          {isBooking ? (
-            <div className="flex items-center gap-3">
-              <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
-              <span className="font-bold text-lg tracking-tight hidden sm:block">Vivid Detailing</span>
-            </div>
-          ) : (
-            <Link href="/" className="flex items-center gap-3">
-              <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
-              <span className="font-bold text-lg tracking-tight hidden sm:block">Vivid Detailing</span>
-            </Link>
-          )}
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
+            <span className="font-bold text-lg tracking-tight hidden sm:block">Vivid Detailing</span>
+          </div>
           {!isSimple && (
             <nav className="hidden md:flex items-center gap-6 text-sm font-medium">
               <Link href="/book" className="transition-colors hover:text-primary">Services</Link>

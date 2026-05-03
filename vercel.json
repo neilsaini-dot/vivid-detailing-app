@@ -1,7 +1,11 @@
 {
   "buildCommand": "pnpm install && pnpm --filter @workspace/vivid-detailing run build",
   "outputDirectory": "artifacts/vivid-detailing/dist/public",
-  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
+  "framework": null,
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/(.*)", "dest": "/index.html" }
+  ],
   "env": {
     "BASE_PATH": "/",
     "NODE_ENV": "production"

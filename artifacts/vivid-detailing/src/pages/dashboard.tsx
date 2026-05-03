@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
-import { 
-  useGetCustomerDashboard, 
+import { useQueryClient } from "@tanstack/react-query";
+import {
+  useGetCustomerDashboard,
+  useGetCalendarNextSlots,
+  useGetCalendarAvailability,
+  useUpdateBooking,
 } from "@workspace/api-client-react";
+import { Calendar } from "@/components/ui/calendar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CarFront, Calendar, History, Shield, AlertCircle, Settings, Plus, Activity, Star, Trophy, Zap, Lock } from "lucide-react";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  CarFront, CalendarIcon, History, Shield, AlertCircle, Settings,
+  Plus, Activity, Star, Trophy, Zap, Lock, Check, ChevronRight, ChevronLeft,
+} from "lucide-react";
 import { format } from "date-fns";
+import { useToast } from "@/hooks/use-toast";
 
 // ── Tier config ──────────────────────────────────────────────────────────────
 const TIERS = [
@@ -74,7 +84,6 @@ function TierBadge({ tier }: { tier: string }) {
   );
 }
 
-// Circular progress ring
 function ProgressRing({ percent, size = 96, stroke = 7 }: { percent: number; size?: number; stroke?: number }) {
   const r = (size - stroke * 2) / 2;
   const circ = 2 * Math.PI * r;
@@ -82,20 +91,218 @@ function ProgressRing({ percent, size = 96, stroke = 7 }: { percent: number; siz
   return (
     <svg width={size} height={size} className="-rotate-90">
       <circle cx={size / 2} cy={size / 2} r={r} stroke="currentColor" strokeWidth={stroke} fill="none" className="text-white/10" />
-      <circle
-        cx={size / 2} cy={size / 2} r={r}
-        stroke="currentColor" strokeWidth={stroke} fill="none"
-        strokeDasharray={circ} strokeDashoffset={offset}
-        strokeLinecap="round"
-        className="text-primary transition-all duration-700"
-      />
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="currentColor" strokeWidth={stroke} fill="none"
+        strokeDasharray={circ} strokeDashoffset={offset} strokeLinecap="round" className="text-primary transition-all duration-700" />
     </svg>
   );
 }
 
+// ── Reschedule Sheet ─────────────────────────────────────────────────────────
+function RescheduleSheet({
+  booking, open, onClose, onSuccess,
+}: { booking: any; open: boolean; onClose: () => void; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const updateBooking = useUpdateBooking();
+
+  const [selectedDate, setSelectedDate] = useState<Date | undefined>();
+  const [selectedSlot, setSelectedSlot] = useState<string | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  // Reset on open/close
+  useEffect(() => {
+    if (!open) {
+      setSelectedDate(undefined);
+      setSelectedSlot(null);
+      setShowDatePicker(false);
+      setSaved(false);
+    }
+  }, [open]);
+
+  const selectedDateStr = selectedDate
+    ? `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, "0")}-${String(selectedDate.getDate()).padStart(2, "0")}`
+    : undefined;
+
+  const { data: nextSlots, isFetching: slotsFetching } = useGetCalendarNextSlots(
+    { duration: 2, count: 3 },
+    { query: { enabled: open } }
+  );
+
+  const { data: daySlots, isFetching: dayFetching } = useGetCalendarAvailability(
+    { date: selectedDateStr!, duration: 2 },
+    { query: { enabled: !!selectedDateStr && showDatePicker } }
+  );
+
+  const handleConfirm = async () => {
+    if (!selectedSlot || !selectedDate) return;
+    try {
+      const dt = new Date(selectedDate);
+      const [h, m] = selectedSlot.split(":");
+      dt.setHours(parseInt(h), parseInt(m), 0, 0);
+      await updateBooking.mutateAsync({ id: booking.id, data: { appointmentAt: dt.toISOString() } });
+      setSaved(true);
+      queryClient.invalidateQueries({ queryKey: [`/api/customers/${booking.customerId}/dashboard`] });
+      toast({ title: "Appointment rescheduled!", description: `New time: ${format(dt, "EEEE, MMM d 'at' h:mm a")}` });
+      setTimeout(() => { onSuccess(); onClose(); }, 1800);
+    } catch {
+      toast({ variant: "destructive", title: "Failed to reschedule", description: "Please try again." });
+    }
+  };
+
+  const confirmLabel = selectedSlot && selectedDate
+    ? `Confirm — ${format(selectedDate, "MMM d")} at ${(() => {
+        const [h] = selectedSlot.split(":"); const hr = parseInt(h);
+        return `${hr > 12 ? hr - 12 : hr}:00 ${hr >= 12 ? "PM" : "AM"}`;
+      })()}`
+    : "Select a time to continue";
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-lg overflow-y-auto bg-background border-border">
+        <SheetHeader className="border-b border-border pb-4 mb-6">
+          <SheetTitle>Reschedule Appointment</SheetTitle>
+          {booking?.appointmentAt && (
+            <p className="text-sm text-muted-foreground">
+              Current: <span className="text-foreground font-medium">
+                {format(new Date(booking.appointmentAt), "EEEE, MMM d 'at' h:mm a")}
+              </span>
+            </p>
+          )}
+        </SheetHeader>
+
+        {saved ? (
+          <div className="flex flex-col items-center justify-center py-16 gap-4 text-center">
+            <div className="w-16 h-16 rounded-full bg-primary/20 flex items-center justify-center">
+              <Check className="h-8 w-8 text-primary" />
+            </div>
+            <p className="font-semibold text-lg">Appointment Updated!</p>
+            <p className="text-sm text-muted-foreground">You're all set. We'll see you at your new time.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Quick slots */}
+            <div>
+              <p className="text-sm font-semibold mb-3">Next available appointments</p>
+              {slotsFetching ? (
+                <div className="space-y-2">
+                  {[...Array(3)].map((_, i) => <div key={i} className="h-14 rounded-lg bg-accent animate-pulse" />)}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {nextSlots?.slots?.map(slot => {
+                    const slotDate = new Date(slot.date + "T00:00:00");
+                    const isSelected = !showDatePicker && selectedSlot === slot.start && selectedDateStr === slot.date;
+                    const spotsLeft = Math.max(1, (3 - slot.bookingsToday) - 1);
+                    return (
+                      <button
+                        key={`${slot.date}-${slot.start}`}
+                        type="button"
+                        onClick={() => { setSelectedDate(slotDate); setSelectedSlot(slot.start); setShowDatePicker(false); }}
+                        className={`flex items-center justify-between w-full px-4 py-3 rounded-lg border text-sm font-medium transition-all ${
+                          isSelected
+                            ? "border-primary bg-primary text-primary-foreground shadow-[0_0_12px_rgba(41,184,217,0.25)]"
+                            : "border-border hover:border-primary/60 hover:bg-primary/5 text-foreground"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <CalendarIcon size={15} className={isSelected ? "text-primary-foreground/80" : "text-primary"} />
+                          <div className="text-left">
+                            <div>{format(slotDate, "EEEE, MMM d")}</div>
+                            <div className={`text-xs font-normal mt-0.5 ${isSelected ? "text-primary-foreground/70" : "text-amber-400"}`}>
+                              {spotsLeft} spot{spotsLeft === 1 ? "" : "s"} left
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={isSelected ? "text-primary-foreground/80" : "text-muted-foreground"}>{slot.label}</span>
+                          {isSelected && <Check size={14} />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                  {!slotsFetching && !nextSlots?.slots?.length && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No upcoming slots found. Choose a date below.</p>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Custom date toggle */}
+            <button
+              type="button"
+              className="flex items-center gap-1.5 text-sm text-primary hover:underline w-full justify-center py-1"
+              onClick={() => setShowDatePicker(v => !v)}
+            >
+              {showDatePicker ? <><ChevronLeft size={14} /> Hide calendar</> : <>Choose a different date <ChevronRight size={14} /></>}
+            </button>
+
+            {showDatePicker && (
+              <div className="space-y-4">
+                <Calendar
+                  mode="single"
+                  selected={selectedDate}
+                  onSelect={d => { setSelectedDate(d); setSelectedSlot(null); }}
+                  disabled={(d) => d < new Date() || d.getDay() === 0}
+                  className="rounded-md border border-border mx-auto"
+                />
+                {selectedDate && (
+                  <div>
+                    <p className="text-sm font-semibold mb-3">
+                      Available times on {format(selectedDate, "MMMM d")}
+                    </p>
+                    {dayFetching ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {[...Array(5)].map((_, i) => <div key={i} className="h-9 rounded-lg bg-accent animate-pulse" />)}
+                      </div>
+                    ) : daySlots?.slots?.length ? (
+                      <div className="grid grid-cols-3 gap-2">
+                        {daySlots.slots.map(slot => {
+                          const isSelected = selectedSlot === slot.start;
+                          return (
+                            <button
+                              key={slot.start}
+                              type="button"
+                              onClick={() => setSelectedSlot(slot.start)}
+                              className={`py-2 rounded-lg border text-sm font-medium transition-all ${
+                                isSelected
+                                  ? "border-primary bg-primary text-primary-foreground"
+                                  : "border-border hover:border-primary/60 hover:bg-primary/5"
+                              }`}
+                            >
+                              {slot.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground text-center py-2">No availability on this date. Try another.</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Confirm button */}
+            <Button
+              className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+              disabled={!selectedSlot || !selectedDate || updateBooking.isPending}
+              onClick={handleConfirm}
+            >
+              {updateBooking.isPending ? "Saving..." : confirmLabel}
+            </Button>
+          </div>
+        )}
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const [customerId, setCustomerId] = useState<string | null>(() => localStorage.getItem("vd_customer_id"));
+  const [rescheduleOpen, setRescheduleOpen] = useState(false);
 
   // Magic link auto-login: ?ref=bookingId → resolve customer ID
   useEffect(() => {
@@ -170,9 +377,6 @@ export default function Dashboard() {
   const data = dashboard || mockDashboard;
   const loyalty = data.loyalty;
   const tier = getTierConfig(loyalty.tier);
-  const nextTier = TIERS.find(t => t.name === loyalty.nextTierName) ?? null;
-
-  // Bookings used for per-visit spend history
   const allBookings = [...(data.recentBookings ?? [])];
   const totalPoints = Math.round(loyalty.lifetimeSpend);
   const spendToNext = loyalty.nextTierThreshold
@@ -239,7 +443,8 @@ export default function Dashboard() {
             </div>
             <div className="relative w-16 h-16 rounded-full border-4 border-surface-2 flex items-center justify-center">
               <svg className="absolute inset-0 w-full h-full transform -rotate-90">
-                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-primary" strokeDasharray="175" strokeDashoffset={175 - (175 * (data.conditionScore || 0)) / 100} />
+                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-primary"
+                  strokeDasharray="175" strokeDashoffset={175 - (175 * (data.conditionScore || 0)) / 100} />
               </svg>
               <span className="text-sm font-bold">Good</span>
             </div>
@@ -249,7 +454,7 @@ export default function Dashboard() {
         <Card className="bg-primary text-primary-foreground border-none">
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium flex items-center opacity-90">
-              <Calendar className="mr-2 h-4 w-4" /> Next Appointment
+              <CalendarIcon className="mr-2 h-4 w-4" /> Next Appointment
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -259,8 +464,15 @@ export default function Dashboard() {
                   {format(new Date(data.upcomingBooking.appointmentAt!), "MMM d, h:mm a")}
                 </div>
                 <p className="text-sm opacity-90 truncate">{data.upcomingBooking.items?.[0]?.itemName}</p>
-                <div className="mt-4 flex gap-2">
-                  <Button size="sm" variant="secondary" className="w-full bg-background/20 hover:bg-background/30 text-white border-none">Reschedule</Button>
+                <div className="mt-4">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full bg-background/20 hover:bg-background/30 text-white border-none"
+                    onClick={() => setRescheduleOpen(true)}
+                  >
+                    Reschedule
+                  </Button>
                 </div>
               </>
             ) : (
@@ -280,8 +492,7 @@ export default function Dashboard() {
           <TabsTrigger value="vehicles">My Vehicles</TabsTrigger>
           <TabsTrigger value="history">Service History</TabsTrigger>
           <TabsTrigger value="rewards">
-            <Trophy className="h-3.5 w-3.5 mr-1.5" />
-            Rewards
+            <Trophy className="h-3.5 w-3.5 mr-1.5" />Rewards
           </TabsTrigger>
         </TabsList>
 
@@ -325,7 +536,9 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h4 className="font-medium">{b.items?.[0]?.itemName}</h4>
-                      <p className="text-sm text-muted-foreground">{format(new Date(b.appointmentAt), "MMMM d, yyyy")} • ${b.totalEstimate}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {format(new Date(b.appointmentAt), "MMMM d, yyyy")} • ${b.totalEstimate}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
@@ -343,17 +556,15 @@ export default function Dashboard() {
 
         {/* ── Rewards ── */}
         <TabsContent value="rewards" className="space-y-6">
-
           {/* Hero card */}
           <Card className={`border ${tier.border} ${tier.bg} overflow-hidden relative`}>
             <div className="absolute inset-0 opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary to-transparent pointer-events-none" />
             <CardContent className="p-6">
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-                {/* Left: tier info */}
                 <div className="flex items-center gap-5">
                   <div className="relative">
                     <ProgressRing percent={loyalty.progressPercent} size={88} stroke={6} />
-                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                    <div className="absolute inset-0 flex items-center justify-center">
                       <Trophy className={`h-5 w-5 ${tier.color}`} />
                     </div>
                   </div>
@@ -363,8 +574,6 @@ export default function Dashboard() {
                     <TierBadge tier={loyalty.tier} />
                   </div>
                 </div>
-
-                {/* Right: points + progress */}
                 <div className="flex-1 max-w-xs w-full">
                   <div className="flex justify-between items-baseline mb-2">
                     <span className="text-3xl font-bold tabular-nums">{totalPoints.toLocaleString()}</span>
@@ -385,7 +594,7 @@ export default function Dashboard() {
           </Card>
 
           <div className="grid md:grid-cols-2 gap-6">
-            {/* Per-visit points history */}
+            {/* Points history */}
             <Card className="bg-surface border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -400,9 +609,7 @@ export default function Dashboard() {
                       <div key={b.id} className="flex items-center justify-between px-4 py-3">
                         <div>
                           <p className="text-sm font-medium">{b.items?.[0]?.itemName ?? "Service"}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(new Date(b.appointmentAt), "MMM d, yyyy")}
-                          </p>
+                          <p className="text-xs text-muted-foreground">{format(new Date(b.appointmentAt), "MMM d, yyyy")}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-bold text-primary">+{pts.toLocaleString()} pts</p>
@@ -426,25 +633,18 @@ export default function Dashboard() {
 
             {/* Tier progression */}
             <div className="space-y-3">
-              {TIERS.map((t, i) => {
+              {TIERS.map(t => {
                 const isCurrentTier = t.name === loyalty.tier;
                 const isUnlocked = (loyalty.lifetimeSpend ?? 0) >= t.threshold;
                 const isLocked = !isUnlocked;
-
                 return (
                   <Card key={t.name} className={`border transition-all ${isCurrentTier ? `${t.border} ${t.bg}` : "border-border bg-surface"} ${isLocked ? "opacity-60" : ""}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start justify-between mb-3">
                         <div className="flex items-center gap-2">
-                          {isLocked ? (
-                            <Lock className="h-4 w-4 text-muted-foreground" />
-                          ) : (
-                            <Trophy className={`h-4 w-4 ${t.color}`} />
-                          )}
+                          {isLocked ? <Lock className="h-4 w-4 text-muted-foreground" /> : <Trophy className={`h-4 w-4 ${t.color}`} />}
                           <span className={`font-bold ${isLocked ? "text-muted-foreground" : t.color}`}>{t.name}</span>
-                          {isCurrentTier && (
-                            <Badge variant="outline" className={`text-xs ${t.badge}`}>Current</Badge>
-                          )}
+                          {isCurrentTier && <Badge variant="outline" className={`text-xs ${t.badge}`}>Current</Badge>}
                         </div>
                         <span className="text-xs text-muted-foreground">
                           {t.nextThreshold ? `$${t.threshold}–$${t.nextThreshold - 1}` : `$${t.threshold}+`}
@@ -468,9 +668,16 @@ export default function Dashboard() {
           <div className="text-center">
             <p className="text-xs text-muted-foreground">$1 spent = 1 point. Points are calculated from your total booking spend including HST.</p>
           </div>
-
         </TabsContent>
       </Tabs>
+
+      {/* Reschedule sheet */}
+      <RescheduleSheet
+        booking={data.upcomingBooking}
+        open={rescheduleOpen}
+        onClose={() => setRescheduleOpen(false)}
+        onSuccess={() => setRescheduleOpen(false)}
+      />
     </div>
   );
 }

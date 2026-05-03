@@ -410,6 +410,18 @@ router.post("/bookings/:id/abandon", async (req, res) => {
   }
 });
 
+// GET /api/bookings/:id/customer — returns just the customer ID for magic link auto-login
+router.get("/bookings/:id/customer", async (req, res) => {
+  try {
+    const booking = (await db.select({ customerId: bookingsTable.customerId }).from(bookingsTable).where(eq(bookingsTable.id, req.params.id)))[0];
+    if (!booking) return res.status(404).json({ error: "Not found" });
+    res.json({ customerId: booking.customerId });
+  } catch (err) {
+    req.log.error({ err }, "Failed to get booking customer");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // POST /api/bookings/:id/magic-link — fires the dedicated GHL magic-link webhook
 router.post("/bookings/:id/magic-link", async (req, res) => {
   try {

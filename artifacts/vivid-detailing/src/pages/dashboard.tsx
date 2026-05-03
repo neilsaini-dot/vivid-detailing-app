@@ -2,29 +2,121 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { 
   useGetCustomerDashboard, 
-  useGetCustomerVehicles,
-  useGetCustomerBookings
 } from "@workspace/api-client-react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CarFront, Calendar, History, Shield, AlertCircle, Settings, Plus, Activity } from "lucide-react";
+import { CarFront, Calendar, History, Shield, AlertCircle, Settings, Plus, Activity, Star, Trophy, Zap, Lock } from "lucide-react";
 import { format } from "date-fns";
+
+// ── Tier config ──────────────────────────────────────────────────────────────
+const TIERS = [
+  {
+    name: "Silver",
+    threshold: 0,
+    nextThreshold: 1000,
+    color: "text-slate-300",
+    bg: "bg-slate-400/10",
+    border: "border-slate-400/30",
+    badge: "bg-slate-400/20 text-slate-300 border-slate-400/30",
+    perks: [
+      "Priority booking — skip the waitlist",
+      "10% off your 4th service",
+      "Free interior wipe-down with every wash",
+    ],
+  },
+  {
+    name: "Black",
+    threshold: 1000,
+    nextThreshold: 3000,
+    color: "text-white",
+    bg: "bg-white/5",
+    border: "border-white/20",
+    badge: "bg-white/10 text-white border-white/20",
+    perks: [
+      "All Silver perks",
+      "15% off add-ons on every visit",
+      "Free decontamination wash annually",
+      "Early access to seasonal promos",
+    ],
+  },
+  {
+    name: "Elite",
+    threshold: 3000,
+    nextThreshold: null,
+    color: "text-amber-400",
+    bg: "bg-amber-400/10",
+    border: "border-amber-400/30",
+    badge: "bg-amber-400/15 text-amber-400 border-amber-400/30",
+    perks: [
+      "All Black perks",
+      "20% lifetime discount on all services",
+      "Complimentary annual PPF touch-up inspection",
+      "Dedicated service advisor — direct line",
+      "Free vehicle pick-up & drop-off",
+    ],
+  },
+];
+
+function getTierConfig(tierName: string) {
+  return TIERS.find(t => t.name === tierName) ?? TIERS[0];
+}
+
+function TierBadge({ tier }: { tier: string }) {
+  const cfg = getTierConfig(tier);
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-semibold border ${cfg.badge}`}>
+      <Trophy className="h-3.5 w-3.5" />
+      {tier} Member
+    </span>
+  );
+}
+
+// Circular progress ring
+function ProgressRing({ percent, size = 96, stroke = 7 }: { percent: number; size?: number; stroke?: number }) {
+  const r = (size - stroke * 2) / 2;
+  const circ = 2 * Math.PI * r;
+  const offset = circ - (percent / 100) * circ;
+  return (
+    <svg width={size} height={size} className="-rotate-90">
+      <circle cx={size / 2} cy={size / 2} r={r} stroke="currentColor" strokeWidth={stroke} fill="none" className="text-white/10" />
+      <circle
+        cx={size / 2} cy={size / 2} r={r}
+        stroke="currentColor" strokeWidth={stroke} fill="none"
+        strokeDasharray={circ} strokeDashoffset={offset}
+        strokeLinecap="round"
+        className="text-primary transition-all duration-700"
+      />
+    </svg>
+  );
+}
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
-  const [customerId] = useState<string | null>(() => localStorage.getItem("vd_customer_id"));
+  const [customerId, setCustomerId] = useState<string | null>(() => localStorage.getItem("vd_customer_id"));
+
+  // Magic link auto-login: ?ref=bookingId → resolve customer ID
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref && !customerId) {
+      fetch(`/api/bookings/${ref}/customer`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (data?.customerId) {
+            localStorage.setItem("vd_customer_id", data.customerId);
+            setCustomerId(data.customerId);
+          }
+        })
+        .catch(() => {});
+    }
+  }, []);
 
   const { data: dashboard, isLoading } = useGetCustomerDashboard(customerId ?? "", {
-    query: {
-      enabled: !!customerId,
-      retry: false,
-    }
+    query: { enabled: !!customerId, retry: false }
   });
 
-  // Mock data if API fails/isn't ready yet for this specific customer
   const mockDashboard = {
     customer: { name: "Alex Driver", email: "alex@example.com" },
     vehicles: [
@@ -34,8 +126,8 @@ export default function Dashboard() {
       tier: "Black",
       lifetimeSpend: 1250,
       nextTierName: "Elite",
-      nextTierThreshold: 2500,
-      progressPercent: 50
+      nextTierThreshold: 3000,
+      progressPercent: 12.5,
     },
     conditionScore: 85,
     maintenanceDue: true,
@@ -47,13 +139,10 @@ export default function Dashboard() {
       items: [{ itemName: "Summer Special Ceramic" }]
     },
     recentBookings: [
-      {
-        id: "b_2",
-        appointmentAt: new Date(Date.now() - 86400000 * 30).toISOString(),
-        status: "completed",
-        totalEstimate: 150.00,
-        items: [{ itemName: "Interior Detail" }]
-      }
+      { id: "b_2", appointmentAt: new Date(Date.now() - 86400000 * 30).toISOString(), status: "completed", totalEstimate: 150.00, items: [{ itemName: "Interior Detail" }] },
+      { id: "b_3", appointmentAt: new Date(Date.now() - 86400000 * 80).toISOString(), status: "completed", totalEstimate: 399.00, items: [{ itemName: "Ceramic Coating" }] },
+      { id: "b_4", appointmentAt: new Date(Date.now() - 86400000 * 120).toISOString(), status: "completed", totalEstimate: 225.00, items: [{ itemName: "Full Detail + Decon" }] },
+      { id: "b_5", appointmentAt: new Date(Date.now() - 86400000 * 200).toISOString(), status: "completed", totalEstimate: 476.00, items: [{ itemName: "PPF Hood & Fenders" }] },
     ]
   };
 
@@ -79,6 +168,16 @@ export default function Dashboard() {
   }
 
   const data = dashboard || mockDashboard;
+  const loyalty = data.loyalty;
+  const tier = getTierConfig(loyalty.tier);
+  const nextTier = TIERS.find(t => t.name === loyalty.nextTierName) ?? null;
+
+  // Bookings used for per-visit spend history
+  const allBookings = [...(data.recentBookings ?? [])];
+  const totalPoints = Math.round(loyalty.lifetimeSpend);
+  const spendToNext = loyalty.nextTierThreshold
+    ? Math.max(0, loyalty.nextTierThreshold - loyalty.lifetimeSpend)
+    : 0;
 
   return (
     <div className="container py-8 max-w-6xl">
@@ -105,6 +204,7 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* Summary cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card className="bg-surface border-border">
           <CardHeader className="pb-2">
@@ -113,13 +213,15 @@ export default function Dashboard() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold mb-1">{data.loyalty.tier} Tier</div>
+            <TierBadge tier={loyalty.tier} />
             <div className="space-y-2 mt-4">
               <div className="flex justify-between text-xs">
-                <span>Spend: ${data.loyalty.lifetimeSpend}</span>
-                <span className="text-muted-foreground">{data.loyalty.nextTierName} at ${data.loyalty.nextTierThreshold}</span>
+                <span>${loyalty.lifetimeSpend.toFixed(0)} spent</span>
+                {loyalty.nextTierName && (
+                  <span className="text-muted-foreground">{loyalty.nextTierName} at ${loyalty.nextTierThreshold}</span>
+                )}
               </div>
-              <Progress value={data.loyalty.progressPercent} className="h-1.5" />
+              <Progress value={loyalty.progressPercent} className="h-1.5" />
             </div>
           </CardContent>
         </Card>
@@ -132,10 +234,9 @@ export default function Dashboard() {
           </CardHeader>
           <CardContent className="flex items-center justify-between">
             <div>
-              <div className="text-3xl font-bold text-primary">{data.conditionScore}/100</div>
+              <div className="text-3xl font-bold text-primary">{data.conditionScore ?? "—"}/100</div>
               <p className="text-xs text-muted-foreground mt-1">Based on last inspection</p>
             </div>
-            {/* Circular Gauge Simulation */}
             <div className="relative w-16 h-16 rounded-full border-4 border-surface-2 flex items-center justify-center">
               <svg className="absolute inset-0 w-full h-full transform -rotate-90">
                 <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-primary" strokeDasharray="175" strokeDashoffset={175 - (175 * (data.conditionScore || 0)) / 100} />
@@ -178,8 +279,13 @@ export default function Dashboard() {
         <TabsList className="mb-6 bg-surface border border-border">
           <TabsTrigger value="vehicles">My Vehicles</TabsTrigger>
           <TabsTrigger value="history">Service History</TabsTrigger>
+          <TabsTrigger value="rewards">
+            <Trophy className="h-3.5 w-3.5 mr-1.5" />
+            Rewards
+          </TabsTrigger>
         </TabsList>
-        
+
+        {/* ── Vehicles ── */}
         <TabsContent value="vehicles" className="space-y-4">
           <div className="grid md:grid-cols-2 gap-4">
             {data.vehicles.map((v: any) => (
@@ -207,10 +313,11 @@ export default function Dashboard() {
           </div>
         </TabsContent>
 
+        {/* ── Service History ── */}
         <TabsContent value="history">
           <Card className="bg-surface border-border">
             <div className="divide-y divide-border">
-              {data.recentBookings.map((b: any) => (
+              {allBookings.map((b: any) => (
                 <div key={b.id} className="p-4 flex items-center justify-between hover:bg-surface-2 transition-colors">
                   <div className="flex items-center gap-4">
                     <div className="bg-surface-2 p-2 rounded-md">
@@ -227,14 +334,143 @@ export default function Dashboard() {
                   </div>
                 </div>
               ))}
-              {data.recentBookings.length === 0 && (
+              {allBookings.length === 0 && (
                 <div className="p-8 text-center text-muted-foreground">No past services found.</div>
               )}
             </div>
           </Card>
         </TabsContent>
+
+        {/* ── Rewards ── */}
+        <TabsContent value="rewards" className="space-y-6">
+
+          {/* Hero card */}
+          <Card className={`border ${tier.border} ${tier.bg} overflow-hidden relative`}>
+            <div className="absolute inset-0 opacity-5 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-primary to-transparent pointer-events-none" />
+            <CardContent className="p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
+                {/* Left: tier info */}
+                <div className="flex items-center gap-5">
+                  <div className="relative">
+                    <ProgressRing percent={loyalty.progressPercent} size={88} stroke={6} />
+                    <div className="absolute inset-0 flex items-center justify-center flex-col">
+                      <Trophy className={`h-5 w-5 ${tier.color}`} />
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-widest mb-1">Current Tier</p>
+                    <h2 className={`text-3xl font-bold ${tier.color}`}>{loyalty.tier}</h2>
+                    <TierBadge tier={loyalty.tier} />
+                  </div>
+                </div>
+
+                {/* Right: points + progress */}
+                <div className="flex-1 max-w-xs w-full">
+                  <div className="flex justify-between items-baseline mb-2">
+                    <span className="text-3xl font-bold tabular-nums">{totalPoints.toLocaleString()}</span>
+                    <span className="text-sm text-muted-foreground">pts earned</span>
+                  </div>
+                  <Progress value={loyalty.progressPercent} className="h-2 mb-2" />
+                  {loyalty.nextTierName ? (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="text-foreground font-semibold">${spendToNext.toFixed(0)}</span> more to reach{" "}
+                      <span className={`font-semibold ${getTierConfig(loyalty.nextTierName).color}`}>{loyalty.nextTierName}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-primary font-semibold">You've reached the highest tier — enjoy every perk!</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid md:grid-cols-2 gap-6">
+            {/* Per-visit points history */}
+            <Card className="bg-surface border-border">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Star className="h-4 w-4 text-primary" /> Points History
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="divide-y divide-border">
+                  {allBookings.filter((b: any) => b.status === "completed").map((b: any) => {
+                    const pts = Math.round(Number(b.totalEstimate));
+                    return (
+                      <div key={b.id} className="flex items-center justify-between px-4 py-3">
+                        <div>
+                          <p className="text-sm font-medium">{b.items?.[0]?.itemName ?? "Service"}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(b.appointmentAt), "MMM d, yyyy")}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-primary">+{pts.toLocaleString()} pts</p>
+                          <p className="text-xs text-muted-foreground">${Number(b.totalEstimate).toFixed(2)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {allBookings.filter((b: any) => b.status === "completed").length === 0 && (
+                    <div className="px-4 py-8 text-center text-muted-foreground text-sm">
+                      Complete your first service to start earning points.
+                    </div>
+                  )}
+                </div>
+                <div className="border-t border-border px-4 py-3 flex justify-between">
+                  <span className="text-sm text-muted-foreground">Lifetime total</span>
+                  <span className="text-sm font-bold">{totalPoints.toLocaleString()} pts</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Tier progression */}
+            <div className="space-y-3">
+              {TIERS.map((t, i) => {
+                const isCurrentTier = t.name === loyalty.tier;
+                const isUnlocked = (loyalty.lifetimeSpend ?? 0) >= t.threshold;
+                const isLocked = !isUnlocked;
+
+                return (
+                  <Card key={t.name} className={`border transition-all ${isCurrentTier ? `${t.border} ${t.bg}` : "border-border bg-surface"} ${isLocked ? "opacity-60" : ""}`}>
+                    <CardContent className="p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          {isLocked ? (
+                            <Lock className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <Trophy className={`h-4 w-4 ${t.color}`} />
+                          )}
+                          <span className={`font-bold ${isLocked ? "text-muted-foreground" : t.color}`}>{t.name}</span>
+                          {isCurrentTier && (
+                            <Badge variant="outline" className={`text-xs ${t.badge}`}>Current</Badge>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground">
+                          {t.nextThreshold ? `$${t.threshold}–$${t.nextThreshold - 1}` : `$${t.threshold}+`}
+                        </span>
+                      </div>
+                      <ul className="space-y-1">
+                        {t.perks.map((perk, j) => (
+                          <li key={j} className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <Zap className={`h-3 w-3 mt-0.5 shrink-0 ${isUnlocked ? "text-primary" : "text-muted-foreground/40"}`} />
+                            {perk}
+                          </li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="text-center">
+            <p className="text-xs text-muted-foreground">$1 spent = 1 point. Points are calculated from your total booking spend including HST.</p>
+          </div>
+
+        </TabsContent>
       </Tabs>
     </div>
   );
 }
-

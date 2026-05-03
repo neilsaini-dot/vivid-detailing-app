@@ -34,7 +34,7 @@ const TIERS = [
     perks: [
       "Priority booking — skip the waitlist",
       "10% off your 4th service",
-      "Free air freshener with every wash",
+      "Free air freshener with every service",
     ],
   },
   {

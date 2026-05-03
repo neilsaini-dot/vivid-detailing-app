@@ -42,6 +42,7 @@ router.post("/leads", async (req, res) => {
     // Fire GHL webhook async — non-blocking
     sendGhlLeadWebhook({
       event: "lead_captured",
+      lead_captured: true,
       customer: { id: customer.id, name: customer.name ?? "", phone: customer.phone ?? "" },
       tags: ["Lead", "Partial"],
       source: "vivid-app",

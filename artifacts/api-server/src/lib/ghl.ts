@@ -45,6 +45,7 @@ export interface GhlBookingConfirmedPayload {
 
 export interface GhlLeadPayload {
   event: "lead_captured";
+  lead_captured: true;
   customer: { id: string; name: string; phone: string };
   tags: ["Lead", "Partial"];
   source: "vivid-app";

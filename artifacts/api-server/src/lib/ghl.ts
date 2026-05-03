@@ -15,6 +15,7 @@ export type GhlEvent =
 // Full booking confirmation payload — triggers contact upsert + opportunity won in GHL
 export interface GhlBookingConfirmedPayload {
   event: "booking_confirmed";
+  booking_confirmed: true;
   contact: {
     firstName: string;
     lastName: string;

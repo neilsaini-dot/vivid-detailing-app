@@ -239,6 +239,7 @@ router.post("/bookings", async (req, res) => {
     // Fire GHL booking-confirmed webhook (creates contact + marks opportunity won)
     sendGhlBookingConfirmed({
       event: "booking_confirmed",
+      booking_confirmed: true,
       contact: {
         firstName,
         lastName,

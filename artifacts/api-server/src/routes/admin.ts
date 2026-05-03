@@ -34,6 +34,18 @@ import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
 
 const router = Router();
 
+function formatCompletedAt(date: Date): string {
+  const month = date.toLocaleString("en-US", { month: "long" });
+  const day = date.getDate();
+  const year = date.getFullYear();
+  const ordinal = day % 10 === 1 && day !== 11 ? "st"
+    : day % 10 === 2 && day !== 12 ? "nd"
+    : day % 10 === 3 && day !== 13 ? "rd"
+    : "th";
+  const time = date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  return `${month} ${day}${ordinal}, ${year} at ${time}`;
+}
+
 // ─── Services ─────────────────────────────────────────────────
 
 router.get("/admin/services", async (req, res) => {
@@ -335,7 +347,7 @@ router.patch("/admin/bookings/:id", async (req, res) => {
           appointment_at: updated.appointmentAt?.toISOString() ?? null,
           total_estimate: Number(updated.totalEstimate ?? 0),
           notes: updated.notes ?? null,
-          completed_at: new Date().toISOString(),
+          completed_at: formatCompletedAt(new Date()),
         },
         source: "vivid-app",
       }).catch(() => {});

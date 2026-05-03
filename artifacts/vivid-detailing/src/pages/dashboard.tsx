@@ -542,7 +542,12 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="flex items-center gap-4">
-                    <Badge variant="outline" className="text-green-500 border-green-500/20 bg-green-500/10">Completed</Badge>
+                    {(() => {
+                      const isUpcoming = b.appointmentAt && new Date(b.appointmentAt) > new Date() && b.status !== "completed" && b.status !== "cancelled";
+                      if (b.status === "cancelled") return <Badge variant="outline" className="text-red-400 border-red-400/20 bg-red-400/10">Cancelled</Badge>;
+                      if (isUpcoming) return <Badge variant="outline" className="text-primary border-primary/20 bg-primary/10">Scheduled</Badge>;
+                      return <Badge variant="outline" className="text-green-500 border-green-500/20 bg-green-500/10">Completed</Badge>;
+                    })()}
                     <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={() => setLocation("/book")}>Rebook</Button>
                   </div>
                 </div>

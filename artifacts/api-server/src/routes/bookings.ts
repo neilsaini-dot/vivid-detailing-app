@@ -84,20 +84,50 @@ router.post("/bookings", async (req, res) => {
       }
     }
 
-    // Create vehicle
-    const [vehicle] = await db
-      .insert(vehiclesTable)
-      .values({
-        customerId: customer.id,
-        type: body.vehicle.type,
-        year: body.vehicle.year ?? null,
-        make: body.vehicle.make ?? null,
-        model: body.vehicle.model ?? null,
-        colour: body.vehicle.colour ?? null,
-        licensePlate: body.vehicle.licensePlate ?? null,
-        notes: body.vehicle.notes ?? null,
-      })
-      .returning();
+    // Reuse existing vehicle if same license plate already on file, otherwise create
+    let vehicle: any;
+    if (body.vehicle.licensePlate) {
+      const { and } = await import("drizzle-orm");
+      const existing = await db
+        .select()
+        .from(vehiclesTable)
+        .where(and(
+          eq(vehiclesTable.customerId, customer.id),
+          eq(vehiclesTable.licensePlate, body.vehicle.licensePlate)
+        ))
+        .limit(1);
+      if (existing.length > 0) {
+        const [updated] = await db
+          .update(vehiclesTable)
+          .set({
+            type: body.vehicle.type,
+            year: body.vehicle.year ?? null,
+            make: body.vehicle.make ?? null,
+            model: body.vehicle.model ?? null,
+            colour: body.vehicle.colour ?? null,
+            notes: body.vehicle.notes ?? null,
+          })
+          .where(eq(vehiclesTable.id, existing[0].id))
+          .returning();
+        vehicle = updated;
+      }
+    }
+    if (!vehicle) {
+      const [created] = await db
+        .insert(vehiclesTable)
+        .values({
+          customerId: customer.id,
+          type: body.vehicle.type,
+          year: body.vehicle.year ?? null,
+          make: body.vehicle.make ?? null,
+          model: body.vehicle.model ?? null,
+          colour: body.vehicle.colour ?? null,
+          licensePlate: body.vehicle.licensePlate ?? null,
+          notes: body.vehicle.notes ?? null,
+        })
+        .returning();
+      vehicle = created;
+    }
 
     // Build booking items
     const items: Array<{

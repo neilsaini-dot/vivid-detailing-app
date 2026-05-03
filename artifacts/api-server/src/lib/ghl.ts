@@ -1,6 +1,8 @@
 import { logger } from "./logger";
 
 const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL;
+const GHL_BOOKING_CONFIRMED_WEBHOOK_URL = process.env.GHL_BOOKING_CONFIRMED_WEBHOOK_URL;
+const GHL_MAGIC_LINK_WEBHOOK_URL = process.env.GHL_MAGIC_LINK_WEBHOOK_URL;
 
 export type GhlEvent =
   | "lead_captured"
@@ -13,7 +15,6 @@ export type GhlEvent =
 // Full booking confirmation payload — triggers contact upsert + opportunity won in GHL
 export interface GhlBookingConfirmedPayload {
   event: "booking_confirmed";
-  // Contact fields — GHL uses these to create/update the contact record
   contact: {
     firstName: string;
     lastName: string;
@@ -21,7 +22,6 @@ export interface GhlBookingConfirmedPayload {
     phone: string;
     tags: string[];
   };
-  // Opportunity fields — GHL uses these to create the deal and mark it won
   opportunity: {
     title: string;
     status: "won";
@@ -29,7 +29,6 @@ export interface GhlBookingConfirmedPayload {
     pipelineStageName: string;
     notes: string;
   };
-  // Extra context
   booking: {
     id: string;
     services: string[];
@@ -50,7 +49,6 @@ export interface GhlLeadPayload {
   source: "vivid-app";
 }
 
-// Legacy full payload (kept for backwards compat with other callers)
 export interface GhlPayload {
   event: GhlEvent;
   customer: { name: string; email: string; phone: string };
@@ -70,43 +68,58 @@ export interface GhlPayload {
   source: "vivid-app";
 }
 
-async function post(payload: unknown): Promise<void> {
-  if (!GHL_WEBHOOK_URL) {
-    logger.warn("GHL_WEBHOOK_URL not configured - skipping webhook");
-    return;
-  }
-  const res = await fetch(GHL_WEBHOOK_URL, {
+async function postTo(url: string, payload: unknown, label: string): Promise<void> {
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
-    logger.warn({ status: res.status }, "GHL webhook returned non-200");
+    logger.warn({ status: res.status, label }, "GHL webhook returned non-200");
   } else {
-    logger.info({ event: (payload as any).event }, "GHL webhook sent");
+    logger.info({ event: (payload as any).event, label }, "GHL webhook sent");
   }
 }
 
+// Lead capture — goes to GHL_WEBHOOK_URL
 export async function sendGhlLeadWebhook(payload: GhlLeadPayload): Promise<void> {
+  if (!GHL_WEBHOOK_URL) {
+    logger.warn("GHL_WEBHOOK_URL not configured - skipping lead webhook");
+    return;
+  }
   try {
-    await post(payload);
+    await postTo(GHL_WEBHOOK_URL, payload, "lead");
   } catch (err) {
     logger.error({ err }, "Failed to send GHL lead webhook");
   }
 }
 
+// Legacy full payload — goes to GHL_WEBHOOK_URL
 export async function sendGhlWebhook(payload: GhlPayload): Promise<void> {
+  if (!GHL_WEBHOOK_URL) {
+    logger.warn("GHL_WEBHOOK_URL not configured - skipping webhook");
+    return;
+  }
   try {
-    await post(payload);
+    await postTo(GHL_WEBHOOK_URL, payload, "legacy");
   } catch (err) {
     logger.error({ err }, "Failed to send GHL webhook");
   }
 }
 
-// Sends the booking-confirmed event that creates the contact and marks opportunity won
+// Booking confirmed — goes to dedicated GHL_BOOKING_CONFIRMED_WEBHOOK_URL
+// Falls back to GHL_WEBHOOK_URL if the dedicated URL is not configured
 export async function sendGhlBookingConfirmed(payload: GhlBookingConfirmedPayload): Promise<void> {
+  const url = GHL_BOOKING_CONFIRMED_WEBHOOK_URL || GHL_WEBHOOK_URL;
+  if (!url) {
+    logger.warn("No GHL URL configured for booking_confirmed - skipping");
+    return;
+  }
+  if (!GHL_BOOKING_CONFIRMED_WEBHOOK_URL) {
+    logger.warn("GHL_BOOKING_CONFIRMED_WEBHOOK_URL not set - falling back to GHL_WEBHOOK_URL");
+  }
   try {
-    await post(payload);
+    await postTo(url, payload, "booking_confirmed");
   } catch (err) {
     logger.error({ err }, "Failed to send GHL booking-confirmed webhook");
   }

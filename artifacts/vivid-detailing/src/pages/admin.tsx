@@ -99,12 +99,19 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null);
   const beforeInputRef = useRef<HTMLInputElement>(null);
   const afterInputRef = useRef<HTMLInputElement>(null);
-  // Inline two-step presigned URL upload — no Uppy dependency needed
-  const uploadPhoto = async (file: File): Promise<string | null> => {
+  // Two-step Supabase upload: request signed URL → PUT file directly to CDN.
+  // Returns the full public URL (stored in DB, used directly as <img src>).
+  const uploadPhoto = async (file: File, photoType: "before" | "after"): Promise<string | null> => {
     const metaRes = await fetch("/api/storage/uploads/request-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "image/jpeg" }),
+      body: JSON.stringify({
+        name: file.name,
+        size: file.size,
+        contentType: file.type || "image/jpeg",
+        bookingId: booking.id,
+        photoType,
+      }),
     });
     if (!metaRes.ok) throw new Error("Failed to get upload URL");
     const { uploadURL, objectPath } = await metaRes.json();
@@ -144,7 +151,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     try {
       const paths: string[] = [];
       for (const file of Array.from(files)) {
-        const objectPath = await uploadPhoto(file);
+        const objectPath = await uploadPhoto(file, type);
         if (objectPath) paths.push(objectPath);
       }
       if (type === "before") setBeforeUrls(prev => [...prev, ...paths]);

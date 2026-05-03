@@ -514,9 +514,9 @@ router.post("/bookings/:id/magic-link", async (req, res) => {
     }
 
     // Build the magic link URL from the app's public domain
-    const domain = (process.env.REPLIT_DOMAINS ?? "").split(",")[0].trim();
-    const magicLinkTarget = domain
-      ? `https://${domain}/dashboard?ref=${id}`
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "");
+    const magicLinkTarget = appUrl
+      ? `${appUrl}/dashboard?ref=${id}`
       : `/dashboard?ref=${id}`;
 
     const payload = {

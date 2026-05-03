@@ -29,7 +29,7 @@ import {
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 import { sendGhlBookingConfirmed, sendGhlBookingCompleted } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
 
 const router = Router();
@@ -439,23 +439,13 @@ router.post("/admin/bookings/:id/sync-to-drive", async (req, res) => {
       return res.status(400).json({ error: "No photos saved for this booking yet" });
     }
 
-    const storage = new ObjectStorageService();
-
-    const downloadPhoto = async (objectPath: string, index: number, prefix: string) => {
-      const file = await storage.getObjectEntityFile(objectPath);
-      const [metadata] = await file.getMetadata();
-      const chunks: Buffer[] = [];
-      await new Promise<void>((resolve, reject) => {
-        const stream = file.createReadStream();
-        stream.on("data", (chunk: Buffer) => chunks.push(chunk));
-        stream.on("end", resolve);
-        stream.on("error", reject);
-      });
-      const ext = objectPath.split(".").pop() ?? "jpg";
+    const downloadPhoto = async (urlOrPath: string, index: number, prefix: string) => {
+      const { data, contentType } = await downloadFile(urlOrPath);
+      const ext = urlOrPath.split("?")[0].split(".").pop() ?? "jpg";
       return {
         name: `${prefix}-${index + 1}.${ext}`,
-        data: Buffer.concat(chunks),
-        mimeType: (metadata.contentType as string) || "image/jpeg",
+        data,
+        mimeType: contentType || "image/jpeg",
       };
     };
 

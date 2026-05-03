@@ -29,6 +29,8 @@ import {
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 import { sendGhlBookingConfirmed, sendGhlBookingCompleted } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
+import { ObjectStorageService } from "../lib/objectStorage";
+import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
 
 const router = Router();
 
@@ -383,6 +385,89 @@ router.patch("/admin/bookings/:id", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to update admin booking");
     res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/bookings/:id/sync-to-drive — upload before/after photos to Google Drive
+router.post("/admin/bookings/:id/sync-to-drive", async (req, res) => {
+  try {
+    const { id } = AdminUpdateBookingParams.parse(req.params);
+
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, id))
+      .limit(1);
+    if (!booking) return res.status(404).json({ error: "Not found" });
+
+    const customer = booking.customerId
+      ? (await db.select().from(customersTable).where(eq(customersTable.id, booking.customerId)).limit(1))[0]
+      : null;
+
+    const [history] = await db
+      .select()
+      .from(serviceHistoryTable)
+      .where(eq(serviceHistoryTable.bookingId, id))
+      .limit(1);
+
+    const beforeUrls: string[] = history?.beforePhotoUrls ?? [];
+    const afterUrls: string[] = history?.afterPhotoUrls ?? [];
+
+    if (beforeUrls.length === 0 && afterUrls.length === 0) {
+      return res.status(400).json({ error: "No photos saved for this booking yet" });
+    }
+
+    const storage = new ObjectStorageService();
+
+    const downloadPhoto = async (objectPath: string, index: number, prefix: string) => {
+      const file = await storage.getObjectEntityFile(objectPath);
+      const [metadata] = await file.getMetadata();
+      const chunks: Buffer[] = [];
+      await new Promise<void>((resolve, reject) => {
+        const stream = file.createReadStream();
+        stream.on("data", (chunk: Buffer) => chunks.push(chunk));
+        stream.on("end", resolve);
+        stream.on("error", reject);
+      });
+      const ext = objectPath.split(".").pop() ?? "jpg";
+      return {
+        name: `${prefix}-${index + 1}.${ext}`,
+        data: Buffer.concat(chunks),
+        mimeType: (metadata.contentType as string) || "image/jpeg",
+      };
+    };
+
+    const [beforeBuffers, afterBuffers] = await Promise.all([
+      Promise.all(beforeUrls.map((u, i) => downloadPhoto(u, i, "before"))),
+      Promise.all(afterUrls.map((u, i) => downloadPhoto(u, i, "after"))),
+    ]);
+
+    const customerName = customer?.name ?? "Unknown";
+    const bookingShort = id.slice(0, 8).toUpperCase();
+    const bookingLabel = `${customerName} — ${bookingShort}`;
+
+    const result = await syncPhotosToGoogleDrive({ bookingLabel, beforeBuffers, afterBuffers });
+
+    // Persist the folder URL in service history
+    if (history) {
+      await db
+        .update(serviceHistoryTable)
+        .set({ driveFolderUrl: result.folderUrl })
+        .where(eq(serviceHistoryTable.id, history.id));
+    } else if (booking.customerId) {
+      await db.insert(serviceHistoryTable).values({
+        customerId: booking.customerId,
+        bookingId: id,
+        beforePhotoUrls: [],
+        afterPhotoUrls: [],
+        driveFolderUrl: result.folderUrl,
+      });
+    }
+
+    res.json({ folderUrl: result.folderUrl, uploaded: result.uploaded });
+  } catch (err) {
+    req.log.error({ err }, "Failed to sync photos to Google Drive");
+    res.status(500).json({ error: "Failed to sync to Google Drive" });
   }
 });
 

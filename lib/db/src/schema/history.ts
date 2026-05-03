@@ -12,6 +12,7 @@ export const serviceHistoryTable = pgTable("service_history", {
   afterPhotoUrls: text("after_photo_urls").array().notNull().default([]),
   notes: text("notes"),
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  driveFolderUrl: text("drive_folder_url"),
 }, (t) => [
   check("condition_score_check", sql`${t.conditionScore} BETWEEN 0 AND 100`),
 ]);

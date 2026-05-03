@@ -95,6 +95,8 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [uploadingBefore, setUploadingBefore] = useState(false);
   const [uploadingAfter, setUploadingAfter] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [driveSyncing, setDriveSyncing] = useState(false);
+  const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null);
   const beforeInputRef = useRef<HTMLInputElement>(null);
   const afterInputRef = useRef<HTMLInputElement>(null);
   // Inline two-step presigned URL upload — no Uppy dependency needed
@@ -121,6 +123,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     setConditionScore("");
     setBeforeUrls([]);
     setAfterUrls([]);
+    setDriveFolderUrl(null);
     fetch(`/api/admin/bookings/${booking.id}/service-history`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -128,6 +131,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
           setConditionScore(data.conditionScore != null ? String(data.conditionScore) : "");
           setBeforeUrls(data.beforePhotoUrls ?? []);
           setAfterUrls(data.afterPhotoUrls ?? []);
+          setDriveFolderUrl(data.driveFolderUrl ?? null);
         }
       })
       .catch(() => {});
@@ -150,6 +154,22 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     } finally {
       if (type === "before") setUploadingBefore(false);
       else setUploadingAfter(false);
+    }
+  };
+
+  const handleSyncToDrive = async () => {
+    setDriveSyncing(true);
+    try {
+      const res = await fetch(`/api/admin/bookings/${booking.id}/sync-to-drive`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Sync failed");
+      setDriveFolderUrl(data.folderUrl);
+      toast({ title: `Synced to Google Drive — ${data.uploaded.before} before, ${data.uploaded.after} after photo(s)` });
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Sync failed";
+      toast({ variant: "destructive", title: msg });
+    } finally {
+      setDriveSyncing(false);
     }
   };
 
@@ -498,6 +518,30 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
               >
                 {photoSaving ? "Saving..." : "Save Photos & Score"}
               </Button>
+
+              <Button
+                size="sm"
+                variant="outline"
+                className="w-full border-border hover:border-primary/40 gap-2"
+                onClick={handleSyncToDrive}
+                disabled={driveSyncing || (beforeUrls.length === 0 && afterUrls.length === 0)}
+              >
+                {driveSyncing
+                  ? <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Syncing to Drive…</>
+                  : <><ExternalLink className="h-3.5 w-3.5" /> Sync to Google Drive</>}
+              </Button>
+
+              {driveFolderUrl && (
+                <a
+                  href={driveFolderUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 text-xs text-primary hover:underline"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                  View folder in Google Drive
+                </a>
+              )}
             </div>
           </section>
 

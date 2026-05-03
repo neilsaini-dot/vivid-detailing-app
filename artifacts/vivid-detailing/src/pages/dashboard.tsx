@@ -298,30 +298,79 @@ function RescheduleSheet({
   );
 }
 
+// ── Loading skeleton ──────────────────────────────────────────────────────────
+function DashboardSkeleton() {
+  return (
+    <div className="container py-8 max-w-6xl animate-pulse">
+      <div className="flex justify-between items-end mb-8">
+        <div className="space-y-2">
+          <div className="h-8 w-48 bg-surface-2 rounded-lg" />
+          <div className="h-4 w-64 bg-surface-2 rounded" />
+        </div>
+        <div className="h-10 w-36 bg-surface-2 rounded-lg" />
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="bg-surface border border-border rounded-xl p-6 space-y-4">
+            <div className="h-4 w-28 bg-surface-2 rounded" />
+            <div className="h-8 w-32 bg-surface-2 rounded-lg" />
+            <div className="h-2 w-full bg-surface-2 rounded-full" />
+          </div>
+        ))}
+      </div>
+      <div className="h-10 w-64 bg-surface-2 rounded-lg mb-6" />
+      <div className="bg-surface border border-border rounded-xl p-6 space-y-4">
+        {[0, 1, 2].map(i => (
+          <div key={i} className="flex items-center justify-between py-2">
+            <div className="flex items-center gap-4">
+              <div className="h-10 w-10 bg-surface-2 rounded-md" />
+              <div className="space-y-2">
+                <div className="h-4 w-40 bg-surface-2 rounded" />
+                <div className="h-3 w-28 bg-surface-2 rounded" />
+              </div>
+            </div>
+            <div className="h-6 w-20 bg-surface-2 rounded-full" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+
+  const hasRef = !!new URLSearchParams(window.location.search).get("ref");
+
+  // Start in "resolving" state if there's a ?ref= param so we never
+  // flash "No account found" while the async lookup is in flight.
+  const [refResolving, setRefResolving] = useState(hasRef);
   const [customerId, setCustomerId] = useState<string | null>(() => localStorage.getItem("vd_customer_id"));
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
 
-  // Magic link auto-login: ?ref=bookingId → resolve customer ID
+  // Magic link auto-login: ?ref=bookingId → always resolve so fresh data loads
   useEffect(() => {
     const ref = new URLSearchParams(window.location.search).get("ref");
-    if (ref && !customerId) {
-      fetch(`/api/bookings/${ref}/customer`)
-        .then(r => r.ok ? r.json() : null)
-        .then(data => {
-          if (data?.customerId) {
-            localStorage.setItem("vd_customer_id", data.customerId);
-            setCustomerId(data.customerId);
-          }
-        })
-        .catch(() => {});
-    }
+    if (!ref) return;
+    setRefResolving(true);
+    fetch(`/api/bookings/${ref}/customer`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.customerId) {
+          localStorage.setItem("vd_customer_id", data.customerId);
+          setCustomerId(data.customerId);
+          // Always bust the cache so newest bookings are included
+          queryClient.invalidateQueries({ queryKey: [`/api/customers/${data.customerId}/dashboard`] });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setRefResolving(false));
   }, []);
 
   const { data: dashboard, isLoading } = useGetCustomerDashboard(customerId ?? "", {
-    query: { enabled: !!customerId, retry: false }
+    query: { enabled: !!customerId && !refResolving, retry: false }
   });
 
   const mockDashboard = {
@@ -353,6 +402,11 @@ export default function Dashboard() {
     ]
   };
 
+  // While the ?ref= magic link is resolving, always show skeleton (never "no account found")
+  if (refResolving || (!!customerId && isLoading)) {
+    return <DashboardSkeleton />;
+  }
+
   if (!customerId) {
     return (
       <div className="container py-24 max-w-lg text-center">
@@ -368,10 +422,6 @@ export default function Dashboard() {
         </Button>
       </div>
     );
-  }
-
-  if (isLoading) {
-    return <div className="p-8 text-center text-muted-foreground">Loading dashboard...</div>;
   }
 
   const data = dashboard || mockDashboard;

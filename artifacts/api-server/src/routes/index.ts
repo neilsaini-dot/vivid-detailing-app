@@ -9,6 +9,7 @@ import vehiclesRouter from "./vehicles";
 import quotesRouter from "./quotes";
 import adminRouter from "./admin";
 import calendarRouter from "./calendar";
+import storageRouter from "./storage";
 
 const router: IRouter = Router();
 
@@ -22,5 +23,6 @@ router.use(vehiclesRouter);
 router.use(quotesRouter);
 router.use(adminRouter);
 router.use(calendarRouter);
+router.use(storageRouter);
 
 export default router;

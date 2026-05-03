@@ -92,9 +92,28 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [beforeUrls, setBeforeUrls] = useState<string[]>([]);
   const [afterUrls, setAfterUrls] = useState<string[]>([]);
   const [photoSaving, setPhotoSaving] = useState(false);
+  const [uploadingBefore, setUploadingBefore] = useState(false);
+  const [uploadingAfter, setUploadingAfter] = useState(false);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const beforeInputRef = useRef<HTMLInputElement>(null);
   const afterInputRef = useRef<HTMLInputElement>(null);
+  // Inline two-step presigned URL upload — no Uppy dependency needed
+  const uploadPhoto = async (file: File): Promise<string | null> => {
+    const metaRes = await fetch("/api/storage/uploads/request-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "image/jpeg" }),
+    });
+    if (!metaRes.ok) throw new Error("Failed to get upload URL");
+    const { uploadURL, objectPath } = await metaRes.json();
+    const putRes = await fetch(uploadURL, {
+      method: "PUT",
+      body: file,
+      headers: { "Content-Type": file.type || "image/jpeg" },
+    });
+    if (!putRes.ok) throw new Error("Failed to upload to storage");
+    return objectPath as string;
+  };
 
   // Load existing service history when sheet opens
   useEffect(() => {
@@ -114,19 +133,24 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
       .catch(() => {});
   }, [open, booking?.id]);
 
-  const fileToBase64 = (file: File): Promise<string> =>
-    new Promise((res, rej) => {
-      const reader = new FileReader();
-      reader.onload = () => res(reader.result as string);
-      reader.onerror = rej;
-      reader.readAsDataURL(file);
-    });
-
   const handleAddPhotos = async (files: FileList | null, type: "before" | "after") => {
     if (!files || files.length === 0) return;
-    const b64s = await Promise.all(Array.from(files).map(fileToBase64));
-    if (type === "before") setBeforeUrls(prev => [...prev, ...b64s]);
-    else setAfterUrls(prev => [...prev, ...b64s]);
+    if (type === "before") setUploadingBefore(true);
+    else setUploadingAfter(true);
+    try {
+      const paths: string[] = [];
+      for (const file of Array.from(files)) {
+        const objectPath = await uploadPhoto(file);
+        if (objectPath) paths.push(objectPath);
+      }
+      if (type === "before") setBeforeUrls(prev => [...prev, ...paths]);
+      else setAfterUrls(prev => [...prev, ...paths]);
+    } catch {
+      // individual upload errors are shown per-file; global catch is a no-op
+    } finally {
+      if (type === "before") setUploadingBefore(false);
+      else setUploadingAfter(false);
+    }
   };
 
   const handleSavePhotos = async () => {
@@ -394,32 +418,36 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">Before Photos</p>
-                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-border" onClick={() => beforeInputRef.current?.click()}>
-                    <Upload className="h-3 w-3" /> Add
+                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-border" disabled={uploadingBefore} onClick={() => beforeInputRef.current?.click()}>
+                    {uploadingBefore ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                    {uploadingBefore ? "Uploading…" : "Add"}
                   </Button>
                   <input ref={beforeInputRef} type="file" accept="image/*" multiple className="hidden"
-                    onChange={e => handleAddPhotos(e.target.files, "before")} />
+                    onChange={e => { handleAddPhotos(e.target.files, "before"); e.target.value = ""; }} />
                 </div>
                 {beforeUrls.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
-                    {beforeUrls.map((url, i) => (
-                      <div key={i} className="relative group aspect-square rounded overflow-hidden border border-border">
-                        <img src={url} alt={`before-${i}`} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                          <button onClick={() => setLightboxSrc(url)} className="p-1 bg-black/60 rounded hover:bg-black/80">
-                            <Eye className="h-3.5 w-3.5 text-white" />
-                          </button>
-                          <button onClick={() => setBeforeUrls(prev => prev.filter((_, j) => j !== i))} className="p-1 bg-black/60 rounded hover:bg-black/80">
-                            <X className="h-3.5 w-3.5 text-white" />
-                          </button>
+                    {beforeUrls.map((url, i) => {
+                      const src = url.startsWith("/objects/") ? `/api/storage${url}` : url;
+                      return (
+                        <div key={i} className="relative group aspect-square rounded overflow-hidden border border-border">
+                          <img src={src} alt={`before-${i}`} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                            <button onClick={() => setLightboxSrc(src)} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                              <Eye className="h-3.5 w-3.5 text-white" />
+                            </button>
+                            <button onClick={() => setBeforeUrls(prev => prev.filter((_, j) => j !== i))} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                              <X className="h-3.5 w-3.5 text-white" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="border border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/40 transition-colors"
                     onClick={() => beforeInputRef.current?.click()}>
-                    <p className="text-xs text-muted-foreground">Click to upload before photos</p>
+                    <p className="text-xs text-muted-foreground">{uploadingBefore ? "Uploading…" : "Click to upload before photos"}</p>
                   </div>
                 )}
               </div>
@@ -428,32 +456,36 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-sm font-medium">After Photos</p>
-                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-border" onClick={() => afterInputRef.current?.click()}>
-                    <Upload className="h-3 w-3" /> Add
+                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-border" disabled={uploadingAfter} onClick={() => afterInputRef.current?.click()}>
+                    {uploadingAfter ? <RefreshCw className="h-3 w-3 animate-spin" /> : <Upload className="h-3 w-3" />}
+                    {uploadingAfter ? "Uploading…" : "Add"}
                   </Button>
                   <input ref={afterInputRef} type="file" accept="image/*" multiple className="hidden"
-                    onChange={e => handleAddPhotos(e.target.files, "after")} />
+                    onChange={e => { handleAddPhotos(e.target.files, "after"); e.target.value = ""; }} />
                 </div>
                 {afterUrls.length > 0 ? (
                   <div className="grid grid-cols-3 gap-2">
-                    {afterUrls.map((url, i) => (
-                      <div key={i} className="relative group aspect-square rounded overflow-hidden border border-border">
-                        <img src={url} alt={`after-${i}`} className="w-full h-full object-cover" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
-                          <button onClick={() => setLightboxSrc(url)} className="p-1 bg-black/60 rounded hover:bg-black/80">
-                            <Eye className="h-3.5 w-3.5 text-white" />
-                          </button>
-                          <button onClick={() => setAfterUrls(prev => prev.filter((_, j) => j !== i))} className="p-1 bg-black/60 rounded hover:bg-black/80">
-                            <X className="h-3.5 w-3.5 text-white" />
-                          </button>
+                    {afterUrls.map((url, i) => {
+                      const src = url.startsWith("/objects/") ? `/api/storage${url}` : url;
+                      return (
+                        <div key={i} className="relative group aspect-square rounded overflow-hidden border border-border">
+                          <img src={src} alt={`after-${i}`} className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                            <button onClick={() => setLightboxSrc(src)} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                              <Eye className="h-3.5 w-3.5 text-white" />
+                            </button>
+                            <button onClick={() => setAfterUrls(prev => prev.filter((_, j) => j !== i))} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                              <X className="h-3.5 w-3.5 text-white" />
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="border border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/40 transition-colors"
                     onClick={() => afterInputRef.current?.click()}>
-                    <p className="text-xs text-muted-foreground">Click to upload after photos</p>
+                    <p className="text-xs text-muted-foreground">{uploadingAfter ? "Uploading…" : "Click to upload after photos"}</p>
                   </div>
                 )}
               </div>

@@ -400,9 +400,6 @@ function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook:
                 {/* Expandable photo gallery */}
                 {isOpen && hasPhotos && (
                   <div className="px-4 pb-4 space-y-3 bg-surface-2/40">
-                    {b.serviceHistory.conditionScore != null && (
-                      <p className="text-xs text-muted-foreground pt-2">Condition score: <span className="text-foreground font-medium">{b.serviceHistory.conditionScore}/100</span></p>
-                    )}
                     {b.serviceHistory.beforePhotoUrls?.length > 0 && (
                       <div>
                         <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Before</p>
@@ -598,27 +595,6 @@ export default function Dashboard() {
                 )}
               </div>
               <Progress value={loyalty.progressPercent} className="h-1.5" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-surface border-border">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm text-muted-foreground font-medium flex items-center">
-              <Activity className="mr-2 h-4 w-4" /> Vehicle Condition
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="flex items-center justify-between">
-            <div>
-              <div className="text-3xl font-bold text-primary">{data.conditionScore ?? "—"}/100</div>
-              <p className="text-xs text-muted-foreground mt-1">Based on last inspection</p>
-            </div>
-            <div className="relative w-16 h-16 rounded-full border-4 border-surface-2 flex items-center justify-center">
-              <svg className="absolute inset-0 w-full h-full transform -rotate-90">
-                <circle cx="32" cy="32" r="28" stroke="currentColor" strokeWidth="4" fill="none" className="text-primary"
-                  strokeDasharray="175" strokeDashoffset={175 - (175 * (data.conditionScore || 0)) / 100} />
-              </svg>
-              <span className="text-sm font-bold">Good</span>
             </div>
           </CardContent>
         </Card>

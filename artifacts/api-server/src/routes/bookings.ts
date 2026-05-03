@@ -370,7 +370,6 @@ router.patch("/bookings/:id", async (req, res) => {
     if (body.appointmentAt !== undefined)
       updates.appointmentAt = body.appointmentAt ? new Date(body.appointmentAt) : null;
     if (body.notes !== undefined) updates.notes = body.notes ?? null;
-    if (body.depositPaid !== undefined) updates.depositPaid = body.depositPaid;
 
     const [updated] = await db
       .update(bookingsTable)

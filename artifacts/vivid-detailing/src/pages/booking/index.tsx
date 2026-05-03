@@ -42,7 +42,6 @@ interface BookingState {
   appointmentAt?: Date;
   timeSlot?: string;
   notes: string;
-  depositPaid: boolean;
 }
 
 const initialState: BookingState = {
@@ -51,7 +50,7 @@ const initialState: BookingState = {
   vehicleTypeSelected: false,
   intents: [],
   selectedVlt: 35, serviceIds: [], addOnIds: [], bundleAddonIds: [], promoIds: [],
-  notes: "", depositPaid: false,
+  notes: "",
 };
 
 const STEPS = 8;
@@ -1484,13 +1483,6 @@ export default function BookingFlow() {
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between pt-4 border-t border-border">
-                        <div>
-                          <Label>Pay 20% deposit now</Label>
-                          <p className="text-xs text-muted-foreground">Secure your appointment instantly</p>
-                        </div>
-                        <Switch checked={state.depositPaid} onCheckedChange={c => setState(s => ({ ...s, depositPaid: c }))} />
-                      </div>
                     </CardContent>
                   </Card>
                 </div>

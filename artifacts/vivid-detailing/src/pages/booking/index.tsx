@@ -673,9 +673,19 @@ export default function BookingFlow() {
                   size="sm"
                   className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 h-8 px-4"
                   onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
-                  disabled={!canNext || (step === 1 && captureLead.isPending)}
+                  disabled={!canNext || (step === 1 && captureLead.isPending) || (step === 7 && createBooking.isPending)}
                 >
-                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : step === 5 && state.bundleAddonIds.length === 0 ? "No Thanks" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
+                  {step === 7 && createBooking.isPending ? (
+                    <><span className="w-3.5 h-3.5 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" /> Confirming…</>
+                  ) : step === 7 ? (
+                    <>Confirm Booking <ChevronRight className="w-3.5 h-3.5" /></>
+                  ) : step === 1 && captureLead.isPending ? (
+                    "Saving…"
+                  ) : step === 5 && state.bundleAddonIds.length === 0 ? (
+                    "No Thanks"
+                  ) : (
+                    <>Continue <ChevronRight className="w-3.5 h-3.5" /></>
+                  )}
                 </Button>
               </div>
             </div>
@@ -704,9 +714,19 @@ export default function BookingFlow() {
                   size="sm"
                   className="bg-primary text-primary-foreground hover:bg-primary/90 gap-1.5 h-8 px-4"
                   onClick={step === 7 ? handleSubmit : step === 1 ? handleStep1Continue : handleNext}
-                  disabled={!canNext || (step === 1 && captureLead.isPending)}
+                  disabled={!canNext || (step === 1 && captureLead.isPending) || (step === 7 && createBooking.isPending)}
                 >
-                  {step === 7 ? "Confirm Booking" : step === 1 && captureLead.isPending ? "Saving…" : step === 5 && state.bundleAddonIds.length === 0 ? "No Thanks" : "Continue"} <ChevronRight className="w-3.5 h-3.5" />
+                  {step === 7 && createBooking.isPending ? (
+                    <><span className="w-3.5 h-3.5 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" /> Confirming…</>
+                  ) : step === 7 ? (
+                    <>Confirm Booking <ChevronRight className="w-3.5 h-3.5" /></>
+                  ) : step === 1 && captureLead.isPending ? (
+                    "Saving…"
+                  ) : step === 5 && state.bundleAddonIds.length === 0 ? (
+                    "No Thanks"
+                  ) : (
+                    <>Continue <ChevronRight className="w-3.5 h-3.5" /></>
+                  )}
                 </Button>
               </div>
             )}

@@ -12,7 +12,7 @@ import {
   seasonalPromosTable,
   loyaltyActivityTable,
 } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, ne, and } from "drizzle-orm";
 import {
   CreateBookingBody,
   GetBookingParams,
@@ -48,37 +48,75 @@ router.post("/bookings", async (req, res) => {
   try {
     const body = CreateBookingBody.parse(req.body);
 
-    // Upsert customer — link to existing lead if ID provided
+    // Upsert customer — always prefer existing record matched by email or phone
+    // so returning customers never lose their loyalty history.
     let customer: any;
+    let freshLeadId: string | null = null; // track any temp lead to clean up
+
     if (body.existingCustomerId) {
-      const [updated] = await db
-        .update(customersTable)
-        .set({ name: body.customer.name, email: body.customer.email, phone: body.customer.phone })
+      const [found] = await db
+        .select()
+        .from(customersTable)
         .where(eq(customersTable.id, body.existingCustomerId))
-        .returning();
-      customer = updated;
+        .limit(1);
+      if (found) freshLeadId = found.id; // may be a temp lead with no bookings
     }
-    if (!customer) {
-      const existing = await db
+
+    // Always look up by email first — this is the canonical identity
+    if (body.customer.email) {
+      const emailMatch = await db
         .select()
         .from(customersTable)
         .where(eq(customersTable.email, body.customer.email))
         .limit(1);
-      if (existing.length > 0) {
+      if (emailMatch.length > 0) {
         const [updated] = await db
           .update(customersTable)
           .set({ name: body.customer.name, phone: body.customer.phone })
-          .where(eq(customersTable.id, existing[0].id))
+          .where(eq(customersTable.id, emailMatch[0].id))
+          .returning();
+        customer = updated;
+        // If a fresh temp lead was created at step 1 and it differs from the
+        // returning customer, delete it — it has no bookings yet.
+        if (freshLeadId && freshLeadId !== customer.id) {
+          await db.delete(customersTable).where(eq(customersTable.id, freshLeadId));
+        }
+      }
+    }
+
+    // Fall back to phone lookup if no email match
+    if (!customer && body.customer.phone) {
+      const phoneMatch = await db
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.phone, body.customer.phone))
+        .limit(1);
+      if (phoneMatch.length > 0) {
+        const [updated] = await db
+          .update(customersTable)
+          .set({ name: body.customer.name, email: body.customer.email })
+          .where(eq(customersTable.id, phoneMatch[0].id))
+          .returning();
+        customer = updated;
+        if (freshLeadId && freshLeadId !== customer.id) {
+          await db.delete(customersTable).where(eq(customersTable.id, freshLeadId));
+        }
+      }
+    }
+
+    // If still no match, update the temp lead with full details or create fresh
+    if (!customer) {
+      if (freshLeadId) {
+        const [updated] = await db
+          .update(customersTable)
+          .set({ name: body.customer.name, email: body.customer.email, phone: body.customer.phone })
+          .where(eq(customersTable.id, freshLeadId))
           .returning();
         customer = updated;
       } else {
         const [created] = await db
           .insert(customersTable)
-          .values({
-            name: body.customer.name,
-            email: body.customer.email,
-            phone: body.customer.phone,
-          })
+          .values({ name: body.customer.name, email: body.customer.email, phone: body.customer.phone })
           .returning();
         customer = created;
       }
@@ -378,6 +416,13 @@ router.patch("/bookings/:id", async (req, res) => {
       .returning();
 
     if (!updated) return res.status(404).json({ error: "Not found" });
+
+    // Remove loyalty points when a booking is cancelled
+    if (body.status === "cancelled") {
+      await db
+        .delete(loyaltyActivityTable)
+        .where(eq(loyaltyActivityTable.bookingId, id));
+    }
 
     const items = await db
       .select()

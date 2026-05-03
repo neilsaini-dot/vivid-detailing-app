@@ -8,7 +8,7 @@ import {
   loyaltyActivityTable,
   serviceHistoryTable,
 } from "@workspace/db";
-import { eq, desc, sum, or, and } from "drizzle-orm";
+import { eq, desc, sum, or, and, inArray } from "drizzle-orm";
 import {
   CaptureLeadBody,
   UpsertCustomerBody,
@@ -210,26 +210,55 @@ router.get("/customers/:id/dashboard", async (req, res) => {
       .where(eq(customersTable.id, id));
     if (!customer) return res.status(404).json({ error: "Not found" });
 
+    // Find all sibling customer records that share this customer's email or phone.
+    // This makes the dashboard resilient to duplicate records that haven't been
+    // merged yet (e.g. production DB after a migration).
+    const siblingIds: string[] = [id];
+    if (customer.email || customer.phone) {
+      const conditions = [];
+      if (customer.email) conditions.push(eq(customersTable.email, customer.email));
+      if (customer.phone) conditions.push(eq(customersTable.phone, customer.phone));
+      const siblings = await db
+        .select({ id: customersTable.id })
+        .from(customersTable)
+        .where(or(...conditions));
+      for (const s of siblings) {
+        if (!siblingIds.includes(s.id)) siblingIds.push(s.id);
+      }
+    }
+
+    // Pull vehicles from ALL sibling records so no vehicle is hidden behind a
+    // duplicate customer ID.
     const allVehicles = await db
       .select()
       .from(vehiclesTable)
-      .where(eq(vehiclesTable.customerId, id))
+      .where(inArray(vehiclesTable.customerId, siblingIds))
       .orderBy(desc(vehiclesTable.createdAt));
 
     // Deduplicate vehicles: keep the most-recent record per year+make+model combo.
-    // Handles cases where the same car was entered across multiple bookings.
+    // Only dedup when there is enough data to form a meaningful key (at least a
+    // non-empty make). Records with no make keep their own ID as the key so they
+    // are never incorrectly collapsed together.
     const seenVehicles = new Set<string>();
     const vehicles = allVehicles.filter((v) => {
-      const key = `${String(v.year ?? "")}|${(v.make ?? "").toLowerCase()}|${(v.model ?? "").toLowerCase()}`;
+      const make = (v.make ?? "").trim().toLowerCase();
+      const key = make
+        ? `${String(v.year ?? "")}|${make}|${(v.model ?? "").trim().toLowerCase()}`
+        : `__id:${v.id}`;
       if (seenVehicles.has(key)) return false;
       seenVehicles.add(key);
       return true;
     });
 
+    // Pull bookings from ALL sibling records too
+    const allBookingCondition = siblingIds.length === 1
+      ? eq(bookingsTable.customerId, id)
+      : inArray(bookingsTable.customerId, siblingIds);
+
     const bookings = await db
       .select()
       .from(bookingsTable)
-      .where(eq(bookingsTable.customerId, id))
+      .where(allBookingCondition)
       .orderBy(desc(bookingsTable.createdAt));
 
     const now = new Date();

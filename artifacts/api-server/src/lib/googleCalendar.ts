@@ -4,7 +4,7 @@
 import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
 
-const CAL_BASE = "/calendars/primary";
+const CAL_BASE = "/calendar/v3/calendars/primary";
 const SHOP_EMAIL = "contact@vividpei.com";
 const SHOP_OPEN_HOUR = 9;
 const LATEST_START_HOUR = 16;

@@ -496,6 +496,39 @@ export default function BookingFlow() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // ── Browser back-button support ───────────────────────────────────────────
+  const isHandlingPopState = useRef(false);
+  const bookingComplete = useRef(false);
+  const isFirstStepRender = useRef(true);
+
+  // Encode step 1 into the current history entry on mount, then intercept popstate
+  useEffect(() => {
+    history.replaceState({ step: 1, tintSubStep: false }, "");
+    const onPopState = (e: PopStateEvent) => {
+      if (bookingComplete.current) return;
+      if (e.state && typeof e.state.step === "number") {
+        isHandlingPopState.current = true;
+        setDir(-1);
+        setStep(e.state.step);
+        setTintSubStep(e.state.tintSubStep ?? false);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  // Mark booking complete so back can't undo a confirmed booking
+  useEffect(() => {
+    if (confirmedBookingId) bookingComplete.current = true;
+  }, [confirmedBookingId]);
+
+  // Push a history entry on every forward step (skip initial render and popstate restores)
+  useEffect(() => {
+    if (isFirstStepRender.current) { isFirstStepRender.current = false; return; }
+    if (isHandlingPopState.current) { isHandlingPopState.current = false; return; }
+    if (step < 8) history.pushState({ step, tintSubStep }, "");
+  }, [step, tintSubStep]);
+
   const go = (delta: number) => { setDir(delta); setStep(s => Math.min(Math.max(s + delta, 1), STEPS)); };
 
   const isValidPhone = (p: string) => p.replace(/\D/g, "").length === 10;

@@ -702,4 +702,75 @@ router.delete("/admin/seasonal-promos/:id", async (req, res) => {
   }
 });
 
+// POST /api/admin/merge-customers — merge duplicate customers by email/phone
+// Runs a full dedup pass: consolidates all records that share email or phone
+// into the oldest surviving record. Safe to call multiple times.
+router.post("/admin/merge-customers", async (req, res) => {
+  try {
+    const all = await db.select().from(customersTable).orderBy(asc(sql`created_at`));
+
+    // Helper: normalize phone for comparison
+    const norm = (p: string | null) => (p ?? "").replace(/\D/g, "");
+
+    // Union-find to group duplicates
+    const parent: Record<string, string> = {};
+    const find = (x: string): string => {
+      if (!parent[x] || parent[x] === x) return x;
+      parent[x] = find(parent[x]);
+      return parent[x];
+    };
+    const union = (a: string, b: string) => {
+      const ra = find(a), rb = find(b);
+      if (ra !== rb) parent[rb] = ra; // earlier one (ra) wins since sorted asc
+    };
+
+    all.forEach(c => { parent[c.id] = c.id; });
+
+    // Group by email
+    const byEmail: Record<string, string[]> = {};
+    const byPhone: Record<string, string[]> = {};
+    for (const c of all) {
+      if (c.email) { byEmail[c.email] = [...(byEmail[c.email] ?? []), c.id]; }
+      const p = norm(c.phone);
+      if (p.length >= 7) { byPhone[p] = [...(byPhone[p] ?? []), c.id]; }
+    }
+    for (const ids of Object.values(byEmail)) ids.reduce((a, b) => { union(a, b); return a; });
+    for (const ids of Object.values(byPhone)) ids.reduce((a, b) => { union(a, b); return a; });
+
+    // Resolve canonical IDs
+    const groups: Record<string, string[]> = {};
+    for (const c of all) {
+      const canon = find(c.id);
+      if (canon !== c.id) groups[canon] = [...(groups[canon] ?? []), c.id];
+    }
+
+    let merged = 0;
+    for (const [canonId, dupeIds] of Object.entries(groups)) {
+      if (dupeIds.length === 0) continue;
+      // Re-point related rows
+      for (const dupeId of dupeIds) {
+        await db.update(bookingsTable).set({ customerId: canonId }).where(eq(bookingsTable.customerId, dupeId));
+        await db.update(vehiclesTable).set({ customerId: canonId } as any).where(eq(vehiclesTable.customerId as any, dupeId));
+        // Patch email/phone onto canonical if missing
+        const dupe = all.find(c => c.id === dupeId);
+        const canon = all.find(c => c.id === canonId);
+        if (dupe && canon) {
+          const patch: any = {};
+          if (!canon.email && dupe.email) patch.email = dupe.email;
+          if (!canon.phone && dupe.phone) patch.phone = dupe.phone;
+          if (canon.name?.trim().length && !canon.name.includes(" ") && dupe.name?.includes(" ")) patch.name = dupe.name;
+          if (Object.keys(patch).length > 0) await db.update(customersTable).set(patch).where(eq(customersTable.id, canonId));
+        }
+        await db.delete(customersTable).where(eq(customersTable.id, dupeId));
+        merged++;
+      }
+    }
+
+    res.json({ ok: true, merged, groups: Object.fromEntries(Object.entries(groups).map(([k, v]) => [k, v.length])) });
+  } catch (err) {
+    req.log.error({ err }, "Failed to merge customers");
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 export default router;

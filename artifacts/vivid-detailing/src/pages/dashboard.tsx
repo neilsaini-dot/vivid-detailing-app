@@ -299,6 +299,165 @@ function RescheduleSheet({
   );
 }
 
+// ── Vehicle Form Sheet ────────────────────────────────────────────────────────
+const VEHICLE_TYPES = ["car", "suv", "truck", "van"] as const;
+
+function VehicleFormSheet({
+  customerId, vehicle, open, onClose, onSuccess,
+}: { customerId: string; vehicle?: any; open: boolean; onClose: () => void; onSuccess: () => void }) {
+  const { toast } = useToast();
+  const isEdit = !!vehicle;
+
+  const [form, setForm] = useState({ type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
+  const [saving, setSaving] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setForm(isEdit ? {
+        type: vehicle.type ?? "car",
+        year: vehicle.year ? String(vehicle.year) : "",
+        make: vehicle.make ?? "",
+        model: vehicle.model ?? "",
+        colour: vehicle.colour ?? "",
+        licensePlate: vehicle.licensePlate ?? "",
+      } : { type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
+      setDeleteConfirm(false);
+    }
+  }, [open, vehicle]);
+
+  const set = (field: string, val: string) => setForm(f => ({ ...f, [field]: val }));
+
+  const handleSave = async () => {
+    if (!form.make || !form.model) {
+      toast({ title: "Make and model are required", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      const url = isEdit
+        ? `/api/customers/${customerId}/vehicles/${vehicle.id}`
+        : `/api/customers/${customerId}/vehicles`;
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+      if (!res.ok) throw new Error("Failed to save vehicle");
+      toast({ title: isEdit ? "Vehicle updated" : "Vehicle added" });
+      onSuccess();
+    } catch {
+      toast({ title: "Something went wrong", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteConfirm) { setDeleteConfirm(true); return; }
+    setSaving(true);
+    try {
+      await fetch(`/api/customers/${customerId}/vehicles/${vehicle.id}`, { method: "DELETE" });
+      toast({ title: "Vehicle removed" });
+      onSuccess();
+    } catch {
+      toast({ title: "Something went wrong", variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <SheetContent className="bg-surface border-border">
+        <SheetHeader>
+          <SheetTitle>{isEdit ? "Edit Vehicle" : "Add Vehicle"}</SheetTitle>
+        </SheetHeader>
+        <div className="space-y-4 mt-6">
+          <div>
+            <label className="text-sm font-medium mb-1 block">Vehicle Type</label>
+            <div className="grid grid-cols-2 gap-2">
+              {VEHICLE_TYPES.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => set("type", t)}
+                  className={`py-2 rounded-lg border text-sm font-medium capitalize transition-colors ${form.type === t ? "bg-primary text-primary-foreground border-primary" : "border-border bg-surface-2 hover:border-primary/50"}`}
+                >
+                  {t}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Year</label>
+              <input
+                className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+                placeholder="2022"
+                value={form.year}
+                onChange={e => set("year", e.target.value)}
+                maxLength={4}
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="text-sm font-medium mb-1 block">Make</label>
+              <input
+                className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+                placeholder="Toyota"
+                value={form.make}
+                onChange={e => set("make", e.target.value)}
+              />
+            </div>
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">Model</label>
+            <input
+              className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+              placeholder="Camry"
+              value={form.model}
+              onChange={e => set("model", e.target.value)}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-sm font-medium mb-1 block">Colour</label>
+              <input
+                className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+                placeholder="Black"
+                value={form.colour}
+                onChange={e => set("colour", e.target.value)}
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1 block">Plate</label>
+              <input
+                className="w-full rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm"
+                placeholder="ABC 123"
+                value={form.licensePlate}
+                onChange={e => set("licensePlate", e.target.value)}
+              />
+            </div>
+          </div>
+          <Button className="w-full bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : isEdit ? "Save Changes" : "Add Vehicle"}
+          </Button>
+          {isEdit && (
+            <Button
+              variant="ghost"
+              className={`w-full ${deleteConfirm ? "text-red-400 border border-red-400/30 bg-red-400/10" : "text-muted-foreground"}`}
+              onClick={handleDelete}
+              disabled={saving}
+            >
+              {deleteConfirm ? "Tap again to confirm removal" : "Remove Vehicle"}
+            </Button>
+          )}
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Loading skeleton ──────────────────────────────────────────────────────────
 function DashboardSkeleton() {
   return (
@@ -364,7 +523,7 @@ function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook:
               <div key={b.id}>
                 <div
                   className="p-4 flex items-center justify-between hover:bg-surface-2 transition-colors cursor-pointer"
-                  onClick={() => hasPhotos && setExpanded(isOpen ? null : b.id)}
+                  onClick={() => setExpanded(isOpen ? null : b.id)}
                 >
                   <div className="flex items-center gap-4">
                     <div className="bg-surface-2 p-2 rounded-md relative">
@@ -377,7 +536,7 @@ function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook:
                       <h4 className="font-medium">{b.items?.[0]?.itemName ?? "Service"}</h4>
                       <p className="text-sm text-muted-foreground">
                         {b.appointmentAt ? format(new Date(b.appointmentAt), "MMMM d, yyyy") : "—"} • ${Number(b.totalEstimate ?? 0).toFixed(2)}
-                        {hasPhotos && <span className="ml-2 text-primary text-xs">• Photos available</span>}
+                        {hasPhotos && <span className="ml-2 text-primary text-xs">• Photos</span>}
                       </p>
                     </div>
                   </div>
@@ -391,39 +550,63 @@ function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook:
                     {!isUpcoming && b.status !== "cancelled" && (
                       <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={e => { e.stopPropagation(); onRebook(); }}>Rebook</Button>
                     )}
-                    {hasPhotos && (
-                      <Camera className={`h-4 w-4 transition-colors ${isOpen ? "text-primary" : "text-muted-foreground"}`} />
-                    )}
+                    <ChevronRight className={`h-4 w-4 text-muted-foreground transition-transform ${isOpen ? "rotate-90" : ""}`} />
                   </div>
                 </div>
 
-                {/* Expandable photo gallery */}
-                {isOpen && hasPhotos && (
+                {/* Expandable booking detail */}
+                {isOpen && (
                   <div className="px-4 pb-4 space-y-3 bg-surface-2/40">
-                    {b.serviceHistory.beforePhotoUrls?.length > 0 && (
+                    {/* Services breakdown */}
+                    {b.items && b.items.length > 0 && (
                       <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Before</p>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                          {b.serviceHistory.beforePhotoUrls.map((url: string, i: number) => (
-                            <div key={i} className="aspect-square rounded overflow-hidden border border-border cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => setLightboxSrc(url)}>
-                              <img src={url} alt={`before-${i}`} className="w-full h-full object-cover" />
+                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Services</p>
+                        <div className="space-y-1">
+                          {b.items.map((item: any, i: number) => (
+                            <div key={i} className="flex justify-between text-sm">
+                              <span>{item.itemName}</span>
+                              {item.unitPrice && <span className="text-muted-foreground">${Number(item.unitPrice).toFixed(2)}</span>}
                             </div>
                           ))}
+                          <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
+                            <span>Total</span>
+                            <span>${Number(b.totalEstimate ?? 0).toFixed(2)}</span>
+                          </div>
                         </div>
                       </div>
                     )}
-                    {b.serviceHistory.afterPhotoUrls?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">After</p>
-                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-                          {b.serviceHistory.afterPhotoUrls.map((url: string, i: number) => (
-                            <div key={i} className="aspect-square rounded overflow-hidden border border-primary/30 cursor-pointer hover:opacity-90 transition-opacity"
-                              onClick={() => setLightboxSrc(url)}>
-                              <img src={url} alt={`after-${i}`} className="w-full h-full object-cover" />
+                    {b.notes && (
+                      <p className="text-xs text-muted-foreground italic">"{b.notes}"</p>
+                    )}
+                    {/* Photo gallery */}
+                    {hasPhotos && (
+                      <div className="space-y-2">
+                        {b.serviceHistory.beforePhotoUrls?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Before</p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                              {b.serviceHistory.beforePhotoUrls.map((url: string, i: number) => (
+                                <div key={i} className="aspect-square rounded overflow-hidden border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={e => { e.stopPropagation(); setLightboxSrc(url); }}>
+                                  <img src={url} alt={`before-${i}`} className="w-full h-full object-cover" />
+                                </div>
+                              ))}
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        )}
+                        {b.serviceHistory.afterPhotoUrls?.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">After</p>
+                            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                              {b.serviceHistory.afterPhotoUrls.map((url: string, i: number) => (
+                                <div key={i} className="aspect-square rounded overflow-hidden border border-primary/30 cursor-pointer hover:opacity-90 transition-opacity"
+                                  onClick={e => { e.stopPropagation(); setLightboxSrc(url); }}>
+                                  <img src={url} alt={`after-${i}`} className="w-full h-full object-cover" />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -459,6 +642,8 @@ export default function Dashboard() {
   const [refResolving, setRefResolving] = useState(hasRef);
   const [customerId, setCustomerId] = useState<string | null>(() => localStorage.getItem("vd_customer_id"));
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
+  const [editVehicle, setEditVehicle] = useState<any | null>(null);
+  const [addVehicleOpen, setAddVehicleOpen] = useState(false);
 
   // Magic link auto-login: ?ref=bookingId → always resolve so fresh data loads
   useEffect(() => {
@@ -656,14 +841,17 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h3 className="font-bold text-lg">{v.year} {v.make} {v.model}</h3>
-                      <p className="text-sm text-muted-foreground">{v.licensePlate} • {v.type}</p>
+                      <p className="text-sm text-muted-foreground">{[v.colour, v.licensePlate, v.type].filter(Boolean).join(" • ")}</p>
                     </div>
                   </div>
-                  <Button variant="ghost" size="icon"><Settings className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" onClick={() => setEditVehicle(v)}><Settings className="h-4 w-4" /></Button>
                 </CardContent>
               </Card>
             ))}
-            <Card className="bg-surface/50 border-border border-dashed hover:border-primary/50 cursor-pointer transition-colors flex items-center justify-center p-6 min-h-[100px]">
+            <Card
+              className="bg-surface/50 border-border border-dashed hover:border-primary/50 cursor-pointer transition-colors flex items-center justify-center p-6 min-h-[100px]"
+              onClick={() => setAddVehicleOpen(true)}
+            >
               <div className="text-center">
                 <Plus className="h-6 w-6 mx-auto mb-2 text-muted-foreground" />
                 <p className="text-sm font-medium">Add Vehicle</p>
@@ -801,6 +989,33 @@ export default function Dashboard() {
         onClose={() => setRescheduleOpen(false)}
         onSuccess={() => setRescheduleOpen(false)}
       />
+
+      {/* Edit vehicle sheet */}
+      {customerId && (
+        <VehicleFormSheet
+          customerId={customerId}
+          vehicle={editVehicle}
+          open={!!editVehicle}
+          onClose={() => setEditVehicle(null)}
+          onSuccess={() => {
+            setEditVehicle(null);
+            queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}/dashboard`] });
+          }}
+        />
+      )}
+
+      {/* Add vehicle sheet */}
+      {customerId && (
+        <VehicleFormSheet
+          customerId={customerId}
+          open={addVehicleOpen}
+          onClose={() => setAddVehicleOpen(false)}
+          onSuccess={() => {
+            setAddVehicleOpen(false);
+            queryClient.invalidateQueries({ queryKey: [`/api/customers/${customerId}/dashboard`] });
+          }}
+        />
+      )}
     </div>
   );
 }

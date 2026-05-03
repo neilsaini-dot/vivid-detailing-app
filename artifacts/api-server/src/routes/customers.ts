@@ -8,7 +8,7 @@ import {
   loyaltyActivityTable,
   serviceHistoryTable,
 } from "@workspace/db";
-import { eq, desc, sum } from "drizzle-orm";
+import { eq, desc, sum, or, and } from "drizzle-orm";
 import {
   CaptureLeadBody,
   UpsertCustomerBody,
@@ -27,6 +27,11 @@ import { sendGhlLeadWebhook } from "../lib/ghl";
 
 const router = Router();
 
+// Normalize phone to digits-only for consistent dedup lookups
+function normalizePhone(phone: string): string {
+  return phone.replace(/\D/g, "");
+}
+
 // POST /api/leads — partial lead capture (name + phone, no email required)
 router.post("/leads", async (req, res) => {
   try {
@@ -36,11 +41,9 @@ router.post("/leads", async (req, res) => {
     // their loyalty history and we never create orphaned lead records.
     let customer: typeof customersTable.$inferSelect | undefined;
     if (body.phone) {
-      const [existing] = await db
-        .select()
-        .from(customersTable)
-        .where(eq(customersTable.phone, body.phone))
-        .limit(1);
+      const normalized = normalizePhone(body.phone);
+      const all = await db.select().from(customersTable);
+      const existing = all.find(c => c.phone && normalizePhone(c.phone) === normalized);
       if (existing) {
         const [updated] = await db
           .update(customersTable)
@@ -311,6 +314,54 @@ router.get("/customers/:id/dashboard", async (req, res) => {
     });
   } catch (err) {
     req.log.error({ err }, "Failed to get dashboard");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/customers/:id/vehicles — add a vehicle
+router.post("/customers/:id/vehicles", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, year, make, model, colour, licensePlate, notes } = req.body;
+    const [vehicle] = await db
+      .insert(vehiclesTable)
+      .values({ customerId: id, type: type ?? "car", year: year ? Number(year) : null, make, model, colour, licensePlate, notes })
+      .returning();
+    res.status(201).json(formatVehicle(vehicle));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create vehicle");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/customers/:id/vehicles/:vehicleId — update a vehicle
+router.patch("/customers/:id/vehicles/:vehicleId", async (req, res) => {
+  try {
+    const { id, vehicleId } = req.params;
+    const { type, year, make, model, colour, licensePlate, notes } = req.body;
+    const [vehicle] = await db
+      .update(vehiclesTable)
+      .set({ type, year: year ? Number(year) : undefined, make, model, colour, licensePlate, notes })
+      .where(and(eq(vehiclesTable.id, vehicleId), eq(vehiclesTable.customerId as any, id)))
+      .returning();
+    if (!vehicle) return res.status(404).json({ error: "Vehicle not found" });
+    res.json(formatVehicle(vehicle));
+  } catch (err) {
+    req.log.error({ err }, "Failed to update vehicle");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/customers/:id/vehicles/:vehicleId — remove a vehicle
+router.delete("/customers/:id/vehicles/:vehicleId", async (req, res) => {
+  try {
+    const { id, vehicleId } = req.params;
+    await db
+      .delete(vehiclesTable)
+      .where(and(eq(vehiclesTable.id, vehicleId), eq(vehiclesTable.customerId as any, id)));
+    res.status(204).send();
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete vehicle");
     res.status(500).json({ error: "Internal server error" });
   }
 });

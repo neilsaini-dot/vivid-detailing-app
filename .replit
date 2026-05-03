@@ -42,6 +42,8 @@ externalPort = 3000
 VITE_BUSINESS_PHONE = "902-267-7775"
 VITE_BUSINESS_EMAIL = "contact@vividpei.com"
 VITE_BUSINESS_ADDRESS = "2-70 Nicholas Lane, Charlottetown, PE"
+SUPABASE_URL = "https://lvxbkcykxvjeqrllnvyz.supabase.co"
+NEXT_PUBLIC_APP_URL = "https://book.vividpei.com"
 
 [nix]
 channel = "stable-25_05"

@@ -595,15 +595,15 @@ function AdminDashboard() {
         </Card>
         <Card className="bg-surface border-border">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Total Bookings</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold">{analytics?.totalBookings || 47}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold">{analytics?.totalBookings ?? 0}</div></CardContent>
         </Card>
         <Card className="bg-surface border-border">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Pending</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-yellow-500">{analytics?.pendingBookings || 5}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-yellow-500">{analytics?.pendingBookings ?? 0}</div></CardContent>
         </Card>
         <Card className="bg-surface border-border">
           <CardHeader className="pb-2"><CardTitle className="text-sm text-muted-foreground">Completed</CardTitle></CardHeader>
-          <CardContent><div className="text-2xl font-bold text-green-500">{analytics?.completedBookings || 42}</div></CardContent>
+          <CardContent><div className="text-2xl font-bold text-green-500">{analytics?.completedBookings ?? 0}</div></CardContent>
         </Card>
       </div>
 

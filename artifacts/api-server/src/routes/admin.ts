@@ -27,7 +27,7 @@ import {
   UpdateSeasonalPromoBody,
 } from "@workspace/api-zod";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
-import { sendGhlBookingConfirmed } from "../lib/ghl";
+import { sendGhlBookingConfirmed, sendGhlBookingCompleted } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
 
 const router = Router();
@@ -271,6 +271,73 @@ router.patch("/admin/bookings/:id", async (req, res) => {
       .returning();
 
     if (!updated) return res.status(404).json({ error: "Not found" });
+
+    // Fire completion webhook when status transitions to "completed"
+    if (body.status === "completed") {
+      const items = await db
+        .select()
+        .from(bookingItemsTable)
+        .where(eq(bookingItemsTable.bookingId, id));
+
+      const services = items
+        .filter((i) => i.itemType === "service" || i.itemType === "promo")
+        .map((i) => i.itemName);
+      const addons = items
+        .filter((i) => i.itemType === "addon")
+        .map((i) => i.itemName);
+
+      let firstName = "";
+      let lastName = "";
+      let email = "";
+      let phone = "";
+      let vehicleStr = "";
+
+      if (updated.customerId) {
+        const [customer] = await db
+          .select()
+          .from(customersTable)
+          .where(eq(customersTable.id, updated.customerId))
+          .limit(1);
+        if (customer) {
+          const parts = (customer.name ?? "").split(" ");
+          firstName = parts[0] ?? "";
+          lastName = parts.slice(1).join(" ");
+          email = customer.email ?? "";
+          phone = customer.phone ?? "";
+        }
+      }
+
+      if (updated.vehicleId) {
+        const [vehicle] = await db
+          .select()
+          .from(vehiclesTable)
+          .where(eq(vehiclesTable.id, updated.vehicleId))
+          .limit(1);
+        if (vehicle) {
+          vehicleStr = [vehicle.year, vehicle.make, vehicle.model]
+            .filter(Boolean)
+            .join(" ");
+        }
+      }
+
+      sendGhlBookingCompleted({
+        event: "booking_completed",
+        status: "completed",
+        status_completed: true,
+        contact: { firstName, lastName, email, phone },
+        booking: {
+          id: updated.id,
+          services,
+          addons,
+          vehicle: vehicleStr,
+          appointment_at: updated.appointmentAt?.toISOString() ?? null,
+          total_estimate: Number(updated.totalEstimate ?? 0),
+          notes: updated.notes ?? null,
+          completed_at: new Date().toISOString(),
+        },
+        source: "vivid-app",
+      }).catch(() => {});
+    }
 
     // Upsert service history when photos or condition score are provided
     const hasPhotoData =

@@ -3,6 +3,7 @@ import { logger } from "./logger";
 const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL;
 const GHL_BOOKING_CONFIRMED_WEBHOOK_URL = process.env.GHL_BOOKING_CONFIRMED_WEBHOOK_URL;
 const GHL_MAGIC_LINK_WEBHOOK_URL = process.env.GHL_MAGIC_LINK_WEBHOOK_URL;
+const GHL_BOOKING_COMPLETED_WEBHOOK_URL = process.env.GHL_BOOKING_COMPLETED_WEBHOOK_URL;
 
 export type GhlEvent =
   | "lead_captured"
@@ -10,7 +11,8 @@ export type GhlEvent =
   | "booking_created"
   | "ppf_quote_request"
   | "booking_abandoned"
-  | "magic_link_requested";
+  | "magic_link_requested"
+  | "booking_completed";
 
 // Full booking confirmation payload — triggers contact upsert + opportunity won in GHL
 export interface GhlBookingConfirmedPayload {
@@ -106,6 +108,42 @@ export async function sendGhlWebhook(payload: GhlPayload): Promise<void> {
     await postTo(GHL_WEBHOOK_URL, payload, "legacy");
   } catch (err) {
     logger.error({ err }, "Failed to send GHL webhook");
+  }
+}
+
+export interface GhlBookingCompletedPayload {
+  event: "booking_completed";
+  status: "completed";
+  status_completed: true;
+  contact: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  booking: {
+    id: string;
+    services: string[];
+    addons: string[];
+    vehicle: string;
+    appointment_at: string | null;
+    total_estimate: number;
+    notes: string | null;
+    completed_at: string;
+  };
+  source: "vivid-app";
+}
+
+// Booking completed — goes to GHL_BOOKING_COMPLETED_WEBHOOK_URL
+export async function sendGhlBookingCompleted(payload: GhlBookingCompletedPayload): Promise<void> {
+  if (!GHL_BOOKING_COMPLETED_WEBHOOK_URL) {
+    logger.warn("GHL_BOOKING_COMPLETED_WEBHOOK_URL not configured - skipping completion webhook");
+    return;
+  }
+  try {
+    await postTo(GHL_BOOKING_COMPLETED_WEBHOOK_URL, payload, "booking_completed");
+  } catch (err) {
+    logger.error({ err }, "Failed to send GHL booking-completed webhook");
   }
 }
 

@@ -1693,7 +1693,7 @@ export default function BookingFlow() {
                     <Button variant="outline" className="w-full" onClick={handleAddToCalendar} disabled={!state.appointmentAt}>
                       <CalendarIcon className="mr-2 h-4 w-4" /> Add to Calendar
                     </Button>
-                    <Button className="w-full bg-primary text-primary-foreground" onClick={() => setLocation("/dashboard")}>
+                    <Button className="w-full bg-primary text-primary-foreground" onClick={() => setLocation(confirmedBookingId ? `/dashboard?ref=${confirmedBookingId}` : "/dashboard")}>
                       View Dashboard
                     </Button>
                   </div>

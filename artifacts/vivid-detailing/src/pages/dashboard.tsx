@@ -127,12 +127,12 @@ function RescheduleSheet({
 
   const { data: nextSlots, isFetching: slotsFetching } = useGetCalendarNextSlots(
     { duration: 2, count: 3 },
-    { query: { enabled: open } }
+    { query: { enabled: open } as any }
   );
 
   const { data: daySlots, isFetching: dayFetching } = useGetCalendarAvailability(
     { date: selectedDateStr!, duration: 2 },
-    { query: { enabled: !!selectedDateStr && showDatePicker } }
+    { query: { enabled: !!selectedDateStr && showDatePicker } as any }
   );
 
   const handleConfirm = async () => {
@@ -720,7 +720,7 @@ export default function Dashboard() {
   }, []);
 
   const { data: dashboard, isLoading, error: dashError } = useGetCustomerDashboard(customerId ?? "", {
-    query: { enabled: !!customerId && !refResolving, retry: false }
+    query: { enabled: !!customerId && !refResolving, retry: false } as any
   });
 
   // If the stored customer ID no longer exists (deleted/merged), clear it so
@@ -799,7 +799,7 @@ export default function Dashboard() {
       customer: {
         name: data.customer.name ?? "",
         email: data.customer.email ?? "",
-        phone: data.customer.phone ?? "",
+        phone: (data.customer as any).phone ?? "",
       },
     };
     if (vehicle) {
@@ -826,7 +826,7 @@ export default function Dashboard() {
         customer: {
           name: data.customer.name ?? "",
           email: data.customer.email ?? "",
-          phone: data.customer.phone ?? "",
+          phone: (data.customer as any).phone ?? "",
         },
       };
       localStorage.setItem("vd_booking_prefill", JSON.stringify(prefill));

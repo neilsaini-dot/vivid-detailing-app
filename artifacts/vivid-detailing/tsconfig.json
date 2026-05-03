@@ -4,6 +4,7 @@
   "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
   "compilerOptions": {
     "noEmit": true,
+    "noImplicitReturns": false,
     "jsx": "preserve",
     "lib": ["esnext", "dom", "dom.iterable"],
     "resolveJsonModule": true,
@@ -17,9 +18,6 @@
   "references": [
     {
       "path": "../../lib/api-client-react"
-    },
-    {
-      "path": "../../lib/object-storage-web"
     }
   ]
 }

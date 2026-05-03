@@ -75,7 +75,7 @@ async function uploadFileToDrive(
         "Content-Type": `multipart/related; boundary=${boundary}`,
         "Content-Length": String(body.length),
       },
-      body: body as unknown as BodyInit,
+      body: body as unknown as Uint8Array,
     }
   );
 

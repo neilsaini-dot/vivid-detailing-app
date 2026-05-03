@@ -497,12 +497,12 @@ export default function BookingFlow() {
   const calDuration = hasCustomTime ? 4 : Math.max(runTimeMax || 2, 0.25);
   const { data: calData, isFetching: calFetching } = useGetCalendarAvailability(
     { date: selectedDateStr!, duration: calDuration },
-    { query: { enabled: step === 7 && showCustomDate && !!selectedDateStr } }
+    { query: { enabled: step === 7 && showCustomDate && !!selectedDateStr } as any }
   );
   // Next 3 available slots — auto-fetched on step 7 entry
   const { data: nextSlotsData, isFetching: nextSlotsFetching } = useGetCalendarNextSlots(
     { duration: calDuration, count: 3 },
-    { query: { enabled: step === 7 } }
+    { query: { enabled: step === 7 } as any }
   );
 
   // ── Slot hold countdown (10 min) ──────────────────────────────────────────
@@ -593,7 +593,7 @@ export default function BookingFlow() {
   };
 
   const handleStep1Continue = async () => {
-    setTouched({ name: true, phone: true, yearMakeModel: true });
+    setTouched({ name: true, phone: true, yearMakeModel: true, email: true });
     if (!state.customer.name || !isValidPhone(state.customer.phone) || !state.vehicleTypeSelected || !state.vehicle.yearMakeModel) return;
     if (!capturedLeadId) {
       try {

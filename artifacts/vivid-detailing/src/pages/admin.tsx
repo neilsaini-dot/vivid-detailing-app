@@ -220,7 +220,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
 
   const handleStatusSave = async () => {
     try {
-      await updateBooking.mutateAsync({ id: booking.id, data: { status } });
+      await updateBooking.mutateAsync({ id: booking.id, data: { status: status as any } });
       queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
       toast({ title: "Status updated" });
     } catch {
@@ -663,7 +663,7 @@ function AdminDashboard() {
 
   const handleTogglePromo = async (id: string, current: boolean) => {
     try {
-      await updatePromo.mutateAsync({ id, data: { isActive: !current } });
+      await updatePromo.mutateAsync({ data: { id, isActive: !current } as any });
       invalidatePromos();
       toast({ title: current ? "Promo deactivated" : "Promo activated" });
     } catch {
@@ -700,8 +700,8 @@ function AdminDashboard() {
   const handleSaveEditPromo = async (id: string) => {
     try {
       await updatePromo.mutateAsync({
-        id,
         data: {
+          id,
           name: editPromo.name,
           basePrice: parseFloat(editPromo.basePrice),
           description: editPromo.description || undefined,

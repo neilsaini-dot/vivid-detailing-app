@@ -536,6 +536,7 @@ router.post("/admin/bookings/:id/resync", async (req, res) => {
 
     await sendGhlBookingConfirmed({
       event: "booking_confirmed",
+      booking_confirmed: true,
       contact: {
         firstName,
         lastName,

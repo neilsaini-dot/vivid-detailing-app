@@ -2,6 +2,7 @@ import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
 
 const CALENDAR_ID = "primary";
+const CAL_BASE = `/calendar/v3/calendars/${encodeURIComponent(CALENDAR_ID)}`;
 const SHOP_OPEN_HOUR = 9;        // Earliest booking start: 9 am
 const LATEST_START_HOUR = 16;    // Latest booking start: 4 pm (end time is unrestricted)
 const MAX_BOOKINGS_PER_DAY = 3;
@@ -21,7 +22,7 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<vo
   try {
     const res = await connectors.proxy(
       "google-calendar",
-      `/calendars/${encodeURIComponent(CALENDAR_ID)}/events`,
+      `${CAL_BASE}/events`,
       {
         method: "POST",
         body: JSON.stringify({
@@ -75,7 +76,7 @@ export async function getAvailableSlots(
 
   const eventsResponse = await connectors.proxy(
     "google-calendar",
-    `/calendars/${encodeURIComponent(CALENDAR_ID)}/events?timeMin=${dayStart.toISOString()}&timeMax=${dayEnd.toISOString()}&singleEvents=true&orderBy=startTime`,
+    `${CAL_BASE}/events?timeMin=${dayStart.toISOString()}&timeMax=${dayEnd.toISOString()}&singleEvents=true&orderBy=startTime`,
     { method: "GET" }
   );
 

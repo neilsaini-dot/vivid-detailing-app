@@ -84,16 +84,18 @@ router.post("/bookings", async (req, res) => {
       }
     }
 
-    // Reuse existing vehicle if same license plate already on file, otherwise create
+    // Reuse existing vehicle if same Year/Make/Model already on file, otherwise create
     let vehicle: any;
-    if (body.vehicle.licensePlate) {
+    if (body.vehicle.year && body.vehicle.make && body.vehicle.model) {
       const { and } = await import("drizzle-orm");
       const existing = await db
         .select()
         .from(vehiclesTable)
         .where(and(
           eq(vehiclesTable.customerId, customer.id),
-          eq(vehiclesTable.licensePlate, body.vehicle.licensePlate)
+          eq(vehiclesTable.year, body.vehicle.year),
+          eq(vehiclesTable.make, body.vehicle.make),
+          eq(vehiclesTable.model, body.vehicle.model)
         ))
         .limit(1);
       if (existing.length > 0) {
@@ -101,9 +103,6 @@ router.post("/bookings", async (req, res) => {
           .update(vehiclesTable)
           .set({
             type: body.vehicle.type,
-            year: body.vehicle.year ?? null,
-            make: body.vehicle.make ?? null,
-            model: body.vehicle.model ?? null,
             colour: body.vehicle.colour ?? null,
             notes: body.vehicle.notes ?? null,
           })

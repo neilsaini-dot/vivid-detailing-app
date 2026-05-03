@@ -35,15 +35,25 @@ import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
 const router = Router();
 
 function formatCompletedAt(date: Date): string {
-  const month = date.toLocaleString("en-US", { month: "long" });
-  const day = date.getDate();
-  const year = date.getFullYear();
+  const tz = "America/Halifax";
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? "";
+  const day = parseInt(get("day"), 10);
   const ordinal = day % 10 === 1 && day !== 11 ? "st"
     : day % 10 === 2 && day !== 12 ? "nd"
     : day % 10 === 3 && day !== 13 ? "rd"
     : "th";
-  const time = date.toLocaleString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
-  return `${month} ${day}${ordinal}, ${year} at ${time}`;
+
+  return `${get("month")} ${day}${ordinal}, ${get("year")} at ${get("hour")}:${get("minute")}${get("dayPeriod")}`;
 }
 
 // ─── Services ─────────────────────────────────────────────────

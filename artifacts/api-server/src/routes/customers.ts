@@ -267,11 +267,23 @@ router.get("/customers/:id/dashboard", async (req, res) => {
 
     const withItems = await Promise.all(
       recentBookings.map(async (b) => {
-        const items = await db
-          .select()
-          .from(bookingItemsTable)
-          .where(eq(bookingItemsTable.bookingId, b.id));
-        return { ...b, items, customer: null, vehicle: null };
+        const [items, [svcHistory]] = await Promise.all([
+          db.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, b.id)),
+          db.select().from(serviceHistoryTable).where(eq(serviceHistoryTable.bookingId, b.id)).limit(1),
+        ]);
+        return {
+          ...b,
+          items,
+          customer: null,
+          vehicle: null,
+          serviceHistory: svcHistory
+            ? {
+                conditionScore: svcHistory.conditionScore,
+                beforePhotoUrls: svcHistory.beforePhotoUrls ?? [],
+                afterPhotoUrls: svcHistory.afterPhotoUrls ?? [],
+              }
+            : null,
+        };
       })
     );
 

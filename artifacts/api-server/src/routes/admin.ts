@@ -238,6 +238,22 @@ router.get("/admin/bookings", async (req, res) => {
   }
 });
 
+// GET /api/admin/bookings/:id/service-history
+router.get("/admin/bookings/:id/service-history", async (req, res) => {
+  try {
+    const { id } = AdminUpdateBookingParams.parse(req.params);
+    const [history] = await db
+      .select()
+      .from(serviceHistoryTable)
+      .where(eq(serviceHistoryTable.bookingId, id))
+      .limit(1);
+    res.json(history ?? null);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get service history");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.patch("/admin/bookings/:id", async (req, res) => {
   try {
     const { id } = AdminUpdateBookingParams.parse(req.params);
@@ -256,16 +272,39 @@ router.patch("/admin/bookings/:id", async (req, res) => {
 
     if (!updated) return res.status(404).json({ error: "Not found" });
 
-    // Update condition score if provided
-    if (body.conditionScore !== undefined && updated.customerId) {
-      await db.insert(serviceHistoryTable).values({
-        customerId: updated.customerId,
-        bookingId: id,
-        conditionScore: body.conditionScore,
-        beforePhotoUrls: body.beforePhotoUrls ?? [],
-        afterPhotoUrls: body.afterPhotoUrls ?? [],
-        completedAt: body.status === "completed" ? new Date() : undefined,
-      });
+    // Upsert service history when photos or condition score are provided
+    const hasPhotoData =
+      body.conditionScore !== undefined ||
+      body.beforePhotoUrls !== undefined ||
+      body.afterPhotoUrls !== undefined;
+
+    if (hasPhotoData && updated.customerId) {
+      const [existing] = await db
+        .select()
+        .from(serviceHistoryTable)
+        .where(eq(serviceHistoryTable.bookingId, id))
+        .limit(1);
+
+      if (existing) {
+        await db
+          .update(serviceHistoryTable)
+          .set({
+            conditionScore: body.conditionScore ?? existing.conditionScore,
+            beforePhotoUrls: body.beforePhotoUrls ?? existing.beforePhotoUrls,
+            afterPhotoUrls: body.afterPhotoUrls ?? existing.afterPhotoUrls,
+            completedAt: body.status === "completed" ? new Date() : existing.completedAt,
+          })
+          .where(eq(serviceHistoryTable.id, existing.id));
+      } else {
+        await db.insert(serviceHistoryTable).values({
+          customerId: updated.customerId,
+          bookingId: id,
+          conditionScore: body.conditionScore,
+          beforePhotoUrls: body.beforePhotoUrls ?? [],
+          afterPhotoUrls: body.afterPhotoUrls ?? [],
+          completedAt: body.status === "completed" ? new Date() : undefined,
+        });
+      }
     }
 
     const items = await db

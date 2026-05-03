@@ -17,6 +17,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import {
   CarFront, CalendarIcon, History, Shield, AlertCircle, Settings,
   Plus, Activity, Star, Trophy, Zap, Lock, Check, ChevronRight, ChevronLeft,
+  Camera, X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
@@ -337,6 +338,118 @@ function DashboardSkeleton() {
   );
 }
 
+// ── Service History List ──────────────────────────────────────────────────────
+function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook: () => void }) {
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  if (bookings.length === 0) {
+    return (
+      <Card className="bg-surface border-border">
+        <div className="p-8 text-center text-muted-foreground">No past services found.</div>
+      </Card>
+    );
+  }
+
+  return (
+    <>
+      <Card className="bg-surface border-border">
+        <div className="divide-y divide-border">
+          {bookings.map((b: any) => {
+            const isUpcoming = b.appointmentAt && new Date(b.appointmentAt) > new Date() && b.status !== "completed" && b.status !== "cancelled";
+            const hasPhotos = (b.serviceHistory?.beforePhotoUrls?.length ?? 0) > 0 || (b.serviceHistory?.afterPhotoUrls?.length ?? 0) > 0;
+            const isOpen = expanded === b.id;
+
+            return (
+              <div key={b.id}>
+                <div
+                  className="p-4 flex items-center justify-between hover:bg-surface-2 transition-colors cursor-pointer"
+                  onClick={() => hasPhotos && setExpanded(isOpen ? null : b.id)}
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="bg-surface-2 p-2 rounded-md relative">
+                      <History className="h-5 w-5 text-muted-foreground" />
+                      {hasPhotos && (
+                        <span className="absolute -top-1 -right-1 h-3 w-3 bg-primary rounded-full border border-background" />
+                      )}
+                    </div>
+                    <div>
+                      <h4 className="font-medium">{b.items?.[0]?.itemName ?? "Service"}</h4>
+                      <p className="text-sm text-muted-foreground">
+                        {b.appointmentAt ? format(new Date(b.appointmentAt), "MMMM d, yyyy") : "—"} • ${Number(b.totalEstimate ?? 0).toFixed(2)}
+                        {hasPhotos && <span className="ml-2 text-primary text-xs">• Photos available</span>}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {b.status === "cancelled"
+                      ? <Badge variant="outline" className="text-red-400 border-red-400/20 bg-red-400/10">Cancelled</Badge>
+                      : isUpcoming
+                        ? <Badge variant="outline" className="text-primary border-primary/20 bg-primary/10">Scheduled</Badge>
+                        : <Badge variant="outline" className="text-green-500 border-green-500/20 bg-green-500/10">Completed</Badge>
+                    }
+                    {!isUpcoming && b.status !== "cancelled" && (
+                      <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={e => { e.stopPropagation(); onRebook(); }}>Rebook</Button>
+                    )}
+                    {hasPhotos && (
+                      <Camera className={`h-4 w-4 transition-colors ${isOpen ? "text-primary" : "text-muted-foreground"}`} />
+                    )}
+                  </div>
+                </div>
+
+                {/* Expandable photo gallery */}
+                {isOpen && hasPhotos && (
+                  <div className="px-4 pb-4 space-y-3 bg-surface-2/40">
+                    {b.serviceHistory.conditionScore != null && (
+                      <p className="text-xs text-muted-foreground pt-2">Condition score: <span className="text-foreground font-medium">{b.serviceHistory.conditionScore}/100</span></p>
+                    )}
+                    {b.serviceHistory.beforePhotoUrls?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Before</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {b.serviceHistory.beforePhotoUrls.map((url: string, i: number) => (
+                            <div key={i} className="aspect-square rounded overflow-hidden border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => setLightboxSrc(url)}>
+                              <img src={url} alt={`before-${i}`} className="w-full h-full object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {b.serviceHistory.afterPhotoUrls?.length > 0 && (
+                      <div>
+                        <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">After</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                          {b.serviceHistory.afterPhotoUrls.map((url: string, i: number) => (
+                            <div key={i} className="aspect-square rounded overflow-hidden border border-primary/30 cursor-pointer hover:opacity-90 transition-opacity"
+                              onClick={() => setLightboxSrc(url)}>
+                              <img src={url} alt={`after-${i}`} className="w-full h-full object-cover" />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      {/* Lightbox */}
+      {lightboxSrc && (
+        <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setLightboxSrc(null)}>
+          <img src={lightboxSrc} alt="Photo" className="max-w-full max-h-full object-contain rounded" />
+          <button className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors" onClick={() => setLightboxSrc(null)}>
+            <X className="h-5 w-5 text-white" />
+          </button>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const [, setLocation] = useLocation();
@@ -585,37 +698,7 @@ export default function Dashboard() {
 
         {/* ── Service History ── */}
         <TabsContent value="history">
-          <Card className="bg-surface border-border">
-            <div className="divide-y divide-border">
-              {allBookings.map((b: any) => (
-                <div key={b.id} className="p-4 flex items-center justify-between hover:bg-surface-2 transition-colors">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-surface-2 p-2 rounded-md">
-                      <History className="h-5 w-5 text-muted-foreground" />
-                    </div>
-                    <div>
-                      <h4 className="font-medium">{b.items?.[0]?.itemName}</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(b.appointmentAt), "MMMM d, yyyy")} • ${b.totalEstimate}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4">
-                    {(() => {
-                      const isUpcoming = b.appointmentAt && new Date(b.appointmentAt) > new Date() && b.status !== "completed" && b.status !== "cancelled";
-                      if (b.status === "cancelled") return <Badge variant="outline" className="text-red-400 border-red-400/20 bg-red-400/10">Cancelled</Badge>;
-                      if (isUpcoming) return <Badge variant="outline" className="text-primary border-primary/20 bg-primary/10">Scheduled</Badge>;
-                      return <Badge variant="outline" className="text-green-500 border-green-500/20 bg-green-500/10">Completed</Badge>;
-                    })()}
-                    <Button variant="ghost" size="sm" className="hidden sm:flex" onClick={() => setLocation("/book")}>Rebook</Button>
-                  </div>
-                </div>
-              ))}
-              {allBookings.length === 0 && (
-                <div className="p-8 text-center text-muted-foreground">No past services found.</div>
-              )}
-            </div>
-          </Card>
+          <ServiceHistoryList bookings={allBookings} onRebook={() => setLocation("/book")} />
         </TabsContent>
 
         {/* ── Rewards ── */}

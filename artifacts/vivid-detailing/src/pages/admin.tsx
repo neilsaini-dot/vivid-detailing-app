@@ -21,7 +21,9 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   User, Car, CalendarDays, Package, CheckCircle2, RefreshCw,
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
+  Camera, Upload, X, Eye,
 } from "lucide-react";
+import { useRef, useEffect } from "react";
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem("adminAuth") === "true");
@@ -82,6 +84,69 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [status, setStatus] = useState<string>(booking?.status ?? "pending");
   const [resyncing, setResyncing] = useState(false);
   const [resynced, setResynced] = useState(false);
+
+  // Photos & condition state
+  const [conditionScore, setConditionScore] = useState<string>("");
+  const [beforeUrls, setBeforeUrls] = useState<string[]>([]);
+  const [afterUrls, setAfterUrls] = useState<string[]>([]);
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
+  const beforeInputRef = useRef<HTMLInputElement>(null);
+  const afterInputRef = useRef<HTMLInputElement>(null);
+
+  // Load existing service history when sheet opens
+  useEffect(() => {
+    if (!open || !booking?.id) return;
+    setConditionScore("");
+    setBeforeUrls([]);
+    setAfterUrls([]);
+    fetch(`/api/admin/bookings/${booking.id}/service-history`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          setConditionScore(data.conditionScore != null ? String(data.conditionScore) : "");
+          setBeforeUrls(data.beforePhotoUrls ?? []);
+          setAfterUrls(data.afterPhotoUrls ?? []);
+        }
+      })
+      .catch(() => {});
+  }, [open, booking?.id]);
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((res, rej) => {
+      const reader = new FileReader();
+      reader.onload = () => res(reader.result as string);
+      reader.onerror = rej;
+      reader.readAsDataURL(file);
+    });
+
+  const handleAddPhotos = async (files: FileList | null, type: "before" | "after") => {
+    if (!files || files.length === 0) return;
+    const b64s = await Promise.all(Array.from(files).map(fileToBase64));
+    if (type === "before") setBeforeUrls(prev => [...prev, ...b64s]);
+    else setAfterUrls(prev => [...prev, ...b64s]);
+  };
+
+  const handleSavePhotos = async () => {
+    setPhotoSaving(true);
+    try {
+      const score = conditionScore !== "" ? Number(conditionScore) : undefined;
+      await updateBooking.mutateAsync({
+        id: booking.id,
+        data: {
+          conditionScore: score,
+          beforePhotoUrls: beforeUrls,
+          afterPhotoUrls: afterUrls,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      toast({ title: "Photos saved" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to save photos" });
+    } finally {
+      setPhotoSaving(false);
+    }
+  };
 
   if (!booking) return null;
 
@@ -299,6 +364,117 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                 {booking.notes}
               </div>
             </section>
+          )}
+
+          {/* Photos & Condition */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Camera className="h-4 w-4 text-primary" />
+              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Photos & Condition</h3>
+            </div>
+            <div className="bg-card border border-border rounded-lg p-4 space-y-4">
+              {/* Condition score */}
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-muted-foreground w-32 shrink-0">Condition Score</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  placeholder="0–100"
+                  value={conditionScore}
+                  onChange={e => setConditionScore(e.target.value)}
+                  className="w-24 bg-background border-border"
+                />
+                <span className="text-xs text-muted-foreground">/100</span>
+              </div>
+
+              {/* Before photos */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">Before Photos</p>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-border" onClick={() => beforeInputRef.current?.click()}>
+                    <Upload className="h-3 w-3" /> Add
+                  </Button>
+                  <input ref={beforeInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={e => handleAddPhotos(e.target.files, "before")} />
+                </div>
+                {beforeUrls.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {beforeUrls.map((url, i) => (
+                      <div key={i} className="relative group aspect-square rounded overflow-hidden border border-border">
+                        <img src={url} alt={`before-${i}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                          <button onClick={() => setLightboxSrc(url)} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                            <Eye className="h-3.5 w-3.5 text-white" />
+                          </button>
+                          <button onClick={() => setBeforeUrls(prev => prev.filter((_, j) => j !== i))} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                            <X className="h-3.5 w-3.5 text-white" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/40 transition-colors"
+                    onClick={() => beforeInputRef.current?.click()}>
+                    <p className="text-xs text-muted-foreground">Click to upload before photos</p>
+                  </div>
+                )}
+              </div>
+
+              {/* After photos */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium">After Photos</p>
+                  <Button size="sm" variant="outline" className="gap-1.5 h-7 text-xs border-border" onClick={() => afterInputRef.current?.click()}>
+                    <Upload className="h-3 w-3" /> Add
+                  </Button>
+                  <input ref={afterInputRef} type="file" accept="image/*" multiple className="hidden"
+                    onChange={e => handleAddPhotos(e.target.files, "after")} />
+                </div>
+                {afterUrls.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {afterUrls.map((url, i) => (
+                      <div key={i} className="relative group aspect-square rounded overflow-hidden border border-border">
+                        <img src={url} alt={`after-${i}`} className="w-full h-full object-cover" />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1.5">
+                          <button onClick={() => setLightboxSrc(url)} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                            <Eye className="h-3.5 w-3.5 text-white" />
+                          </button>
+                          <button onClick={() => setAfterUrls(prev => prev.filter((_, j) => j !== i))} className="p-1 bg-black/60 rounded hover:bg-black/80">
+                            <X className="h-3.5 w-3.5 text-white" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="border border-dashed border-border rounded-lg p-4 text-center cursor-pointer hover:border-primary/40 transition-colors"
+                    onClick={() => afterInputRef.current?.click()}>
+                    <p className="text-xs text-muted-foreground">Click to upload after photos</p>
+                  </div>
+                )}
+              </div>
+
+              <Button
+                size="sm"
+                className="w-full bg-primary text-primary-foreground hover:bg-primary/90"
+                onClick={handleSavePhotos}
+                disabled={photoSaving}
+              >
+                {photoSaving ? "Saving..." : "Save Photos & Score"}
+              </Button>
+            </div>
+          </section>
+
+          {/* Lightbox */}
+          {lightboxSrc && (
+            <div className="fixed inset-0 bg-black/90 z-50 flex items-center justify-center p-4" onClick={() => setLightboxSrc(null)}>
+              <img src={lightboxSrc} alt="Photo" className="max-w-full max-h-full object-contain rounded" />
+              <button className="absolute top-4 right-4 p-2 bg-white/10 rounded-full hover:bg-white/20" onClick={() => setLightboxSrc(null)}>
+                <X className="h-5 w-5 text-white" />
+              </button>
+            </div>
           )}
 
           <Separator className="bg-border" />

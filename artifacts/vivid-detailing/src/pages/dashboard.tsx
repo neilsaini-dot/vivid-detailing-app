@@ -299,6 +299,60 @@ function RescheduleSheet({
   );
 }
 
+// ── Book Vehicle Picker ───────────────────────────────────────────────────────
+function BookVehicleSheet({
+  customer, vehicles, open, onClose, onBook,
+}: {
+  customer: any;
+  vehicles: any[];
+  open: boolean;
+  onClose: () => void;
+  onBook: (vehicle?: any) => void;
+}) {
+  return (
+    <Sheet open={open} onOpenChange={v => { if (!v) onClose(); }}>
+      <SheetContent side="bottom" className="bg-surface border-border rounded-t-2xl pb-safe max-h-[85vh] overflow-y-auto">
+        <SheetHeader className="mb-4">
+          <SheetTitle>Which vehicle?</SheetTitle>
+          <p className="text-sm text-muted-foreground">Select the vehicle you're booking for.</p>
+        </SheetHeader>
+        <div className="space-y-3">
+          {vehicles.map((v: any) => (
+            <button
+              key={v.id}
+              type="button"
+              className="w-full text-left rounded-xl border border-border bg-surface-2 hover:border-primary/60 hover:bg-primary/5 transition-colors p-4 flex items-center gap-4"
+              onClick={() => onBook(v)}
+            >
+              <div className="h-10 w-10 rounded-full bg-surface flex items-center justify-center shrink-0">
+                <CarFront className="h-5 w-5 text-primary" />
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold truncate">{[v.year, v.make, v.model].filter(Boolean).join(" ")}</p>
+                <p className="text-sm text-muted-foreground truncate">{[v.colour, v.licensePlate, v.type].filter(Boolean).join(" • ")}</p>
+              </div>
+              <ChevronRight className="h-4 w-4 text-muted-foreground ml-auto shrink-0" />
+            </button>
+          ))}
+          <button
+            type="button"
+            className="w-full text-left rounded-xl border border-dashed border-border hover:border-primary/50 transition-colors p-4 flex items-center gap-4"
+            onClick={() => onBook(undefined)}
+          >
+            <div className="h-10 w-10 rounded-full bg-surface-2 flex items-center justify-center shrink-0">
+              <Plus className="h-5 w-5 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="font-medium">Book with a different vehicle</p>
+              <p className="text-sm text-muted-foreground">Enter vehicle info during booking</p>
+            </div>
+          </button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 // ── Vehicle Form Sheet ────────────────────────────────────────────────────────
 const VEHICLE_TYPES = ["car", "suv", "truck", "van"] as const;
 
@@ -644,6 +698,7 @@ export default function Dashboard() {
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
   const [editVehicle, setEditVehicle] = useState<any | null>(null);
   const [addVehicleOpen, setAddVehicleOpen] = useState(false);
+  const [bookVehicleOpen, setBookVehicleOpen] = useState(false);
 
   // Magic link auto-login: ?ref=bookingId → always resolve so fresh data loads
   useEffect(() => {
@@ -737,6 +792,48 @@ export default function Dashboard() {
     ? Math.max(0, loyalty.nextTierThreshold - loyalty.lifetimeSpend)
     : 0;
 
+  // Store customer + vehicle prefill in localStorage, then navigate to booking
+  const handleBook = (vehicle?: any, intent?: string) => {
+    const prefill: any = {
+      customerId: customerId,
+      customer: {
+        name: data.customer.name ?? "",
+        email: data.customer.email ?? "",
+        phone: data.customer.phone ?? "",
+      },
+    };
+    if (vehicle) {
+      prefill.vehicle = {
+        type: vehicle.type ?? "car",
+        yearMakeModel: [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" "),
+        colour: vehicle.colour ?? "",
+      };
+    }
+    localStorage.setItem("vd_booking_prefill", JSON.stringify(prefill));
+    const params = new URLSearchParams();
+    params.set("prefilled", "1");
+    if (intent) params.set("intent", intent);
+    setLocation(`/book?${params.toString()}`);
+  };
+
+  const openBookSheet = (intent?: string) => {
+    if (data.vehicles?.length > 0) {
+      setBookVehicleOpen(true);
+    } else {
+      // No vehicles on file — prefill customer info only, start at step 1
+      const prefill = {
+        customerId,
+        customer: {
+          name: data.customer.name ?? "",
+          email: data.customer.email ?? "",
+          phone: data.customer.phone ?? "",
+        },
+      };
+      localStorage.setItem("vd_booking_prefill", JSON.stringify(prefill));
+      setLocation(intent ? `/book?prefilled=1&intent=${intent}` : "/book?prefilled=1");
+    }
+  };
+
   return (
     <div className="container py-8 max-w-6xl">
       <div className="flex justify-between items-end mb-8">
@@ -744,7 +841,7 @@ export default function Dashboard() {
           <h1 className="text-3xl font-bold">Welcome back, {data.customer.name?.split(' ')[0] || 'Guest'}</h1>
           <p className="text-muted-foreground">Manage your vehicles and appointments.</p>
         </div>
-        <Button onClick={() => setLocation("/book")} className="bg-primary text-primary-foreground hover:bg-primary/90">
+        <Button onClick={() => openBookSheet()} className="bg-primary text-primary-foreground hover:bg-primary/90">
           Book New Service
         </Button>
       </div>
@@ -758,7 +855,7 @@ export default function Dashboard() {
               <p className="text-sm text-primary/80">It's been over 4 weeks since your last wash. Keep your coating performing optimally.</p>
             </div>
           </div>
-          <Button size="sm" onClick={() => setLocation("/book?intent=clean")}>Schedule Now</Button>
+          <Button size="sm" onClick={() => openBookSheet("clean")}>Schedule Now</Button>
         </div>
       )}
 
@@ -811,7 +908,7 @@ export default function Dashboard() {
             ) : (
               <div className="flex flex-col items-center justify-center py-2">
                 <p className="text-sm mb-3">No upcoming appointments</p>
-                <Button size="sm" variant="secondary" className="w-full bg-background text-foreground hover:bg-background/90" onClick={() => setLocation("/book")}>
+                <Button size="sm" variant="secondary" className="w-full bg-background text-foreground hover:bg-background/90" onClick={() => openBookSheet()}>
                   Book Now
                 </Button>
               </div>
@@ -862,7 +959,7 @@ export default function Dashboard() {
 
         {/* ── Service History ── */}
         <TabsContent value="history">
-          <ServiceHistoryList bookings={allBookings} onRebook={() => setLocation("/book")} />
+          <ServiceHistoryList bookings={allBookings} onRebook={() => openBookSheet()} />
         </TabsContent>
 
         {/* ── Rewards ── */}
@@ -988,6 +1085,15 @@ export default function Dashboard() {
         open={rescheduleOpen}
         onClose={() => setRescheduleOpen(false)}
         onSuccess={() => setRescheduleOpen(false)}
+      />
+
+      {/* Book vehicle picker */}
+      <BookVehicleSheet
+        customer={data.customer}
+        vehicles={data.vehicles ?? []}
+        open={bookVehicleOpen}
+        onClose={() => setBookVehicleOpen(false)}
+        onBook={(vehicle) => { setBookVehicleOpen(false); handleBook(vehicle); }}
       />
 
       {/* Edit vehicle sheet */}

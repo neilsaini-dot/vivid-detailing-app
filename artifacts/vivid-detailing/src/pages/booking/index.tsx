@@ -369,6 +369,52 @@ export default function BookingFlow() {
     const params = new URLSearchParams(window.location.search);
     const intentParam = params.get("intent") as Intent;
     const vltParam = params.get("vlt");
+    const prefilled = params.get("prefilled") === "1";
+
+    // Read pre-fill from dashboard "Book" action
+    if (prefilled) {
+      try {
+        const raw = localStorage.getItem("vd_booking_prefill");
+        if (raw) {
+          const prefill = JSON.parse(raw);
+          localStorage.removeItem("vd_booking_prefill");
+
+          const updates: Partial<BookingState> = {};
+
+          if (prefill.customer) {
+            updates.customer = {
+              name: prefill.customer.name ?? "",
+              email: prefill.customer.email ?? "",
+              phone: prefill.customer.phone ?? "",
+            };
+          }
+
+          if (prefill.vehicle) {
+            updates.vehicle = {
+              type: (prefill.vehicle.type as VehicleType) ?? "car",
+              yearMakeModel: prefill.vehicle.yearMakeModel ?? "",
+              colour: prefill.vehicle.colour ?? "",
+            };
+            updates.vehicleTypeSelected = true;
+          }
+
+          setState(s => ({ ...s, ...updates }));
+
+          if (prefill.customerId) {
+            setCapturedLeadId(prefill.customerId);
+          }
+
+          // If vehicle info is complete, skip step 1 entirely
+          if (prefill.vehicle?.yearMakeModel) {
+            setDir(1);
+            setStep(2);
+          }
+        }
+      } catch {
+        // Ignore malformed prefill
+      }
+    }
+
     if (intentParam && ["clean", "protect", "tint", "paint"].includes(intentParam)) {
       setState(s => ({ ...s, intents: [intentParam] }));
     }

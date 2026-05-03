@@ -369,9 +369,18 @@ export default function Dashboard() {
       .finally(() => setRefResolving(false));
   }, []);
 
-  const { data: dashboard, isLoading } = useGetCustomerDashboard(customerId ?? "", {
+  const { data: dashboard, isLoading, error: dashError } = useGetCustomerDashboard(customerId ?? "", {
     query: { enabled: !!customerId && !refResolving, retry: false }
   });
+
+  // If the stored customer ID no longer exists (deleted/merged), clear it so
+  // the "no account" screen shows instead of an infinite spinner.
+  useEffect(() => {
+    if (dashError && customerId) {
+      localStorage.removeItem("vd_customer_id");
+      setCustomerId(null);
+    }
+  }, [dashError, customerId]);
 
   const mockDashboard = {
     customer: { name: "Alex Driver", email: "alex@example.com" },

@@ -32,10 +32,31 @@ router.post("/leads", async (req, res) => {
   try {
     const body = CaptureLeadBody.parse(req.body);
 
-    const [customer] = await db
-      .insert(customersTable)
-      .values({ name: body.name, phone: body.phone })
-      .returning();
+    // Reuse existing customer matched by phone so returning customers keep
+    // their loyalty history and we never create orphaned lead records.
+    let customer: typeof customersTable.$inferSelect | undefined;
+    if (body.phone) {
+      const [existing] = await db
+        .select()
+        .from(customersTable)
+        .where(eq(customersTable.phone, body.phone))
+        .limit(1);
+      if (existing) {
+        const [updated] = await db
+          .update(customersTable)
+          .set({ name: body.name })
+          .where(eq(customersTable.id, existing.id))
+          .returning();
+        customer = updated;
+      }
+    }
+    if (!customer) {
+      const [created] = await db
+        .insert(customersTable)
+        .values({ name: body.name, phone: body.phone })
+        .returning();
+      customer = created;
+    }
 
     req.log.info({ customerId: customer.id }, "Lead captured");
 
@@ -186,10 +207,21 @@ router.get("/customers/:id/dashboard", async (req, res) => {
       .where(eq(customersTable.id, id));
     if (!customer) return res.status(404).json({ error: "Not found" });
 
-    const vehicles = await db
+    const allVehicles = await db
       .select()
       .from(vehiclesTable)
-      .where(eq(vehiclesTable.customerId, id));
+      .where(eq(vehiclesTable.customerId, id))
+      .orderBy(desc(vehiclesTable.createdAt));
+
+    // Deduplicate vehicles: keep the most-recent record per year+make+model combo.
+    // Handles cases where the same car was entered across multiple bookings.
+    const seenVehicles = new Set<string>();
+    const vehicles = allVehicles.filter((v) => {
+      const key = `${(v.year ?? "").toLowerCase()}|${(v.make ?? "").toLowerCase()}|${(v.model ?? "").toLowerCase()}`;
+      if (seenVehicles.has(key)) return false;
+      seenVehicles.add(key);
+      return true;
+    });
 
     const bookings = await db
       .select()
@@ -202,7 +234,8 @@ router.get("/customers/:id/dashboard", async (req, res) => {
       (b) => b.appointmentAt && new Date(b.appointmentAt) > now && b.status !== "cancelled"
     ) ?? null;
 
-    const recentBookings = bookings.slice(0, 5);
+    // Show ALL bookings in service history — no arbitrary cap
+    const recentBookings = bookings;
 
     const bookingSpend = await db
       .select({ total: sum(bookingsTable.totalEstimate) })

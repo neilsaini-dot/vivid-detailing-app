@@ -22,7 +22,9 @@ import {
   User, Car, CalendarDays, Package, CheckCircle2, RefreshCw,
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
   Camera, Upload, X, Eye, Plus, Trash2, Pencil, Tag, CalendarRange,
+  ChevronDown,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useEffect } from "react";
 
 export default function AdminPanel() {
@@ -552,6 +554,9 @@ function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<string>("")
+  const [bulkWorking, setBulkWorking] = useState(false);
 
   // Promo create form state
   const [showCreatePromo, setShowCreatePromo] = useState(false);
@@ -641,6 +646,67 @@ function AdminDashboard() {
     }
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === bookings.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(bookings.map((b: any) => b.id)));
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = Array.from(selectedIds);
+    if (!confirm(`Permanently delete ${ids.length} booking${ids.length !== 1 ? "s" : ""}? This cannot be undone.`)) return;
+    setBulkWorking(true);
+    try {
+      const res = await fetch("/api/admin/bookings/bulk-delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      setSelectedIds(new Set());
+      toast({ title: `${data.deleted} booking${data.deleted !== 1 ? "s" : ""} deleted` });
+    } catch {
+      toast({ variant: "destructive", title: "Bulk delete failed" });
+    } finally {
+      setBulkWorking(false);
+    }
+  };
+
+  const handleBulkStatus = async () => {
+    if (!bulkStatus) return;
+    const ids = Array.from(selectedIds);
+    setBulkWorking(true);
+    try {
+      const res = await fetch("/api/admin/bookings/bulk-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids, status: bulkStatus }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      setSelectedIds(new Set());
+      setBulkStatus("");
+      toast({ title: `${data.updated} booking${data.updated !== 1 ? "s" : ""} set to ${bulkStatus}` });
+    } catch {
+      toast({ variant: "destructive", title: "Bulk status update failed" });
+    } finally {
+      setBulkWorking(false);
+    }
+  };
+
   const handleToggleService = async (id: string, current: boolean) => {
     try {
       await updateService.mutateAsync({ id, data: { isActive: !current } });
@@ -688,10 +754,69 @@ function AdminDashboard() {
         </TabsList>
 
         <TabsContent value="bookings">
+          {/* Bulk action toolbar — only visible when rows are selected */}
+          {selectedIds.size > 0 && (
+            <div className="flex items-center gap-3 mb-3 px-4 py-3 bg-primary/10 border border-primary/30 rounded-lg">
+              <span className="text-sm font-medium text-primary mr-1">
+                {selectedIds.size} selected
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="text-muted-foreground hover:text-foreground h-7 px-2 text-xs"
+                onClick={() => setSelectedIds(new Set())}
+              >
+                Clear
+              </Button>
+              <div className="flex-1" />
+              {/* Status change */}
+              <div className="flex items-center gap-2">
+                <Select value={bulkStatus} onValueChange={setBulkStatus}>
+                  <SelectTrigger className="h-8 text-xs w-[130px] bg-background border-border">
+                    <SelectValue placeholder="Set status…" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button
+                  size="sm"
+                  className="h-8 text-xs bg-primary text-primary-foreground hover:bg-primary/90"
+                  disabled={!bulkStatus || bulkWorking}
+                  onClick={handleBulkStatus}
+                >
+                  Apply
+                </Button>
+              </div>
+              {/* Delete */}
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-8 text-xs gap-1.5 border-red-500/30 text-red-400 hover:bg-red-500/10 hover:border-red-500/50"
+                disabled={bulkWorking}
+                onClick={handleBulkDelete}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Delete {selectedIds.size}
+              </Button>
+            </div>
+          )}
+
           <Card className="bg-surface border-border">
             <Table>
               <TableHeader>
                 <TableRow className="border-border hover:bg-transparent">
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={bookings.length > 0 && selectedIds.size === bookings.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Select all"
+                      className="border-border"
+                    />
+                  </TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead>Vehicle</TableHead>
@@ -703,7 +828,18 @@ function AdminDashboard() {
               </TableHeader>
               <TableBody>
                 {bookings.map((b: any) => (
-                  <TableRow key={b.id} className="border-border">
+                  <TableRow
+                    key={b.id}
+                    className={`border-border ${selectedIds.has(b.id) ? "bg-primary/5" : ""}`}
+                  >
+                    <TableCell>
+                      <Checkbox
+                        checked={selectedIds.has(b.id)}
+                        onCheckedChange={() => toggleSelect(b.id)}
+                        aria-label="Select booking"
+                        className="border-border"
+                      />
+                    </TableCell>
                     <TableCell className="text-sm">
                       {b.appointmentAt ? format(new Date(b.appointmentAt), "MMM d, yyyy") : "TBD"}
                     </TableCell>
@@ -730,7 +866,7 @@ function AdminDashboard() {
                 ))}
                 {bookings.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
                       No bookings yet.
                     </TableCell>
                   </TableRow>

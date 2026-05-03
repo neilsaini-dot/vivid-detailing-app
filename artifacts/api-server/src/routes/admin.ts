@@ -12,7 +12,7 @@ import {
   serviceHistoryTable,
   seasonalPromosTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, desc, asc, sql, sum, count } from "drizzle-orm";
+import { eq, and, gte, lte, desc, asc, sql, sum, count, inArray } from "drizzle-orm";
 import {
   AdminUpdateServiceParams,
   AdminUpdateServiceBody,
@@ -770,6 +770,47 @@ router.post("/admin/merge-customers", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to merge customers");
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// POST /api/admin/bookings/bulk-delete — permanently delete multiple bookings
+router.post("/admin/bookings/bulk-delete", async (req, res) => {
+  try {
+    const { ids } = req.body as { ids: string[] };
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids must be a non-empty array" });
+    }
+    // Delete child records first to satisfy FK constraints
+    await db.delete(bookingItemsTable).where(inArray(bookingItemsTable.bookingId, ids));
+    await db.delete(serviceHistoryTable).where(inArray(serviceHistoryTable.bookingId, ids));
+    const deleted = await db.delete(bookingsTable).where(inArray(bookingsTable.id, ids)).returning({ id: bookingsTable.id });
+    res.json({ ok: true, deleted: deleted.length });
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk-delete bookings");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/bookings/bulk-status — change status for multiple bookings
+router.post("/admin/bookings/bulk-status", async (req, res) => {
+  try {
+    const { ids, status } = req.body as { ids: string[]; status: string };
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ error: "ids must be a non-empty array" });
+    }
+    const validStatuses = ["pending", "confirmed", "completed", "cancelled"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: "Invalid status" });
+    }
+    const updated = await db
+      .update(bookingsTable)
+      .set({ status: status as any })
+      .where(inArray(bookingsTable.id, ids))
+      .returning({ id: bookingsTable.id });
+    res.json({ ok: true, updated: updated.length });
+  } catch (err) {
+    req.log.error({ err }, "Failed to bulk-update booking status");
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

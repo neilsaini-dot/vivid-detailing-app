@@ -465,10 +465,10 @@ router.post("/admin/bookings/:id/sync-to-drive", async (req, res) => {
     ]);
 
     const customerName = customer?.name ?? "Unknown";
-    const bookingShort = id.slice(0, 8).toUpperCase();
-    const bookingLabel = `${customerName} — ${bookingShort}`;
+    const bookingDate = (booking.appointmentAt ?? booking.createdAt)
+      .toLocaleDateString("en-CA", { timeZone: "America/Halifax" }); // YYYY-MM-DD
 
-    const result = await syncPhotosToGoogleDrive({ bookingLabel, beforeBuffers, afterBuffers });
+    const result = await syncPhotosToGoogleDrive({ customerName, bookingDate, beforeBuffers, afterBuffers });
 
     // Persist the folder URL in service history
     if (history) {

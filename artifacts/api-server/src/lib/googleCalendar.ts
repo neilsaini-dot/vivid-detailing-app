@@ -1,12 +1,18 @@
-// Google Calendar — standard OAuth 2.0 via GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN
-import { googleFetch } from "./googleAuth";
+// Google Calendar — via Replit Connectors SDK (@replit/connectors-sdk)
+// Proxy handles OAuth2 token injection and refresh automatically.
+// No GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN needed.
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { logger } from "./logger";
 
-const CAL_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary";
+const CAL_BASE = "/calendars/primary";
 const SHOP_EMAIL = "contact@vividpei.com";
 const SHOP_OPEN_HOUR = 9;
 const LATEST_START_HOUR = 16;
 const MAX_BOOKINGS_PER_DAY = 3;
+
+function getConnectors(): ReplitConnectors {
+  return new ReplitConnectors();
+}
 
 export interface CalendarEventInput {
   summary: string;
@@ -29,7 +35,8 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<vo
   });
 
   try {
-    const res = await googleFetch(`${CAL_BASE}/events`, {
+    const connectors = getConnectors();
+    const res = await connectors.proxy("google-calendar", `${CAL_BASE}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
@@ -70,16 +77,21 @@ export async function getAvailableSlots(
 
   const dayStart = new Date(`${date}T00:00:00Z`).toISOString();
   const dayEnd = new Date(`${date}T23:59:59Z`).toISOString();
-  const url = `${CAL_BASE}/events?timeMin=${encodeURIComponent(dayStart)}&timeMax=${encodeURIComponent(dayEnd)}&singleEvents=true&orderBy=startTime`;
+  const path = `${CAL_BASE}/events?timeMin=${encodeURIComponent(dayStart)}&timeMax=${encodeURIComponent(dayEnd)}&singleEvents=true&orderBy=startTime`;
 
   let events: { start: { dateTime?: string; date?: string } }[] = [];
   try {
-    const res = await googleFetch(url);
+    const connectors = getConnectors();
+    const res = await connectors.proxy("google-calendar", path);
     if (res.ok) {
       const data = await res.json() as { items?: typeof events };
       events = data?.items ?? [];
+    } else {
+      const text = await res.text().catch(() => "");
+      logger.warn({ status: res.status, text, date }, "Google Calendar availability fetch failed");
     }
-  } catch {
+  } catch (err) {
+    logger.warn({ err, date }, "Google Calendar availability fetch error — returning all slots open");
     events = [];
   }
 

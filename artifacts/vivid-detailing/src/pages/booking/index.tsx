@@ -335,7 +335,8 @@ export default function BookingFlow() {
     const pad = (n: number) => String(n).padStart(2, "0");
     const fmt = (d: Date) =>
       `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
-    const end = new Date(dt.getTime() + 2 * 60 * 60 * 1000);
+    const durationHours = hasCustomTime ? 4 : Math.max(runTimeMax || 2, 0.25);
+    const end = new Date(dt.getTime() + durationHours * 60 * 60 * 1000);
     const serviceNames = (currentPricing?.lineItems ?? [])
       .filter((item: any) => item.type === "service" || !item.type)
       .map((item: any) => item.name)

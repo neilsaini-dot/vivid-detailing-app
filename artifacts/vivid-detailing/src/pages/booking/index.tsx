@@ -337,11 +337,16 @@ export default function BookingFlow() {
     const fmt = (d: Date) =>
       `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
     const end = new Date(dt.getTime() + 2 * 60 * 60 * 1000);
-    const title  = encodeURIComponent(`Vivid Detailing – ${state.customer.name}`);
-    const detail = encodeURIComponent("Your detailing appointment at Vivid Detailing, Charlottetown PEI. Questions? Call (902) 555-0100.");
+    const serviceNames = (currentPricing?.lineItems ?? [])
+      .filter((item: any) => item.type === "service" || !item.type)
+      .map((item: any) => item.name)
+      .filter(Boolean)
+      .join(", ") || "Appointment";
+    const title  = encodeURIComponent(`Vivid Detailing - ${serviceNames}`);
+    const detail = encodeURIComponent(`Your ${serviceNames} appointment at Vivid Detailing, Charlottetown PEI. Questions? Call 902-267-7775.`);
     const loc    = encodeURIComponent("Vivid Detailing, Charlottetown, PE, Canada");
     window.open(
-      `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(dt)}/${fmt(end)}&details=${detail}&location=${loc}`,
+      `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${fmt(dt)}/${fmt(end)}&details=${detail}&location=${loc}&remind=1440&remind=30`,
       "_blank"
     );
   };

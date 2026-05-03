@@ -496,10 +496,14 @@ export default function BookingFlow() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // ── Browser back-button support ───────────────────────────────────────────
+  // ── Browser back/forward button support ──────────────────────────────────
   const isHandlingPopState = useRef(false);
   const bookingComplete = useRef(false);
   const isFirstStepRender = useRef(true);
+  const currentStepRef = useRef(1);
+
+  // Keep currentStepRef in sync so the popstate handler can read live step value
+  useEffect(() => { currentStepRef.current = step; }, [step]);
 
   // Encode step 1 into the current history entry on mount, then intercept popstate
   useEffect(() => {
@@ -508,7 +512,7 @@ export default function BookingFlow() {
       if (bookingComplete.current) return;
       if (e.state && typeof e.state.step === "number") {
         isHandlingPopState.current = true;
-        setDir(-1);
+        setDir(e.state.step >= currentStepRef.current ? 1 : -1);
         setStep(e.state.step);
         setTintSubStep(e.state.tintSubStep ?? false);
       }

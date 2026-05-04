@@ -258,13 +258,18 @@ export const GetBookingResponse = zod.object({
     zod.object({
       id: zod.string(),
       bookingId: zod.string(),
-      itemType: zod.enum(["service", "addon", "quote", "promo"]),
+      itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
       itemName: zod.string(),
       unitPrice: zod.number().nullish(),
       quantity: zod.number(),
       isQuoteBased: zod.boolean(),
     }),
   ),
+  source: zod
+    .enum(["online", "phone", "walkin", "referral", "other"])
+    .nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
+  createdByAdmin: zod.boolean().optional(),
   customer: zod
     .object({
       id: zod.string(),
@@ -289,6 +294,13 @@ export const GetBookingResponse = zod.object({
       licensePlate: zod.string().nullish(),
       notes: zod.string().nullish(),
       createdAt: zod.string(),
+    })
+    .nullish(),
+  serviceHistory: zod
+    .object({
+      conditionScore: zod.number().nullish(),
+      beforePhotoUrls: zod.array(zod.string()),
+      afterPhotoUrls: zod.array(zod.string()),
     })
     .nullish(),
 });
@@ -325,13 +337,18 @@ export const UpdateBookingResponse = zod.object({
     zod.object({
       id: zod.string(),
       bookingId: zod.string(),
-      itemType: zod.enum(["service", "addon", "quote", "promo"]),
+      itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
       itemName: zod.string(),
       unitPrice: zod.number().nullish(),
       quantity: zod.number(),
       isQuoteBased: zod.boolean(),
     }),
   ),
+  source: zod
+    .enum(["online", "phone", "walkin", "referral", "other"])
+    .nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
+  createdByAdmin: zod.boolean().optional(),
   customer: zod
     .object({
       id: zod.string(),
@@ -356,6 +373,13 @@ export const UpdateBookingResponse = zod.object({
       licensePlate: zod.string().nullish(),
       notes: zod.string().nullish(),
       createdAt: zod.string(),
+    })
+    .nullish(),
+  serviceHistory: zod
+    .object({
+      conditionScore: zod.number().nullish(),
+      beforePhotoUrls: zod.array(zod.string()),
+      afterPhotoUrls: zod.array(zod.string()),
     })
     .nullish(),
 });
@@ -467,13 +491,18 @@ export const GetCustomerBookingsResponseItem = zod.object({
     zod.object({
       id: zod.string(),
       bookingId: zod.string(),
-      itemType: zod.enum(["service", "addon", "quote", "promo"]),
+      itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
       itemName: zod.string(),
       unitPrice: zod.number().nullish(),
       quantity: zod.number(),
       isQuoteBased: zod.boolean(),
     }),
   ),
+  source: zod
+    .enum(["online", "phone", "walkin", "referral", "other"])
+    .nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
+  createdByAdmin: zod.boolean().optional(),
   customer: zod
     .object({
       id: zod.string(),
@@ -498,6 +527,13 @@ export const GetCustomerBookingsResponseItem = zod.object({
       licensePlate: zod.string().nullish(),
       notes: zod.string().nullish(),
       createdAt: zod.string(),
+    })
+    .nullish(),
+  serviceHistory: zod
+    .object({
+      conditionScore: zod.number().nullish(),
+      beforePhotoUrls: zod.array(zod.string()),
+      afterPhotoUrls: zod.array(zod.string()),
     })
     .nullish(),
 });
@@ -569,13 +605,18 @@ export const GetCustomerDashboardResponse = zod.object({
         zod.object({
           id: zod.string(),
           bookingId: zod.string(),
-          itemType: zod.enum(["service", "addon", "quote", "promo"]),
+          itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
           itemName: zod.string(),
           unitPrice: zod.number().nullish(),
           quantity: zod.number(),
           isQuoteBased: zod.boolean(),
         }),
       ),
+      source: zod
+        .enum(["online", "phone", "walkin", "referral", "other"])
+        .nullish(),
+      isManualPriceOverride: zod.boolean().optional(),
+      createdByAdmin: zod.boolean().optional(),
       customer: zod
         .object({
           id: zod.string(),
@@ -600,6 +641,13 @@ export const GetCustomerDashboardResponse = zod.object({
           licensePlate: zod.string().nullish(),
           notes: zod.string().nullish(),
           createdAt: zod.string(),
+        })
+        .nullish(),
+      serviceHistory: zod
+        .object({
+          conditionScore: zod.number().nullish(),
+          beforePhotoUrls: zod.array(zod.string()),
+          afterPhotoUrls: zod.array(zod.string()),
         })
         .nullish(),
     })
@@ -621,13 +669,18 @@ export const GetCustomerDashboardResponse = zod.object({
         zod.object({
           id: zod.string(),
           bookingId: zod.string(),
-          itemType: zod.enum(["service", "addon", "quote", "promo"]),
+          itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
           itemName: zod.string(),
           unitPrice: zod.number().nullish(),
           quantity: zod.number(),
           isQuoteBased: zod.boolean(),
         }),
       ),
+      source: zod
+        .enum(["online", "phone", "walkin", "referral", "other"])
+        .nullish(),
+      isManualPriceOverride: zod.boolean().optional(),
+      createdByAdmin: zod.boolean().optional(),
       customer: zod
         .object({
           id: zod.string(),
@@ -652,6 +705,13 @@ export const GetCustomerDashboardResponse = zod.object({
           licensePlate: zod.string().nullish(),
           notes: zod.string().nullish(),
           createdAt: zod.string(),
+        })
+        .nullish(),
+      serviceHistory: zod
+        .object({
+          conditionScore: zod.number().nullish(),
+          beforePhotoUrls: zod.array(zod.string()),
+          afterPhotoUrls: zod.array(zod.string()),
         })
         .nullish(),
     }),
@@ -858,6 +918,9 @@ export const AdminListBookingsQueryParams = zod.object({
   status: zod
     .enum(["pending", "confirmed", "completed", "cancelled"])
     .optional(),
+  source: zod
+    .enum(["online", "phone", "walkin", "referral", "other"])
+    .optional(),
   from: zod.date().optional(),
   to: zod.date().optional(),
   serviceCategory: zod.coerce.string().optional(),
@@ -879,13 +942,18 @@ export const AdminListBookingsResponseItem = zod.object({
     zod.object({
       id: zod.string(),
       bookingId: zod.string(),
-      itemType: zod.enum(["service", "addon", "quote", "promo"]),
+      itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
       itemName: zod.string(),
       unitPrice: zod.number().nullish(),
       quantity: zod.number(),
       isQuoteBased: zod.boolean(),
     }),
   ),
+  source: zod
+    .enum(["online", "phone", "walkin", "referral", "other"])
+    .nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
+  createdByAdmin: zod.boolean().optional(),
   customer: zod
     .object({
       id: zod.string(),
@@ -912,10 +980,62 @@ export const AdminListBookingsResponseItem = zod.object({
       createdAt: zod.string(),
     })
     .nullish(),
+  serviceHistory: zod
+    .object({
+      conditionScore: zod.number().nullish(),
+      beforePhotoUrls: zod.array(zod.string()),
+      afterPhotoUrls: zod.array(zod.string()),
+    })
+    .nullish(),
 });
 export const AdminListBookingsResponse = zod.array(
   AdminListBookingsResponseItem,
 );
+
+/**
+ * @summary Create a manual booking from the admin panel
+ */
+export const AdminCreateBookingBody = zod.object({
+  customerId: zod
+    .string()
+    .nullish()
+    .describe("Existing customer ID (mutually exclusive with newCustomer)"),
+  newCustomer: zod
+    .object({
+      name: zod.string(),
+      email: zod.string().optional(),
+      phone: zod.string().optional(),
+    })
+    .optional(),
+  vehicleId: zod.string().nullish(),
+  newVehicle: zod
+    .object({
+      customerId: zod.string().nullish(),
+      type: zod.enum(["car", "suv", "truck", "van"]),
+      year: zod.number().nullish(),
+      make: zod.string().nullish(),
+      model: zod.string().nullish(),
+      colour: zod.string().nullish(),
+      licensePlate: zod.string().nullish(),
+      notes: zod.string().nullish(),
+    })
+    .optional(),
+  appointmentAt: zod.string().nullish(),
+  source: zod.enum(["online", "phone", "walkin", "referral", "other"]),
+  notes: zod.string().nullish(),
+  status: zod.enum(["pending", "confirmed", "completed"]).optional(),
+  lineItems: zod.array(
+    zod.object({
+      description: zod.string(),
+      price: zod.number(),
+    }),
+  ),
+  totalOverride: zod.number().nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
+  conditionScore: zod.number().nullish(),
+  beforePhotoUrls: zod.array(zod.string()).optional(),
+  afterPhotoUrls: zod.array(zod.string()).optional(),
+});
 
 /**
  * @summary Update booking (confirm, complete, cancel, condition score, photos)
@@ -951,13 +1071,18 @@ export const AdminUpdateBookingResponse = zod.object({
     zod.object({
       id: zod.string(),
       bookingId: zod.string(),
-      itemType: zod.enum(["service", "addon", "quote", "promo"]),
+      itemType: zod.enum(["service", "addon", "quote", "promo", "manual"]),
       itemName: zod.string(),
       unitPrice: zod.number().nullish(),
       quantity: zod.number(),
       isQuoteBased: zod.boolean(),
     }),
   ),
+  source: zod
+    .enum(["online", "phone", "walkin", "referral", "other"])
+    .nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
+  createdByAdmin: zod.boolean().optional(),
   customer: zod
     .object({
       id: zod.string(),
@@ -984,7 +1109,45 @@ export const AdminUpdateBookingResponse = zod.object({
       createdAt: zod.string(),
     })
     .nullish(),
+  serviceHistory: zod
+    .object({
+      conditionScore: zod.number().nullish(),
+      beforePhotoUrls: zod.array(zod.string()),
+      afterPhotoUrls: zod.array(zod.string()),
+    })
+    .nullish(),
 });
+
+/**
+ * @summary Search customers by name, email, or phone
+ */
+export const AdminSearchCustomersQueryParams = zod.object({
+  q: zod.coerce.string(),
+});
+
+export const AdminSearchCustomersResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string().nullish(),
+  email: zod.string().nullish(),
+  phone: zod.string().nullish(),
+  vehicles: zod.array(
+    zod.object({
+      id: zod.string(),
+      customerId: zod.string(),
+      type: zod.enum(["car", "suv", "truck", "van"]),
+      year: zod.number().nullish(),
+      make: zod.string().nullish(),
+      model: zod.string().nullish(),
+      colour: zod.string().nullish(),
+      licensePlate: zod.string().nullish(),
+      notes: zod.string().nullish(),
+      createdAt: zod.string(),
+    }),
+  ),
+});
+export const AdminSearchCustomersResponse = zod.array(
+  AdminSearchCustomersResponseItem,
+);
 
 /**
  * @summary List all customers with GHL sync status

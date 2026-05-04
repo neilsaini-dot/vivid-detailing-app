@@ -25,3 +25,17 @@ pnpm workspace monorepo using TypeScript. Each package manages its own dependenc
 - `pnpm --filter @workspace/api-server run dev` — run API server locally
 
 See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details.
+
+## Features
+
+### Admin Manual Booking System
+- `POST /api/admin/bookings` — create a booking from the admin panel (customer search/create, vehicle select/create, free-form line items, source, status, total override)
+- `GET /api/admin/customers/search?q=` — live customer search by name/email/phone with their vehicles
+- Source filter on `GET /api/admin/bookings?source=phone|walkin|online|referral|other`
+- Bookings table shows colour-coded source badges (blue=Online, purple=Phone, orange=Walk-in, green=Referral)
+- "New Booking" button opens a slide-over sheet with: customer search/create, vehicle select/create, quick-service shortcuts, line item builder with auto-total, manual total override, source & status dropdowns, appointment datetime, notes
+- If status is `confirmed`, fires GHL webhook + Google Calendar event automatically
+- New DB columns: `bookings.source` (default 'online'), `bookings.is_manual_price_override`, `bookings.created_by_admin`; `booking_items.item_type` now also allows `'manual'`
+
+### Migration SQL
+`scripts/migrate-manual-booking.sql` — run in Supabase SQL Editor and Railway before deploying.

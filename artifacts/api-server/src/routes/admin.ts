@@ -25,7 +25,10 @@ import {
   AdminUpdateCustomerBody,
   GetAnalyticsQueryParams,
   UpdateSeasonalPromoBody,
+  AdminCreateBookingBody,
+  AdminSearchCustomersQueryParams,
 } from "@workspace/api-zod";
+import { ilike, or } from "drizzle-orm";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 import { sendGhlBookingConfirmed, sendGhlBookingCompleted } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
@@ -229,6 +232,9 @@ router.get("/admin/bookings", async (req, res) => {
 
     if (query.status) {
       bookings = bookings.filter((b) => b.status === query.status);
+    }
+    if (query.source) {
+      bookings = bookings.filter((b) => b.source === query.source);
     }
     if (query.from) {
       const from = new Date(query.from);
@@ -882,6 +888,210 @@ router.post("/admin/merge-customers", async (req, res) => {
   } catch (err) {
     req.log.error({ err }, "Failed to merge customers");
     res.status(500).json({ error: String(err) });
+  }
+});
+
+// GET /api/admin/customers/search — search customers by name/email/phone
+router.get("/admin/customers/search", async (req, res) => {
+  try {
+    const { q } = AdminSearchCustomersQueryParams.parse(req.query);
+    const pattern = `%${q}%`;
+    const customers = await db
+      .select()
+      .from(customersTable)
+      .where(
+        or(
+          ilike(customersTable.name, pattern),
+          ilike(customersTable.email, pattern),
+          ilike(customersTable.phone, pattern),
+        )
+      )
+      .orderBy(asc(customersTable.name))
+      .limit(20);
+
+    const results = await Promise.all(
+      customers.map(async (c) => {
+        const vehicles = await db
+          .select()
+          .from(vehiclesTable)
+          .where(eq(vehiclesTable.customerId, c.id))
+          .orderBy(desc(vehiclesTable.createdAt));
+        return {
+          id: c.id,
+          name: c.name,
+          email: c.email,
+          phone: c.phone,
+          vehicles: vehicles.map(formatVehicle),
+        };
+      })
+    );
+    res.json(results);
+  } catch (err) {
+    req.log.error({ err }, "Failed to search customers");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/bookings — create a manual booking from the admin panel
+router.post("/admin/bookings", async (req, res) => {
+  try {
+    const body = AdminCreateBookingBody.parse(req.body);
+
+    // ── 1. Resolve or create customer ────────────────────────────
+    let customerId: string | null = null;
+    let customerRecord: (typeof customersTable.$inferSelect) | null = null;
+
+    if (body.customerId) {
+      const [found] = await db.select().from(customersTable).where(eq(customersTable.id, body.customerId)).limit(1);
+      if (!found) return res.status(400).json({ error: "Customer not found" });
+      customerId = found.id;
+      customerRecord = found;
+    } else if (body.newCustomer) {
+      const nameParts = body.newCustomer.name.trim().split(" ");
+      const [created] = await db
+        .insert(customersTable)
+        .values({
+          name: body.newCustomer.name.trim(),
+          email: body.newCustomer.email ?? null,
+          phone: body.newCustomer.phone ?? null,
+          ghlSyncStatus: "pending",
+        })
+        .returning();
+      customerId = created.id;
+      customerRecord = created;
+      void nameParts; // suppress unused warning
+    }
+
+    // ── 2. Resolve or create vehicle ─────────────────────────────
+    let vehicleId: string | null = null;
+    let vehicleRecord: (typeof vehiclesTable.$inferSelect) | null = null;
+
+    if (body.vehicleId) {
+      const [found] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, body.vehicleId)).limit(1);
+      if (found) { vehicleId = found.id; vehicleRecord = found; }
+    } else if (body.newVehicle && customerId) {
+      const [created] = await db
+        .insert(vehiclesTable)
+        .values({ ...body.newVehicle, customerId })
+        .returning();
+      vehicleId = created.id;
+      vehicleRecord = created;
+    }
+
+    // ── 3. Compute total ─────────────────────────────────────────
+    const lineItemsTotal = body.lineItems.reduce((sum, li) => sum + li.price, 0);
+    const total = body.isManualPriceOverride && body.totalOverride != null
+      ? body.totalOverride
+      : lineItemsTotal;
+
+    // ── 4. Create booking ────────────────────────────────────────
+    const [booking] = await db
+      .insert(bookingsTable)
+      .values({
+        customerId,
+        vehicleId,
+        status: body.status ?? "pending",
+        appointmentAt: body.appointmentAt ? new Date(body.appointmentAt) : null,
+        totalEstimate: String(total),
+        depositPaid: false,
+        notes: body.notes ?? null,
+        source: body.source,
+        isManualPriceOverride: body.isManualPriceOverride ?? false,
+        createdByAdmin: true,
+      })
+      .returning();
+
+    // ── 5. Create line items ──────────────────────────────────────
+    if (body.lineItems.length > 0) {
+      await db.insert(bookingItemsTable).values(
+        body.lineItems.map((li) => ({
+          bookingId: booking.id,
+          itemType: "manual" as const,
+          itemName: li.description,
+          unitPrice: String(li.price),
+          quantity: 1,
+          isQuoteBased: false,
+        }))
+      );
+    }
+
+    // ── 6. Create service history if photos provided ──────────────
+    if (body.beforePhotoUrls?.length || body.afterPhotoUrls?.length || body.conditionScore != null) {
+      await db.insert(serviceHistoryTable).values({
+        bookingId: booking.id,
+        conditionScore: body.conditionScore ?? null,
+        beforePhotoUrls: body.beforePhotoUrls ?? [],
+        afterPhotoUrls: body.afterPhotoUrls ?? [],
+      });
+    }
+
+    // ── 7. GHL + Calendar if confirmed ───────────────────────────
+    if (booking.status === "confirmed" && customerRecord) {
+      const items = await db.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, booking.id));
+      const primaryService = items[0]?.itemName ?? "Detailing Service";
+
+      const vehicleLabel = vehicleRecord
+        ? [vehicleRecord.year, vehicleRecord.make, vehicleRecord.model].filter(Boolean).join(" ")
+        : "";
+
+      try {
+        await sendGhlBookingConfirmed({
+          event: "booking_confirmed",
+          booking_confirmed: true,
+          source: "vivid-app",
+          contact: {
+            firstName: customerRecord.name?.split(" ")[0] ?? customerRecord.name ?? "",
+            lastName: customerRecord.name?.split(" ").slice(1).join(" ") ?? "",
+            email: customerRecord.email ?? "",
+            phone: customerRecord.phone ?? "",
+            tags: ["Booking", "Vivid Detailing", primaryService],
+          },
+          opportunity: {
+            title: `${customerRecord.name ?? "Client"} — ${primaryService}`,
+            status: "won",
+            monetaryValue: Number(booking.totalEstimate ?? 0),
+            pipelineStageName: "Won",
+            notes: booking.notes ?? "",
+          },
+          booking: {
+            id: booking.id,
+            services: [primaryService],
+            addons: [],
+            vehicle: vehicleLabel,
+            appointment_at: booking.appointmentAt?.toISOString() ?? null,
+            total_estimate: Number(booking.totalEstimate ?? 0),
+            is_quote_based: false,
+            notes: booking.notes ?? null,
+          },
+        });
+      } catch (err) {
+        req.log.warn({ err }, "GHL webhook failed for manual booking");
+      }
+
+      if (booking.appointmentAt) {
+        try {
+          await createCalendarEvent({
+            summary: `Vivid Detailing — ${customerRecord.name ?? "Client"} (${primaryService})`,
+            description: [
+              vehicleLabel ? `Vehicle: ${vehicleLabel}` : null,
+              booking.notes ? `Notes: ${booking.notes}` : null,
+              `Source: ${booking.source} (admin created)`,
+            ].filter(Boolean).join("\n"),
+            startIso: booking.appointmentAt.toISOString(),
+            durationHours: 3,
+          });
+        } catch (err) {
+          req.log.warn({ err }, "Calendar event creation failed for manual booking");
+        }
+      }
+    }
+
+    // ── 8. Return enriched booking ────────────────────────────────
+    const items = await db.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, booking.id));
+    res.status(201).json(formatBooking({ ...booking, items, customer: customerRecord, vehicle: vehicleRecord }));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create manual booking");
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

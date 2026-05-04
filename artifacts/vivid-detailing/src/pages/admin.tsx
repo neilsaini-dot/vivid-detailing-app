@@ -3,6 +3,7 @@ import {
   useAdminListBookings, useAdminListServices, useGetAnalytics,
   useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
   useDeleteSeasonalPromo, useAdminUpdateService, useAdminUpdateBooking,
+  useAdminCreateBooking, useAdminSearchCustomers,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,7 +26,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useCallback, useMemo } from "react";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function AdminPanel() {
   const [isAuthenticated, setIsAuthenticated] = useState(() => sessionStorage.getItem("adminAuth") === "true");
@@ -633,10 +635,477 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   );
 }
 
+// ─── Source badge helpers ─────────────────────────────────────────────────────
+const SOURCE_LABELS: Record<string, string> = {
+  online: "Online", phone: "Phone", walkin: "Walk-in", referral: "Referral", other: "Other",
+};
+const SOURCE_BADGE_CLASS: Record<string, string> = {
+  online: "text-blue-400 border-blue-500/20 bg-blue-500/10",
+  phone: "text-purple-400 border-purple-500/20 bg-purple-500/10",
+  walkin: "text-orange-400 border-orange-500/20 bg-orange-500/10",
+  referral: "text-green-400 border-green-500/20 bg-green-500/10",
+  other: "text-muted-foreground border-border",
+};
+
+// ─── Manual Booking Sheet ─────────────────────────────────────────────────────
+type LineItem = { description: string; price: string };
+const QUICK_SERVICES = [
+  { label: "Full Detail", price: "299" },
+  { label: "Exterior Wash", price: "79" },
+  { label: "Interior Detail", price: "149" },
+  { label: "Paint Protection Film", price: "699" },
+  { label: "Ceramic Coating", price: "899" },
+  { label: "Window Tint", price: "349" },
+  { label: "Headlight Restoration", price: "99" },
+  { label: "Engine Bay Clean", price: "99" },
+];
+
+function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const createBooking = useAdminCreateBooking();
+
+  // Customer search state
+  const [customerMode, setCustomerMode] = useState<"search" | "new">("search");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const debouncedSearch = useDebounce(customerSearch, 350);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
+  const [newCustomerName, setNewCustomerName] = useState("");
+  const [newCustomerEmail, setNewCustomerEmail] = useState("");
+  const [newCustomerPhone, setNewCustomerPhone] = useState("");
+
+  // Vehicle state
+  const [vehicleMode, setVehicleMode] = useState<"select" | "new">("select");
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [newVehicle, setNewVehicle] = useState({ type: "car" as const, year: "", make: "", model: "", colour: "", licensePlate: "" });
+
+  // Line items
+  const [lineItems, setLineItems] = useState<LineItem[]>([{ description: "", price: "" }]);
+
+  // Booking meta
+  const [source, setSource] = useState<"online" | "phone" | "walkin" | "referral" | "other">("phone");
+  const [status, setStatus] = useState<"pending" | "confirmed" | "completed">("confirmed");
+  const [appointmentAt, setAppointmentAt] = useState("");
+  const [notes, setNotes] = useState("");
+  const [totalOverride, setTotalOverride] = useState("");
+  const [isManualTotal, setIsManualTotal] = useState(false);
+
+  const searchEnabled = debouncedSearch.length >= 2 && customerMode === "search" && !selectedCustomer;
+  const { data: searchResults = [], isFetching: searching } = useAdminSearchCustomers(
+    { q: debouncedSearch },
+    { query: { enabled: searchEnabled } as any }
+  );
+
+  const autoTotal = useMemo(() =>
+    lineItems.reduce((sum, li) => sum + (parseFloat(li.price) || 0), 0),
+    [lineItems]
+  );
+
+  const resetForm = useCallback(() => {
+    setCustomerMode("search");
+    setCustomerSearch("");
+    setSelectedCustomer(null);
+    setNewCustomerName(""); setNewCustomerEmail(""); setNewCustomerPhone("");
+    setVehicleMode("select");
+    setSelectedVehicleId("");
+    setNewVehicle({ type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
+    setLineItems([{ description: "", price: "" }]);
+    setSource("phone");
+    setStatus("confirmed");
+    setAppointmentAt("");
+    setNotes("");
+    setTotalOverride("");
+    setIsManualTotal(false);
+  }, []);
+
+  useEffect(() => { if (!open) resetForm(); }, [open, resetForm]);
+
+  const handleSelectCustomer = (c: any) => {
+    setSelectedCustomer(c);
+    setCustomerSearch("");
+    setVehicleMode("select");
+    setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
+  };
+
+  const addLineItem = () => setLineItems(prev => [...prev, { description: "", price: "" }]);
+  const removeLineItem = (i: number) => setLineItems(prev => prev.filter((_, j) => j !== i));
+  const updateLineItem = (i: number, field: keyof LineItem, val: string) =>
+    setLineItems(prev => prev.map((li, j) => j === i ? { ...li, [field]: val } : li));
+  const addQuickService = (svc: { label: string; price: string }) => {
+    const empty = lineItems.findIndex(li => !li.description.trim());
+    if (empty >= 0) {
+      updateLineItem(empty, "description", svc.label);
+      updateLineItem(empty, "price", svc.price);
+    } else {
+      setLineItems(prev => [...prev, { description: svc.label, price: svc.price }]);
+    }
+  };
+
+  const handleSubmit = async () => {
+    const validItems = lineItems.filter(li => li.description.trim());
+    if (validItems.length === 0) {
+      toast({ variant: "destructive", title: "Add at least one line item" });
+      return;
+    }
+    if (customerMode === "search" && !selectedCustomer && !newCustomerName.trim()) {
+      toast({ variant: "destructive", title: "Select or create a customer" });
+      return;
+    }
+
+    try {
+      const payload: any = {
+        source,
+        status,
+        notes: notes.trim() || null,
+        appointmentAt: appointmentAt || null,
+        lineItems: validItems.map(li => ({ description: li.description.trim(), price: parseFloat(li.price) || 0 })),
+        isManualPriceOverride: isManualTotal,
+        totalOverride: isManualTotal && totalOverride ? parseFloat(totalOverride) : null,
+      };
+
+      if (selectedCustomer) {
+        payload.customerId = selectedCustomer.id;
+        if (vehicleMode === "select" && selectedVehicleId) payload.vehicleId = selectedVehicleId;
+        else if (vehicleMode === "new" && newVehicle.make) payload.newVehicle = {
+          ...newVehicle,
+          year: newVehicle.year ? parseInt(newVehicle.year) : null,
+          customerId: selectedCustomer.id,
+        };
+      } else if (newCustomerName.trim()) {
+        payload.newCustomer = {
+          name: newCustomerName.trim(),
+          email: newCustomerEmail.trim() || undefined,
+          phone: newCustomerPhone.trim() || undefined,
+        };
+        if (newVehicle.make) payload.newVehicle = {
+          ...newVehicle,
+          year: newVehicle.year ? parseInt(newVehicle.year) : null,
+        };
+      }
+
+      await createBooking.mutateAsync({ data: payload });
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      toast({ title: "Booking created" });
+      onClose();
+    } catch {
+      toast({ variant: "destructive", title: "Failed to create booking" });
+    }
+  };
+
+  const vehicles = selectedCustomer?.vehicles ?? [];
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto bg-background border-border p-0">
+        <SheetHeader className="px-6 py-5 border-b border-border sticky top-0 bg-background z-10">
+          <div className="flex items-center justify-between">
+            <SheetTitle className="text-lg font-bold">New Manual Booking</SheetTitle>
+            <Badge variant="outline" className="text-xs text-muted-foreground border-border">Admin</Badge>
+          </div>
+        </SheetHeader>
+
+        <div className="px-6 py-6 space-y-6">
+
+          {/* ── Customer ── */}
+          <section>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Customer</h3>
+              </div>
+              <div className="flex gap-1">
+                <Button size="sm" variant={customerMode === "search" ? "default" : "ghost"}
+                  className={`h-7 text-xs px-2 ${customerMode === "search" ? "bg-primary/20 text-primary border border-primary/30" : "text-muted-foreground"}`}
+                  onClick={() => { setCustomerMode("search"); setSelectedCustomer(null); }}>
+                  Search
+                </Button>
+                <Button size="sm" variant={customerMode === "new" ? "default" : "ghost"}
+                  className={`h-7 text-xs px-2 ${customerMode === "new" ? "bg-primary/20 text-primary border border-primary/30" : "text-muted-foreground"}`}
+                  onClick={() => { setCustomerMode("new"); setSelectedCustomer(null); }}>
+                  + New
+                </Button>
+              </div>
+            </div>
+
+            {customerMode === "search" && !selectedCustomer && (
+              <div className="space-y-2">
+                <Input
+                  placeholder="Search by name, email, or phone…"
+                  value={customerSearch}
+                  onChange={e => setCustomerSearch(e.target.value)}
+                  className="bg-surface-2 border-border"
+                />
+                {debouncedSearch.length >= 2 && (
+                  <div className="border border-border rounded-lg overflow-hidden">
+                    {searching ? (
+                      <div className="p-3 text-sm text-muted-foreground flex items-center gap-2">
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Searching…
+                      </div>
+                    ) : searchResults.length === 0 ? (
+                      <div className="p-3 text-sm text-muted-foreground">
+                        No customers found.{" "}
+                        <button className="text-primary underline" onClick={() => { setCustomerMode("new"); setNewCustomerName(customerSearch); }}>
+                          Create new?
+                        </button>
+                      </div>
+                    ) : (
+                      <ul>
+                        {(searchResults as any[]).map((c: any) => (
+                          <li key={c.id}>
+                            <button
+                              className="w-full text-left px-4 py-3 hover:bg-surface-2 border-b border-border last:border-0 transition-colors"
+                              onClick={() => handleSelectCustomer(c)}
+                            >
+                              <p className="font-medium text-sm">{c.name ?? "—"}</p>
+                              <p className="text-xs text-muted-foreground">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {customerMode === "search" && selectedCustomer && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 flex items-start justify-between">
+                <div>
+                  <p className="font-semibold text-sm">{selectedCustomer.name}</p>
+                  <p className="text-xs text-muted-foreground">{[selectedCustomer.phone, selectedCustomer.email].filter(Boolean).join(" · ")}</p>
+                </div>
+                <button className="text-muted-foreground hover:text-foreground" onClick={() => { setSelectedCustomer(null); setSelectedVehicleId(""); }}>
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
+            {customerMode === "new" && (
+              <div className="grid grid-cols-1 gap-3">
+                <Input placeholder="Full name *" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)} className="bg-surface-2 border-border" />
+                <Input placeholder="Phone" value={newCustomerPhone} onChange={e => setNewCustomerPhone(e.target.value)} className="bg-surface-2 border-border" />
+                <Input placeholder="Email" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)} className="bg-surface-2 border-border" />
+              </div>
+            )}
+          </section>
+
+          {/* ── Vehicle ── */}
+          {(selectedCustomer || customerMode === "new") && (
+            <section>
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <Car className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Vehicle</h3>
+                </div>
+                {selectedCustomer && vehicles.length > 0 && (
+                  <div className="flex gap-1">
+                    <Button size="sm" variant="ghost"
+                      className={`h-7 text-xs px-2 ${vehicleMode === "select" ? "bg-primary/20 text-primary border border-primary/30" : "text-muted-foreground"}`}
+                      onClick={() => setVehicleMode("select")}>
+                      Existing
+                    </Button>
+                    <Button size="sm" variant="ghost"
+                      className={`h-7 text-xs px-2 ${vehicleMode === "new" ? "bg-primary/20 text-primary border border-primary/30" : "text-muted-foreground"}`}
+                      onClick={() => setVehicleMode("new")}>
+                      + New
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {vehicleMode === "select" && selectedCustomer && vehicles.length > 0 ? (
+                <Select value={selectedVehicleId} onValueChange={setSelectedVehicleId}>
+                  <SelectTrigger className="bg-surface-2 border-border">
+                    <SelectValue placeholder="Select vehicle" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">No vehicle</SelectItem>
+                    {vehicles.map((v: any) => (
+                      <SelectItem key={v.id} value={v.id}>
+                        {[v.year, v.make, v.model].filter(Boolean).join(" ") || v.type}
+                        {v.colour ? ` (${v.colour})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <Select value={newVehicle.type} onValueChange={v => setNewVehicle(p => ({ ...p, type: v as any }))}>
+                    <SelectTrigger className="bg-surface-2 border-border"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="car">Car</SelectItem>
+                      <SelectItem value="suv">SUV</SelectItem>
+                      <SelectItem value="truck">Truck</SelectItem>
+                      <SelectItem value="van">Van</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input placeholder="Year" value={newVehicle.year} onChange={e => setNewVehicle(p => ({ ...p, year: e.target.value }))} className="bg-surface-2 border-border" />
+                  <Input placeholder="Make" value={newVehicle.make} onChange={e => setNewVehicle(p => ({ ...p, make: e.target.value }))} className="bg-surface-2 border-border" />
+                  <Input placeholder="Model" value={newVehicle.model} onChange={e => setNewVehicle(p => ({ ...p, model: e.target.value }))} className="bg-surface-2 border-border" />
+                  <Input placeholder="Colour" value={newVehicle.colour} onChange={e => setNewVehicle(p => ({ ...p, colour: e.target.value }))} className="bg-surface-2 border-border" />
+                  <Input placeholder="Plate" value={newVehicle.licensePlate} onChange={e => setNewVehicle(p => ({ ...p, licensePlate: e.target.value }))} className="bg-surface-2 border-border" />
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* ── Line Items ── */}
+          <section>
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Services & Line Items</h3>
+              </div>
+            </div>
+
+            {/* Quick service shortcuts */}
+            <div className="flex flex-wrap gap-1.5 mb-3">
+              {QUICK_SERVICES.map(svc => (
+                <button
+                  key={svc.label}
+                  className="text-xs px-2.5 py-1 rounded-full border border-border hover:border-primary/40 hover:bg-primary/5 text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => addQuickService(svc)}
+                >
+                  + {svc.label}
+                </button>
+              ))}
+            </div>
+
+            <div className="space-y-2">
+              {lineItems.map((li, i) => (
+                <div key={i} className="flex gap-2 items-center">
+                  <Input
+                    placeholder="Description"
+                    value={li.description}
+                    onChange={e => updateLineItem(i, "description", e.target.value)}
+                    className="flex-1 bg-surface-2 border-border text-sm"
+                  />
+                  <div className="relative w-24 shrink-0">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                    <Input
+                      type="number"
+                      placeholder="0"
+                      value={li.price}
+                      onChange={e => updateLineItem(i, "price", e.target.value)}
+                      className="pl-6 bg-surface-2 border-border text-sm"
+                    />
+                  </div>
+                  {lineItems.length > 1 && (
+                    <button onClick={() => removeLineItem(i)} className="text-muted-foreground hover:text-red-400 transition-colors">
+                      <X className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <Button size="sm" variant="ghost" className="mt-2 text-xs text-muted-foreground hover:text-foreground gap-1.5" onClick={addLineItem}>
+              <Plus className="h-3 w-3" /> Add line item
+            </Button>
+
+            {/* Total */}
+            <div className="mt-3 border-t border-border pt-3 space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Auto total</span>
+                <span className="font-semibold">${autoTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
+                  <Checkbox
+                    checked={isManualTotal}
+                    onCheckedChange={(v) => setIsManualTotal(Boolean(v))}
+                    className="border-border"
+                  />
+                  Override total
+                </label>
+                {isManualTotal && (
+                  <div className="relative flex-1">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                    <Input
+                      type="number"
+                      placeholder="0.00"
+                      value={totalOverride}
+                      onChange={e => setTotalOverride(e.target.value)}
+                      className="pl-6 bg-surface-2 border-border text-sm"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          </section>
+
+          {/* ── Booking Details ── */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <CalendarDays className="h-4 w-4 text-primary" />
+              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Booking Details</h3>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Source</label>
+                <Select value={source} onValueChange={v => setSource(v as any)}>
+                  <SelectTrigger className="bg-surface-2 border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="phone">Phone</SelectItem>
+                    <SelectItem value="walkin">Walk-in</SelectItem>
+                    <SelectItem value="online">Online</SelectItem>
+                    <SelectItem value="referral">Referral</SelectItem>
+                    <SelectItem value="other">Other</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs text-muted-foreground">Status</label>
+                <Select value={status} onValueChange={v => setStatus(v as any)}>
+                  <SelectTrigger className="bg-surface-2 border-border"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="confirmed">Confirmed</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Appointment Date &amp; Time</label>
+                <Input
+                  type="datetime-local"
+                  value={appointmentAt}
+                  onChange={e => setAppointmentAt(e.target.value)}
+                  className="bg-surface-2 border-border"
+                />
+              </div>
+              <div className="space-y-1 sm:col-span-2">
+                <label className="text-xs text-muted-foreground">Notes</label>
+                <textarea
+                  rows={3}
+                  placeholder="Internal notes about this booking…"
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface-2 px-3 py-2 text-sm resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+              </div>
+            </div>
+          </section>
+
+          <Button
+            className="w-full bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+            onClick={handleSubmit}
+            disabled={createBooking.isPending}
+          >
+            {createBooking.isPending ? <><RefreshCw className="h-4 w-4 animate-spin" /> Creating…</> : <>
+              <Plus className="h-4 w-4" /> Create Booking
+            </>}
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
 function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [showManualBooking, setShowManualBooking] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<string>("")
   const [bulkWorking, setBulkWorking] = useState(false);
@@ -837,6 +1306,19 @@ function AdminDashboard() {
         </TabsList>
 
         <TabsContent value="bookings">
+          {/* Bookings tab header */}
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm text-muted-foreground">{bookings.length} booking{bookings.length !== 1 ? "s" : ""}</p>
+            <Button
+              size="sm"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+              onClick={() => setShowManualBooking(true)}
+            >
+              <Plus className="h-4 w-4" />
+              New Booking
+            </Button>
+          </div>
+
           {/* Bulk action toolbar — only visible when rows are selected */}
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-3 mb-3 px-4 py-3 bg-primary/10 border border-primary/30 rounded-lg">
@@ -904,6 +1386,7 @@ function AdminDashboard() {
                   <TableHead>Customer</TableHead>
                   <TableHead>Vehicle</TableHead>
                   <TableHead>Service</TableHead>
+                  <TableHead>Source</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Total</TableHead>
                   <TableHead></TableHead>
@@ -930,6 +1413,11 @@ function AdminDashboard() {
                     <TableCell className="text-sm">{b.vehicle?.year} {b.vehicle?.model}</TableCell>
                     <TableCell className="text-sm max-w-[160px] truncate">{b.items?.[0]?.itemName || "Custom"}</TableCell>
                     <TableCell>
+                      <Badge variant="outline" className={`text-xs ${SOURCE_BADGE_CLASS[b.source ?? "online"] ?? SOURCE_BADGE_CLASS.other}`}>
+                        {SOURCE_LABELS[b.source ?? "online"] ?? b.source}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <Badge variant="outline" className={statusBadgeClass(b.status)}>
                         {b.status}
                       </Badge>
@@ -949,7 +1437,7 @@ function AdminDashboard() {
                 ))}
                 {bookings.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
                       No bookings yet.
                     </TableCell>
                   </TableRow>
@@ -1222,6 +1710,10 @@ function AdminDashboard() {
         booking={selectedBooking}
         open={!!selectedBooking}
         onClose={() => setSelectedBooking(null)}
+      />
+      <ManualBookingSheet
+        open={showManualBooking}
+        onClose={() => setShowManualBooking(false)}
       />
     </div>
   );

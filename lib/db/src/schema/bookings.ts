@@ -16,9 +16,16 @@ export const bookingsTable = pgTable("bookings", {
   notes: text("notes"),
   ghlContactId: text("ghl_contact_id"),
   ghlOpportunityId: text("ghl_opportunity_id"),
+  // Booking origin — online | phone | walkin | referral | other
+  source: text("source").notNull().default("online"),
+  // True when admin manually overrode the total instead of summing line items
+  isManualPriceOverride: boolean("is_manual_price_override").notNull().default(false),
+  // True for bookings created through the admin manual booking form
+  createdByAdmin: boolean("created_by_admin").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check("booking_status_check", sql`${t.status} IN ('pending','confirmed','completed','cancelled')`),
+  check("booking_source_check", sql`${t.source} IN ('online','phone','walkin','referral','other')`),
 ]);
 
 export const bookingItemsTable = pgTable("booking_items", {
@@ -30,7 +37,8 @@ export const bookingItemsTable = pgTable("booking_items", {
   quantity: integer("quantity").notNull().default(1),
   isQuoteBased: boolean("is_quote_based").notNull().default(false),
 }, (t) => [
-  check("booking_item_type_check", sql`${t.itemType} IN ('service','addon','quote','promo')`),
+  // 'manual' added for admin free-form line items
+  check("booking_item_type_check", sql`${t.itemType} IN ('service','addon','quote','promo','manual')`),
 ]);
 
 export const insertBookingSchema = createInsertSchema(bookingsTable).omit({ id: true, createdAt: true });

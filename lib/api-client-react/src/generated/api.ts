@@ -20,7 +20,9 @@ import type {
   AbandonBooking200,
   AbandonBookingBody,
   AddOn,
+  AdminCreateBookingBody,
   AdminListBookingsParams,
+  AdminSearchCustomersParams,
   AdminUpdateAddOnBody,
   AdminUpdateBookingBody,
   AdminUpdateCustomerBody,
@@ -35,6 +37,7 @@ import type {
   CreateVehicleBody,
   Customer,
   CustomerDashboard,
+  CustomerSearchResult,
   GetAnalyticsParams,
   GetCalendarAvailabilityParams,
   GetCalendarNextSlotsParams,
@@ -2413,6 +2416,92 @@ export function useAdminListBookings<
 }
 
 /**
+ * @summary Create a manual booking from the admin panel
+ */
+export const getAdminCreateBookingUrl = () => {
+  return `/api/admin/bookings`;
+};
+
+export const adminCreateBooking = async (
+  adminCreateBookingBody: AdminCreateBookingBody,
+  options?: RequestInit,
+): Promise<Booking> => {
+  return customFetch<Booking>(getAdminCreateBookingUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminCreateBookingBody),
+  });
+};
+
+export const getAdminCreateBookingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminCreateBooking>>,
+    TError,
+    { data: BodyType<AdminCreateBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminCreateBooking>>,
+  TError,
+  { data: BodyType<AdminCreateBookingBody> },
+  TContext
+> => {
+  const mutationKey = ["adminCreateBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminCreateBooking>>,
+    { data: BodyType<AdminCreateBookingBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adminCreateBooking(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminCreateBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminCreateBooking>>
+>;
+export type AdminCreateBookingMutationBody = BodyType<AdminCreateBookingBody>;
+export type AdminCreateBookingMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create a manual booking from the admin panel
+ */
+export const useAdminCreateBooking = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminCreateBooking>>,
+    TError,
+    { data: BodyType<AdminCreateBookingBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminCreateBooking>>,
+  TError,
+  { data: BodyType<AdminCreateBookingBody> },
+  TContext
+> => {
+  return useMutation(getAdminCreateBookingMutationOptions(options));
+};
+
+/**
  * @summary Update booking (confirm, complete, cancel, condition score, photos)
  */
 export const getAdminUpdateBookingUrl = (id: string) => {
@@ -2498,6 +2587,109 @@ export const useAdminUpdateBooking = <
 > => {
   return useMutation(getAdminUpdateBookingMutationOptions(options));
 };
+
+/**
+ * @summary Search customers by name, email, or phone
+ */
+export const getAdminSearchCustomersUrl = (
+  params: AdminSearchCustomersParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/customers/search?${stringifiedParams}`
+    : `/api/admin/customers/search`;
+};
+
+export const adminSearchCustomers = async (
+  params: AdminSearchCustomersParams,
+  options?: RequestInit,
+): Promise<CustomerSearchResult[]> => {
+  return customFetch<CustomerSearchResult[]>(
+    getAdminSearchCustomersUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAdminSearchCustomersQueryKey = (
+  params?: AdminSearchCustomersParams,
+) => {
+  return [`/api/admin/customers/search`, ...(params ? [params] : [])] as const;
+};
+
+export const getAdminSearchCustomersQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminSearchCustomers>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AdminSearchCustomersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminSearchCustomers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminSearchCustomersQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminSearchCustomers>>
+  > = ({ signal }) =>
+    adminSearchCustomers(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminSearchCustomers>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminSearchCustomersQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminSearchCustomers>>
+>;
+export type AdminSearchCustomersQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Search customers by name, email, or phone
+ */
+
+export function useAdminSearchCustomers<
+  TData = Awaited<ReturnType<typeof adminSearchCustomers>>,
+  TError = ErrorType<unknown>,
+>(
+  params: AdminSearchCustomersParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminSearchCustomers>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminSearchCustomersQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary List all customers with GHL sync status

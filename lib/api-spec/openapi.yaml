@@ -589,6 +589,11 @@ paths:
           schema:
             type: string
             enum: [pending, confirmed, completed, cancelled]
+        - name: source
+          in: query
+          schema:
+            type: string
+            enum: [online, phone, walkin, referral, other]
         - name: from
           in: query
           schema:
@@ -612,6 +617,23 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Booking"
+    post:
+      operationId: adminCreateBooking
+      tags: [admin]
+      summary: Create a manual booking from the admin panel
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdminCreateBookingBody"
+      responses:
+        "201":
+          description: Created booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Booking"
 
   /admin/bookings/{id}:
     patch:
@@ -637,6 +659,27 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Booking"
+
+  /admin/customers/search:
+    get:
+      operationId: adminSearchCustomers
+      tags: [admin]
+      summary: Search customers by name, email, or phone
+      parameters:
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching customers with their vehicles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CustomerSearchResult"
 
   /admin/customers:
     get:
@@ -927,11 +970,22 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/BookingItem"
+        source:
+          type: string
+          enum: [online, phone, walkin, referral, other]
+          nullable: true
+        isManualPriceOverride:
+          type: boolean
+        createdByAdmin:
+          type: boolean
         customer:
           $ref: "#/components/schemas/Customer"
           nullable: true
         vehicle:
           $ref: "#/components/schemas/Vehicle"
+          nullable: true
+        serviceHistory:
+          $ref: "#/components/schemas/ServiceHistorySummary"
           nullable: true
       required: [id, status, depositPaid, createdAt, items]
 
@@ -944,7 +998,7 @@ components:
           type: string
         itemType:
           type: string
-          enum: [service, addon, quote, promo]
+          enum: [service, addon, quote, promo, manual]
         itemName:
           type: string
         unitPrice:
@@ -1457,3 +1511,104 @@ components:
         phone:
           type: string
       required: [name, phone]
+
+    AdminCreateBookingBody:
+      type: object
+      properties:
+        customerId:
+          type: string
+          description: Existing customer ID (mutually exclusive with newCustomer)
+          nullable: true
+        newCustomer:
+          type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+            phone:
+              type: string
+          required: [name]
+        vehicleId:
+          type: string
+          nullable: true
+        newVehicle:
+          $ref: "#/components/schemas/CreateVehicleBody"
+        appointmentAt:
+          type: string
+          nullable: true
+        source:
+          type: string
+          enum: [online, phone, walkin, referral, other]
+        notes:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [pending, confirmed, completed]
+        lineItems:
+          type: array
+          items:
+            $ref: "#/components/schemas/AdminManualLineItem"
+        totalOverride:
+          type: number
+          nullable: true
+        isManualPriceOverride:
+          type: boolean
+        conditionScore:
+          type: integer
+          nullable: true
+        beforePhotoUrls:
+          type: array
+          items:
+            type: string
+        afterPhotoUrls:
+          type: array
+          items:
+            type: string
+      required: [source, lineItems]
+
+    AdminManualLineItem:
+      type: object
+      properties:
+        description:
+          type: string
+        price:
+          type: number
+      required: [description, price]
+
+    CustomerSearchResult:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        vehicles:
+          type: array
+          items:
+            $ref: "#/components/schemas/Vehicle"
+      required: [id, vehicles]
+
+    ServiceHistorySummary:
+      type: object
+      properties:
+        conditionScore:
+          type: integer
+          nullable: true
+        beforePhotoUrls:
+          type: array
+          items:
+            type: string
+        afterPhotoUrls:
+          type: array
+          items:
+            type: string
+      required: [beforePhotoUrls, afterPhotoUrls]

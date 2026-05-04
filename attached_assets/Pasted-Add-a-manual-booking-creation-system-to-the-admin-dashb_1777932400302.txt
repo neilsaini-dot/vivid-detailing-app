@@ -1,0 +1,70 @@
+Add a manual booking creation system to the admin dashboard. This should not change anything about the existing customer-facing booking flow or pricing engine. All changes are admin-side only.
+1. Manual Booking Button
+Add a "New Manual Booking" button to the admin bookings list page. It opens a full-page form or modal.
+2. Customer Selection
+At the top of the form:
+
+Search existing customers by name, email, or phone
+If no match found show a "Add New Customer" option that collects name, email, phone
+Selecting or creating a customer auto-fills their known vehicles if any exist
+Allow adding a new vehicle inline (type, year, make, model, colour)
+
+3. Booking Details
+
+Service date and time picker
+Source field: dropdown with options Online, Phone, Walk-in, Referral, Other
+Internal notes field
+
+4. Free-Form Line Item Builder
+This is the core of the manual booking. Build a dynamic line item system:
+
+Each line item has: Description (free text), Price (numeric input)
+"Add Line Item" button adds a new empty row
+Each row has a delete button
+Pre-populate with a dropdown of standard services as a shortcut — selecting one fills the description and price but both remain fully editable
+Line items are stored as JSON in the booking_items table using item_type: "manual"
+
+5. Total Calculation
+Below the line items show:
+
+Auto-calculated subtotal (sum of all line items)
+A toggle: "Calculate automatically" vs "Override total manually"
+When override is selected: show a single editable total field
+When auto: total = sum of line items
+The final total (whether auto or override) is what gets saved to bookings.total_estimate
+Store a boolean field on the booking: is_manual_price_override (true/false)
+
+6. Status on Creation
+Allow admin to set initial booking status on creation:
+
+Pending
+Confirmed
+Completed
+
+If set to Completed immediately (walk-in already done), also show:
+
+Condition score input (0-100)
+Before photo upload
+After photo upload
+
+7. Database Changes
+Add these fields to the bookings table if not already present:
+
+source (text): online | phone | walkin | referral | other
+is_manual_price_override (boolean): default false
+created_by_admin (boolean): default false
+
+8. GHL Webhook
+When a manual booking is saved, fire the existing GHL_WEBHOOK_URL with the same payload structure as online bookings. Add "source" field to the payload. If status is set to Completed on creation, also fire GHL_BOOKING_COMPLETED_WEBHOOK_URL.
+9. Customer Dashboard
+Manual bookings must appear in the customer's dashboard service history exactly like online bookings. If the customer was newly created during manual entry, send them a magic link email inviting them to create their portal account using the existing magic link email template.
+10. Admin Bookings List
+In the admin bookings list add a "Source" badge next to each booking showing Online / Phone / Walk-in / Referral so you can see at a glance how each booking came in. Make the source column filterable.
+Important rules:
+
+Do not modify the customer-facing booking flow in any way
+Do not modify the pricing engine
+Do not modify existing webhook payload structure — only add the source field
+All new database fields should have sensible defaults so existing records are not affected
+After making changes run tsc --noEmit to confirm zero TypeScript errors
+List every file changed when done

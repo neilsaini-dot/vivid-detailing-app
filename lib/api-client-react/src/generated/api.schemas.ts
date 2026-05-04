@@ -88,6 +88,18 @@ export const BookingStatus = {
   cancelled: "cancelled",
 } as const;
 
+export type BookingSource =
+  | (typeof BookingSource)[keyof typeof BookingSource]
+  | null;
+
+export const BookingSource = {
+  online: "online",
+  phone: "phone",
+  walkin: "walkin",
+  referral: "referral",
+  other: "other",
+} as const;
+
 export type BookingItemItemType =
   (typeof BookingItemItemType)[keyof typeof BookingItemItemType];
 
@@ -96,6 +108,7 @@ export const BookingItemItemType = {
   addon: "addon",
   quote: "quote",
   promo: "promo",
+  manual: "manual",
 } as const;
 
 export interface BookingItem {
@@ -141,6 +154,12 @@ export interface Vehicle {
   createdAt: string;
 }
 
+export interface ServiceHistorySummary {
+  conditionScore?: number | null;
+  beforePhotoUrls: string[];
+  afterPhotoUrls: string[];
+}
+
 export interface Booking {
   id: string;
   customerId?: string | null;
@@ -154,8 +173,12 @@ export interface Booking {
   ghlOpportunityId?: string | null;
   createdAt: string;
   items: BookingItem[];
+  source?: BookingSource;
+  isManualPriceOverride?: boolean;
+  createdByAdmin?: boolean;
   customer?: Customer | null;
   vehicle?: Vehicle | null;
+  serviceHistory?: ServiceHistorySummary | null;
 }
 
 export interface UpsertCustomerBody {
@@ -395,6 +418,63 @@ export interface CaptureLeadBody {
   phone: string;
 }
 
+export type AdminCreateBookingBodyNewCustomer = {
+  name: string;
+  email?: string;
+  phone?: string;
+};
+
+export type AdminCreateBookingBodySource =
+  (typeof AdminCreateBookingBodySource)[keyof typeof AdminCreateBookingBodySource];
+
+export const AdminCreateBookingBodySource = {
+  online: "online",
+  phone: "phone",
+  walkin: "walkin",
+  referral: "referral",
+  other: "other",
+} as const;
+
+export type AdminCreateBookingBodyStatus =
+  (typeof AdminCreateBookingBodyStatus)[keyof typeof AdminCreateBookingBodyStatus];
+
+export const AdminCreateBookingBodyStatus = {
+  pending: "pending",
+  confirmed: "confirmed",
+  completed: "completed",
+} as const;
+
+export interface AdminManualLineItem {
+  description: string;
+  price: number;
+}
+
+export interface AdminCreateBookingBody {
+  /** Existing customer ID (mutually exclusive with newCustomer) */
+  customerId?: string | null;
+  newCustomer?: AdminCreateBookingBodyNewCustomer;
+  vehicleId?: string | null;
+  newVehicle?: CreateVehicleBody;
+  appointmentAt?: string | null;
+  source: AdminCreateBookingBodySource;
+  notes?: string | null;
+  status?: AdminCreateBookingBodyStatus;
+  lineItems: AdminManualLineItem[];
+  totalOverride?: number | null;
+  isManualPriceOverride?: boolean;
+  conditionScore?: number | null;
+  beforePhotoUrls?: string[];
+  afterPhotoUrls?: string[];
+}
+
+export interface CustomerSearchResult {
+  id: string;
+  name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  vehicles: Vehicle[];
+}
+
 export type GetCalendarAvailabilityParams = {
   /**
    * Date in YYYY-MM-DD format
@@ -450,6 +530,7 @@ export type AbandonBooking200 = {
 
 export type AdminListBookingsParams = {
   status?: AdminListBookingsStatus;
+  source?: AdminListBookingsSource;
   from?: string;
   to?: string;
   serviceCategory?: string;
@@ -464,6 +545,21 @@ export const AdminListBookingsStatus = {
   completed: "completed",
   cancelled: "cancelled",
 } as const;
+
+export type AdminListBookingsSource =
+  (typeof AdminListBookingsSource)[keyof typeof AdminListBookingsSource];
+
+export const AdminListBookingsSource = {
+  online: "online",
+  phone: "phone",
+  walkin: "walkin",
+  referral: "referral",
+  other: "other",
+} as const;
+
+export type AdminSearchCustomersParams = {
+  q: string;
+};
 
 export type GetAnalyticsParams = {
   from?: string;

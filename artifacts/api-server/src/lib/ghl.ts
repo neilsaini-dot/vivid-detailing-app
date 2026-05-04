@@ -147,6 +147,31 @@ export async function sendGhlBookingCompleted(payload: GhlBookingCompletedPayloa
   }
 }
 
+export interface GhlMagicLinkPayload {
+  event: "magic_link_requested";
+  contact: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  magicLinkUrl: string;
+  source: "vivid-app";
+}
+
+// Magic link invite — goes to GHL_MAGIC_LINK_WEBHOOK_URL
+export async function sendGhlMagicLink(payload: GhlMagicLinkPayload): Promise<void> {
+  if (!GHL_MAGIC_LINK_WEBHOOK_URL) {
+    logger.warn("GHL_MAGIC_LINK_WEBHOOK_URL not configured - skipping magic link webhook");
+    return;
+  }
+  try {
+    await postTo(GHL_MAGIC_LINK_WEBHOOK_URL, payload, "magic_link");
+  } catch (err) {
+    logger.error({ err }, "Failed to send GHL magic link webhook");
+  }
+}
+
 // Booking confirmed — goes to dedicated GHL_BOOKING_CONFIRMED_WEBHOOK_URL
 // Falls back to GHL_WEBHOOK_URL if the dedicated URL is not configured
 export async function sendGhlBookingConfirmed(payload: GhlBookingConfirmedPayload): Promise<void> {

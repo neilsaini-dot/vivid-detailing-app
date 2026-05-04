@@ -785,16 +785,10 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => { if (!open) resetForm(); }, [open, resetForm]);
 
   const handleSelectCustomer = (c: any) => {
-    // Defer all state updates to the next tick so Radix UI's pointer-event
-    // dismissal logic fires *before* the search list unmounts. Without this,
-    // the list disappears mid-event and Radix misreads it as an outside click,
-    // silently closing the Sheet.
-    setTimeout(() => {
-      setSelectedCustomer(c);
-      setCustomerSearch("");
-      setVehicleMode("select");
-      setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
-    }, 0);
+    setSelectedCustomer(c);
+    setCustomerSearch("");
+    setVehicleMode("select");
+    setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
   };
 
   const addLineItem = () => setLineItems(prev => [...prev, { description: "", price: "" }]);
@@ -871,6 +865,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
         className="w-full sm:max-w-xl overflow-y-auto bg-background border-border p-0"
         onPointerDownOutside={(e) => e.preventDefault()}
         onFocusOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
       >
         <SheetHeader className="px-6 py-5 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">

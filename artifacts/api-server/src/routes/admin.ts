@@ -288,13 +288,27 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     if (body.appointmentAt) updates.appointmentAt = new Date(body.appointmentAt);
     if (body.notes !== undefined) updates.notes = body.notes;
 
-    const [updated] = await db
-      .update(bookingsTable)
-      .set(updates)
-      .where(eq(bookingsTable.id, id))
-      .returning();
-
-    if (!updated) return res.status(404).json({ error: "Not found" });
+    // Only run UPDATE when there are booking-level fields to change.
+    // Photo-only saves send no booking fields, which would cause Drizzle
+    // to throw "No values to set" on an empty UPDATE.
+    let updated: typeof bookingsTable.$inferSelect;
+    if (Object.keys(updates).length > 0) {
+      const [row] = await db
+        .update(bookingsTable)
+        .set(updates)
+        .where(eq(bookingsTable.id, id))
+        .returning();
+      if (!row) return res.status(404).json({ error: "Not found" });
+      updated = row;
+    } else {
+      const [row] = await db
+        .select()
+        .from(bookingsTable)
+        .where(eq(bookingsTable.id, id))
+        .limit(1);
+      if (!row) return res.status(404).json({ error: "Not found" });
+      updated = row;
+    }
 
     // Fire completion webhook when status transitions to "completed"
     if (body.status === "completed") {

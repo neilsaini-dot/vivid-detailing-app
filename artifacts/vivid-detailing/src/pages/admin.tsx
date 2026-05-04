@@ -721,7 +721,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
 
   // Vehicle state
   const [vehicleMode, setVehicleMode] = useState<"select" | "new">("select");
-  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("");
+  const [selectedVehicleId, setSelectedVehicleId] = useState<string>("__none__");
   const [newVehicle, setNewVehicle] = useState({ type: "car" as const, year: "", make: "", model: "", colour: "", licensePlate: "" });
 
   // Line items
@@ -771,7 +771,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
     setSelectedCustomer(null);
     setNewCustomerName(""); setNewCustomerEmail(""); setNewCustomerPhone("");
     setVehicleMode("select");
-    setSelectedVehicleId("");
+    setSelectedVehicleId("__none__");
     setNewVehicle({ type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
     setLineItems([{ description: "", price: "" }]);
     setSource("phone");
@@ -785,12 +785,10 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => { if (!open) resetForm(); }, [open, resetForm]);
 
   const handleSelectCustomer = (c: any) => {
-    console.log("[DEBUG] handleSelectCustomer fired", c?.name, c?.id);
     setSelectedCustomer(c);
     setCustomerSearch("");
     setVehicleMode("select");
-    setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
-    console.log("[DEBUG] state updates dispatched");
+    setSelectedVehicleId(c.vehicles?.[0]?.id ?? "__none__");
   };
 
   const addLineItem = () => setLineItems(prev => [...prev, { description: "", price: "" }]);
@@ -831,7 +829,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
 
       if (selectedCustomer) {
         payload.customerId = selectedCustomer.id;
-        if (vehicleMode === "select" && selectedVehicleId) payload.vehicleId = selectedVehicleId;
+        if (vehicleMode === "select" && selectedVehicleId && selectedVehicleId !== "__none__") payload.vehicleId = selectedVehicleId;
         else if (vehicleMode === "new" && newVehicle.make) payload.newVehicle = {
           ...newVehicle,
           year: newVehicle.year ? parseInt(newVehicle.year) : null,
@@ -861,13 +859,13 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   const vehicles = selectedCustomer?.vehicles ?? [];
 
   return (
-    <Sheet open={open} onOpenChange={(v) => { console.log("[DEBUG] Sheet onOpenChange:", v); if (!v) onClose(); }}>
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-xl overflow-y-auto bg-background border-border p-0"
-        onPointerDownOutside={(e) => { console.log("[DEBUG] onPointerDownOutside"); e.preventDefault(); }}
-        onFocusOutside={(e) => { console.log("[DEBUG] onFocusOutside"); e.preventDefault(); }}
-        onInteractOutside={(e) => { console.log("[DEBUG] onInteractOutside"); e.preventDefault(); }}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
       >
         <SheetHeader className="px-6 py-5 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
@@ -1020,7 +1018,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                     <SelectValue placeholder="Select vehicle" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">No vehicle</SelectItem>
+                    <SelectItem value="__none__">No vehicle</SelectItem>
                     {vehicles.map((v: any) => (
                       <SelectItem key={v.id} value={v.id}>
                         {[v.year, v.make, v.model].filter(Boolean).join(" ") || v.type}

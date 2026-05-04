@@ -716,10 +716,16 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
     { query: { enabled: dupCheckEnabled } as any }
   );
 
+  const HST_RATE = 0.15; // PEI HST
+
   const autoTotal = useMemo(() =>
     lineItems.reduce((sum, li) => sum + (parseFloat(li.price) || 0), 0),
     [lineItems]
   );
+
+  const subtotal = isManualTotal && totalOverride ? parseFloat(totalOverride) || 0 : autoTotal;
+  const hstAmount = subtotal * HST_RATE;
+  const grandTotal = subtotal + hstAmount;
 
   const resetForm = useCallback(() => {
     setCustomerMode("search");
@@ -1055,10 +1061,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
 
             {/* Total */}
             <div className="mt-3 border-t border-border pt-3 space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Auto total</span>
-                <span className="font-semibold">${autoTotal.toFixed(2)}</span>
-              </div>
+              {/* Override checkbox + input */}
               <div className="flex items-center gap-3">
                 <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer">
                   <Checkbox
@@ -1066,7 +1069,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                     onCheckedChange={(v) => setIsManualTotal(Boolean(v))}
                     className="border-border"
                   />
-                  Override total
+                  Override subtotal
                 </label>
                 {isManualTotal && (
                   <div className="relative flex-1">
@@ -1080,6 +1083,22 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                     />
                   </div>
                 )}
+              </div>
+
+              {/* Subtotal / HST / Grand total breakdown */}
+              <div className="rounded-lg bg-surface-2 border border-border px-3 py-2.5 space-y-1.5 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal</span>
+                  <span>${subtotal.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between text-muted-foreground">
+                  <span>HST (15%)</span>
+                  <span>${hstAmount.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between font-semibold text-foreground border-t border-border pt-1.5">
+                  <span>Total (incl. HST)</span>
+                  <span>${grandTotal.toFixed(2)}</span>
+                </div>
               </div>
             </div>
           </section>

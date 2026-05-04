@@ -647,6 +647,14 @@ const SOURCE_BADGE_CLASS: Record<string, string> = {
   other: "text-muted-foreground border-border",
 };
 
+// ─── Phone formatting helpers ─────────────────────────────────────────────────
+function formatPhoneNumber(raw: string): string {
+  const digits = raw.replace(/\D/g, "").slice(0, 10);
+  if (digits.length <= 3) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 3)}-${digits.slice(3)}`;
+  return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
 // ─── Manual Booking Sheet ─────────────────────────────────────────────────────
 type LineItem = { description: string; price: string };
 const QUICK_SERVICES = [
@@ -883,7 +891,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
             {customerMode === "new" && (
               <div className="grid grid-cols-1 gap-3">
                 <Input placeholder="Full name *" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)} className="bg-surface-2 border-border" />
-                <Input placeholder="Phone" value={newCustomerPhone} onChange={e => setNewCustomerPhone(e.target.value)} className="bg-surface-2 border-border" />
+                <Input placeholder="Phone (e.g. 902-267-7775)" value={newCustomerPhone} onChange={e => setNewCustomerPhone(formatPhoneNumber(e.target.value))} className="bg-surface-2 border-border" />
                 <Input placeholder="Email" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)} className="bg-surface-2 border-border" />
               </div>
             )}

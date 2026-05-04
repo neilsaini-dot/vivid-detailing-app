@@ -896,6 +896,10 @@ router.get("/admin/customers/search", async (req, res) => {
   try {
     const { q } = AdminSearchCustomersQueryParams.parse(req.query);
     const pattern = `%${q}%`;
+    // Strip all non-numeric chars from both stored phone and the query so that
+    // "9022677775", "902-267-7775", and "(902) 267-7775" all match each other.
+    const digitsOnly = q.replace(/\D/g, "");
+    const phonePattern = `%${digitsOnly}%`;
     const customers = await db
       .select()
       .from(customersTable)
@@ -904,6 +908,10 @@ router.get("/admin/customers/search", async (req, res) => {
           ilike(customersTable.name, pattern),
           ilike(customersTable.email, pattern),
           ilike(customersTable.phone, pattern),
+          // Normalised phone match — only run when there are digits to compare
+          digitsOnly.length >= 2
+            ? sql`regexp_replace(${customersTable.phone}, '[^0-9]', '', 'g') ILIKE ${phonePattern}`
+            : sql`false`,
         )
       )
       .orderBy(asc(customersTable.name))

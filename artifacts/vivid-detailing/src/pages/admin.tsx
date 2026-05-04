@@ -748,10 +748,16 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => { if (!open) resetForm(); }, [open, resetForm]);
 
   const handleSelectCustomer = (c: any) => {
-    setSelectedCustomer(c);
-    setCustomerSearch("");
-    setVehicleMode("select");
-    setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
+    // Defer all state updates to the next tick so Radix UI's pointer-event
+    // dismissal logic fires *before* the search list unmounts. Without this,
+    // the list disappears mid-event and Radix misreads it as an outside click,
+    // silently closing the Sheet.
+    setTimeout(() => {
+      setSelectedCustomer(c);
+      setCustomerSearch("");
+      setVehicleMode("select");
+      setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
+    }, 0);
   };
 
   const addLineItem = () => setLineItems(prev => [...prev, { description: "", price: "" }]);
@@ -882,9 +888,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                             <button
                               type="button"
                               className="w-full text-left px-4 py-3 hover:bg-surface-2 border-b border-border last:border-0 transition-colors"
-                              // Use onPointerDown so the selection is captured before the list
-                              // unmounts, which would otherwise trick Radix into closing the Sheet.
-                              onPointerDown={(e) => { e.preventDefault(); handleSelectCustomer(c); }}
+                              onClick={() => handleSelectCustomer(c)}
                             >
                               <p className="font-medium text-sm">{c.name ?? "—"}</p>
                               <p className="text-xs text-muted-foreground">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
@@ -934,7 +938,7 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                           <button
                             type="button"
                             className="shrink-0 text-xs text-primary underline hover:no-underline"
-                            onPointerDown={(e) => { e.preventDefault(); handleSelectCustomer(c); setCustomerMode("search"); }}
+                            onClick={() => { setCustomerMode("search"); handleSelectCustomer(c); }}
                           >
                             Use this
                           </button>

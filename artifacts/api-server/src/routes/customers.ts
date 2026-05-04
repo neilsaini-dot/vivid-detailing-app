@@ -447,6 +447,7 @@ export function formatBooking(b: any) {
     })),
     customer: b.customer ? formatCustomer(b.customer) : null,
     vehicle: b.vehicle ? formatVehicle(b.vehicle) : null,
+    serviceHistory: b.serviceHistory ?? null,
   };
 }
 

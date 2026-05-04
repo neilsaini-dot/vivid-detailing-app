@@ -30,7 +30,7 @@ import {
 } from "@workspace/api-zod";
 import { ilike, or } from "drizzle-orm";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
-import { sendGhlBookingConfirmed, sendGhlBookingCompleted } from "../lib/ghl";
+import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
 import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
@@ -1068,6 +1068,38 @@ router.post("/admin/bookings", async (req, res) => {
           isQuoteBased: false,
         }))
       );
+    }
+
+    // ── 5.5 Send portal magic link to customer ────────────────────
+    // Always fire for every manual booking so the customer can track it,
+    // regardless of status. Uses the booking ID as the ?ref= parameter.
+    if (customerRecord) {
+      try {
+        const rawDomain = process.env.NEXT_PUBLIC_APP_URL
+          ?? process.env.REPLIT_DOMAINS?.split(",")[0]?.trim()
+          ?? "";
+        const appUrl = rawDomain.startsWith("http")
+          ? rawDomain.replace(/\/$/, "")
+          : rawDomain ? `https://${rawDomain}` : "";
+        const portalUrl = appUrl
+          ? `${appUrl}/dashboard?ref=${booking.id}`
+          : `/dashboard?ref=${booking.id}`;
+
+        const nameParts = (customerRecord.name ?? "").trim().split(" ");
+        await sendGhlMagicLink({
+          event: "magic_link_requested",
+          contact: {
+            firstName: nameParts[0] ?? "",
+            lastName: nameParts.slice(1).join(" ") ?? "",
+            email: customerRecord.email ?? "",
+            phone: customerRecord.phone ?? "",
+          },
+          magicLinkUrl: portalUrl,
+          source: "vivid-app",
+        });
+      } catch (err) {
+        req.log.warn({ err }, "Magic link webhook failed for manual booking");
+      }
     }
 
     // ── 6. Create service history if photos provided ──────────────

@@ -704,11 +704,12 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
     { query: { enabled: searchEnabled } as any }
   );
 
-  // Duplicate detection when creating a new customer — prefer phone digits, fall back to name
+  // Duplicate detection when creating a new customer — phone first, email second.
+  // Deliberately never falls back to name: two different people can share a name.
   const newCustomerPhoneDigits = newCustomerPhone.replace(/\D/g, "");
   const dupRaw = newCustomerPhoneDigits.length >= 6
     ? newCustomerPhone
-    : newCustomerName.trim().length >= 2 ? newCustomerName.trim() : "";
+    : newCustomerEmail.trim().includes("@") ? newCustomerEmail.trim() : "";
   const debouncedDupQuery = useDebounce(dupRaw, 400);
   const dupCheckEnabled = customerMode === "new" && debouncedDupQuery.length >= 2;
   const { data: dupResults = [] } = useAdminSearchCustomers(

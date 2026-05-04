@@ -785,10 +785,12 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   useEffect(() => { if (!open) resetForm(); }, [open, resetForm]);
 
   const handleSelectCustomer = (c: any) => {
+    console.log("[DEBUG] handleSelectCustomer fired", c?.name, c?.id);
     setSelectedCustomer(c);
     setCustomerSearch("");
     setVehicleMode("select");
     setSelectedVehicleId(c.vehicles?.[0]?.id ?? "");
+    console.log("[DEBUG] state updates dispatched");
   };
 
   const addLineItem = () => setLineItems(prev => [...prev, { description: "", price: "" }]);
@@ -859,13 +861,13 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   const vehicles = selectedCustomer?.vehicles ?? [];
 
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+    <Sheet open={open} onOpenChange={(v) => { console.log("[DEBUG] Sheet onOpenChange:", v); if (!v) onClose(); }}>
       <SheetContent
         side="right"
         className="w-full sm:max-w-xl overflow-y-auto bg-background border-border p-0"
-        onPointerDownOutside={(e) => e.preventDefault()}
-        onFocusOutside={(e) => e.preventDefault()}
-        onInteractOutside={(e) => e.preventDefault()}
+        onPointerDownOutside={(e) => { console.log("[DEBUG] onPointerDownOutside"); e.preventDefault(); }}
+        onFocusOutside={(e) => { console.log("[DEBUG] onFocusOutside"); e.preventDefault(); }}
+        onInteractOutside={(e) => { console.log("[DEBUG] onInteractOutside"); e.preventDefault(); }}
       >
         <SheetHeader className="px-6 py-5 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">

@@ -866,7 +866,12 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-xl overflow-y-auto bg-background border-border p-0">
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-xl overflow-y-auto bg-background border-border p-0"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onFocusOutside={(e) => e.preventDefault()}
+      >
         <SheetHeader className="px-6 py-5 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
             <SheetTitle className="text-lg font-bold">New Manual Booking</SheetTitle>

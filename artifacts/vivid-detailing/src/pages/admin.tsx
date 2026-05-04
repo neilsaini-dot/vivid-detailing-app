@@ -704,6 +704,18 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
     { query: { enabled: searchEnabled } as any }
   );
 
+  // Duplicate detection when creating a new customer — prefer phone digits, fall back to name
+  const newCustomerPhoneDigits = newCustomerPhone.replace(/\D/g, "");
+  const dupRaw = newCustomerPhoneDigits.length >= 6
+    ? newCustomerPhone
+    : newCustomerName.trim().length >= 2 ? newCustomerName.trim() : "";
+  const debouncedDupQuery = useDebounce(dupRaw, 400);
+  const dupCheckEnabled = customerMode === "new" && debouncedDupQuery.length >= 2;
+  const { data: dupResults = [] } = useAdminSearchCustomers(
+    { q: debouncedDupQuery },
+    { query: { enabled: dupCheckEnabled } as any }
+  );
+
   const autoTotal = useMemo(() =>
     lineItems.reduce((sum, li) => sum + (parseFloat(li.price) || 0), 0),
     [lineItems]
@@ -861,8 +873,11 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                         {(searchResults as any[]).map((c: any) => (
                           <li key={c.id}>
                             <button
+                              type="button"
                               className="w-full text-left px-4 py-3 hover:bg-surface-2 border-b border-border last:border-0 transition-colors"
-                              onClick={() => handleSelectCustomer(c)}
+                              // Use onPointerDown so the selection is captured before the list
+                              // unmounts, which would otherwise trick Radix into closing the Sheet.
+                              onPointerDown={(e) => { e.preventDefault(); handleSelectCustomer(c); }}
                             >
                               <p className="font-medium text-sm">{c.name ?? "—"}</p>
                               <p className="text-xs text-muted-foreground">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
@@ -889,10 +904,38 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
             )}
 
             {customerMode === "new" && (
-              <div className="grid grid-cols-1 gap-3">
-                <Input placeholder="Full name *" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)} className="bg-surface-2 border-border" />
-                <Input placeholder="Phone (e.g. 902-267-7775)" value={newCustomerPhone} onChange={e => setNewCustomerPhone(formatPhoneNumber(e.target.value))} className="bg-surface-2 border-border" />
-                <Input placeholder="Email" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)} className="bg-surface-2 border-border" />
+              <div className="space-y-3">
+                <div className="grid grid-cols-1 gap-3">
+                  <Input placeholder="Full name *" value={newCustomerName} onChange={e => setNewCustomerName(e.target.value)} className="bg-surface-2 border-border" />
+                  <Input placeholder="Phone (e.g. 902-267-7775)" value={newCustomerPhone} onChange={e => setNewCustomerPhone(formatPhoneNumber(e.target.value))} className="bg-surface-2 border-border" />
+                  <Input placeholder="Email" value={newCustomerEmail} onChange={e => setNewCustomerEmail(e.target.value)} className="bg-surface-2 border-border" />
+                </div>
+
+                {/* Duplicate warning — shown when an existing customer matches the entered phone/name */}
+                {(dupResults as any[]).length > 0 && (
+                  <div className="rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 space-y-2">
+                    <p className="text-xs font-semibold text-yellow-400 flex items-center gap-1.5">
+                      <span>⚠</span> Possible duplicate — existing customer{(dupResults as any[]).length > 1 ? "s" : ""} found:
+                    </p>
+                    <ul className="space-y-1">
+                      {(dupResults as any[]).map((c: any) => (
+                        <li key={c.id} className="flex items-center justify-between gap-2">
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium text-foreground truncate">{c.name ?? "—"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{[c.phone, c.email].filter(Boolean).join(" · ")}</p>
+                          </div>
+                          <button
+                            type="button"
+                            className="shrink-0 text-xs text-primary underline hover:no-underline"
+                            onPointerDown={(e) => { e.preventDefault(); handleSelectCustomer(c); setCustomerMode("search"); }}
+                          >
+                            Use this
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
             )}
           </section>

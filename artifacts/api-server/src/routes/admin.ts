@@ -59,6 +59,53 @@ function formatCompletedAt(date: Date): string {
   return `${get("month")} ${day}${ordinal}, ${get("year")} at ${get("hour")}:${get("minute")}${get("dayPeriod")}`;
 }
 
+/**
+ * Parse a naive datetime string (e.g. "2026-05-05T09:00" from a datetime-local
+ * input) as America/Halifax local time and return the correct UTC Date.
+ *
+ * Without this, Node.js treats the string as server-local (UTC) time, which
+ * shifts a 9:00 AM ADT entry to 9:00 AM UTC = 6:00 AM ADT on the calendar.
+ */
+function parseHalifaxDatetime(str: string): Date {
+  // Parse naively as UTC so we have a reference point near the right date.
+  const naive = new Date(str + "Z");
+
+  // Ask Intl what Halifax shows for that UTC instant.
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Halifax",
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(naive);
+  const gp = (t: string) => parseInt(parts.find(p => p.type === t)?.value ?? "0", 10);
+
+  // Reconstruct what Halifax-local reads for the naive UTC instant.
+  const halifaxAsUtcMs = Date.UTC(gp("year"), gp("month") - 1, gp("day"), gp("hour") % 24, gp("minute"), gp("second"));
+  // offsetMs = Halifax-behind-UTC (negative for ADT/AST).
+  const offsetMs = halifaxAsUtcMs - naive.getTime();
+  // Shift: the user *meant* `str` as Halifax time → subtract offset to get real UTC.
+  return new Date(naive.getTime() - offsetMs);
+}
+
+/**
+ * Format a UTC Date as "May 05, 2026 at 9:00am" in America/Halifax (ADT/AST)
+ * for display in GHL webhook payloads / emails.
+ */
+function formatHalifaxForGhl(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Halifax",
+    month: "long",
+    day: "2-digit",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).formatToParts(date);
+  const get = (t: string) => parts.find(p => p.type === t)?.value ?? "";
+  const ampm = get("dayPeriod").toLowerCase().replace(/\./g, ""); // "am" / "pm"
+  return `${get("month")} ${get("day")}, ${get("year")} at ${get("hour")}:${get("minute")}${ampm}`;
+}
+
 // ─── Services ─────────────────────────────────────────────────
 
 router.get("/admin/services", async (req, res) => {
@@ -576,7 +623,7 @@ router.post("/admin/bookings/:id/resync", async (req, res) => {
         services: serviceNames,
         addons: addonNames,
         vehicle: vehicleLabel,
-        appointment_at: booking.appointmentAt?.toISOString() ?? null,
+        appointment_at: booking.appointmentAt ? formatHalifaxForGhl(booking.appointmentAt) : null,
         total_estimate: total,
         is_quote_based: hasQuote,
         notes: booking.notes ?? null,
@@ -999,7 +1046,7 @@ router.post("/admin/bookings", async (req, res) => {
         customerId,
         vehicleId,
         status: body.status ?? "pending",
-        appointmentAt: body.appointmentAt ? new Date(body.appointmentAt) : null,
+        appointmentAt: body.appointmentAt ? parseHalifaxDatetime(body.appointmentAt) : null,
         totalEstimate: String(total),
         depositPaid: false,
         notes: body.notes ?? null,
@@ -1066,7 +1113,7 @@ router.post("/admin/bookings", async (req, res) => {
             services: [primaryService],
             addons: [],
             vehicle: vehicleLabel,
-            appointment_at: booking.appointmentAt?.toISOString() ?? null,
+            appointment_at: booking.appointmentAt ? formatHalifaxForGhl(booking.appointmentAt) : null,
             total_estimate: Number(booking.totalEstimate ?? 0),
             is_quote_based: false,
             notes: booking.notes ?? null,

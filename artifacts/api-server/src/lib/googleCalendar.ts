@@ -1,18 +1,13 @@
-// Google Calendar — via Replit Connectors SDK (@replit/connectors-sdk)
-// Proxy handles OAuth2 token injection and refresh automatically.
-// No GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN needed.
-import { ReplitConnectors } from "@replit/connectors-sdk";
+// Google Calendar — manual OAuth2 via GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN
+// Works on any host (Railway, Supabase, etc.) — no Replit-specific dependencies.
+import { googleFetch } from "./googleAuth";
 import { logger } from "./logger";
 
-const CAL_BASE = "/calendar/v3/calendars/primary";
+const CAL_BASE = "https://www.googleapis.com/calendar/v3/calendars/primary";
 const SHOP_EMAIL = "contact@vividpei.com";
 const SHOP_OPEN_HOUR = 9;
 const LATEST_START_HOUR = 16;
 const MAX_BOOKINGS_PER_DAY = 3;
-
-function getConnectors(): ReplitConnectors {
-  return new ReplitConnectors();
-}
 
 export interface CalendarEventInput {
   summary: string;
@@ -35,8 +30,7 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<vo
   });
 
   try {
-    const connectors = getConnectors();
-    const res = await connectors.proxy("google-calendar", `${CAL_BASE}/events`, {
+    const res = await googleFetch(`${CAL_BASE}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
@@ -77,12 +71,11 @@ export async function getAvailableSlots(
 
   const dayStart = new Date(`${date}T00:00:00Z`).toISOString();
   const dayEnd = new Date(`${date}T23:59:59Z`).toISOString();
-  const path = `${CAL_BASE}/events?timeMin=${encodeURIComponent(dayStart)}&timeMax=${encodeURIComponent(dayEnd)}&singleEvents=true&orderBy=startTime`;
+  const url = `${CAL_BASE}/events?timeMin=${encodeURIComponent(dayStart)}&timeMax=${encodeURIComponent(dayEnd)}&singleEvents=true&orderBy=startTime`;
 
   let events: { start: { dateTime?: string; date?: string } }[] = [];
   try {
-    const connectors = getConnectors();
-    const res = await connectors.proxy("google-calendar", path);
+    const res = await googleFetch(url);
     if (res.ok) {
       const data = await res.json() as { items?: typeof events };
       events = data?.items ?? [];

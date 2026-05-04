@@ -23,7 +23,7 @@ import {
   User, Car, CalendarDays, Package, CheckCircle2, RefreshCw,
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
   Camera, Upload, X, Eye, Plus, Trash2, Pencil, Tag, CalendarRange,
-  ChevronDown,
+  ChevronDown, Link as LinkIcon,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useEffect, useCallback, useMemo } from "react";
@@ -88,6 +88,8 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [status, setStatus] = useState<string>(booking?.status ?? "pending");
   const [resyncing, setResyncing] = useState(false);
   const [resynced, setResynced] = useState(false);
+  const [sendingPortal, setSendingPortal] = useState(false);
+  const [portalSent, setPortalSent] = useState(false);
 
   // Photos & condition state
   const [conditionScore, setConditionScore] = useState<string>("");
@@ -227,6 +229,20 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
       toast({ title: "Status updated" });
     } catch {
       toast({ variant: "destructive", title: "Failed to update status" });
+    }
+  };
+
+  const handleSendPortalLink = async () => {
+    setSendingPortal(true);
+    try {
+      const res = await fetch(`/api/bookings/${booking.id}/magic-link`, { method: "POST" });
+      if (!res.ok) throw new Error("Failed");
+      setPortalSent(true);
+      toast({ title: "Portal link sent to customer via GHL" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to send portal link — check GHL_MAGIC_LINK_WEBHOOK_URL secret" });
+    } finally {
+      setSendingPortal(false);
     }
   };
 
@@ -595,6 +611,27 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                 <RefreshCw className={`h-3.5 w-3.5 ${resyncing ? "animate-spin" : ""}`} />
                 {resyncing ? "Re-syncing..." : "Re-sync to GHL"}
               </Button>
+
+              <div className="border-t border-border pt-3 space-y-2">
+                <div className="flex items-center gap-2 text-sm">
+                  <LinkIcon className="h-4 w-4 text-primary shrink-0" />
+                  <span className="text-muted-foreground text-xs">
+                    {portalSent
+                      ? "Portal link sent — customer can access their booking dashboard"
+                      : "Send the customer a link to their booking portal via GHL automation"}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="w-full border-border hover:border-primary/40 gap-2"
+                  onClick={handleSendPortalLink}
+                  disabled={sendingPortal}
+                >
+                  <LinkIcon className={`h-3.5 w-3.5 ${sendingPortal ? "animate-pulse" : ""}`} />
+                  {sendingPortal ? "Sending..." : portalSent ? "Re-send Portal Link" : "Send Portal Link"}
+                </Button>
+              </div>
             </div>
           </section>
 

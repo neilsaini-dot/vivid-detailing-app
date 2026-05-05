@@ -103,6 +103,14 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [driveFolderUrl, setDriveFolderUrl] = useState<string | null>(null);
   const beforeInputRef = useRef<HTMLInputElement>(null);
   const afterInputRef = useRef<HTMLInputElement>(null);
+
+  // Edit services state
+  const [editingServices, setEditingServices] = useState(false);
+  const [editLineItems, setEditLineItems] = useState<Array<{ description: string; price: string }>>([]);
+  const [editIsManualTotal, setEditIsManualTotal] = useState(false);
+  const [editTotalOverride, setEditTotalOverride] = useState("");
+  const [servicesSaving, setServicesSaving] = useState(false);
+
   // Two-step Supabase upload: request signed URL → PUT file directly to CDN.
   // Returns the full public URL (stored in DB, used directly as <img src>).
   const uploadPhoto = async (file: File, photoType: "before" | "after"): Promise<string | null> => {
@@ -202,6 +210,32 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
       toast({ variant: "destructive", title: "Failed to save photos" });
     } finally {
       setPhotoSaving(false);
+    }
+  };
+
+  const handleServicesSave = async () => {
+    const valid = editLineItems.filter(li => li.description.trim());
+    if (valid.length === 0) {
+      toast({ variant: "destructive", title: "Add at least one line item" });
+      return;
+    }
+    setServicesSaving(true);
+    try {
+      await updateBooking.mutateAsync({
+        id: booking.id,
+        data: {
+          lineItems: valid.map(li => ({ description: li.description.trim(), price: parseFloat(li.price) || 0 })),
+          isManualPriceOverride: editIsManualTotal,
+          totalOverride: editIsManualTotal && editTotalOverride ? parseFloat(editTotalOverride) || null : null,
+        },
+      });
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      setEditingServices(false);
+      toast({ title: "Services updated" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to update services" });
+    } finally {
+      setServicesSaving(false);
     }
   };
 
@@ -378,50 +412,204 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
 
           {/* Services & Add-ons */}
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Package className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Services & Add-ons</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Services & Add-ons</h3>
+              </div>
+              {!editingServices ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-7 px-2 gap-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setEditLineItems(
+                      allLineItems.length > 0
+                        ? allLineItems.map((it: any) => ({
+                            description: it.itemName ?? "",
+                            price: it.isQuoteBased ? "0" : String(Number(it.unitPrice ?? 0)),
+                          }))
+                        : [{ description: "", price: "" }]
+                    );
+                    setEditIsManualTotal(booking.isManualPriceOverride ?? false);
+                    setEditTotalOverride(booking.totalEstimate ? String(Math.round((Number(booking.totalEstimate) / 1.15) * 100) / 100) : "");
+                    setEditingServices(true);
+                  }}
+                >
+                  <Pencil className="h-3 w-3" /> Edit
+                </Button>
+              ) : (
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs text-muted-foreground" onClick={() => setEditingServices(false)}>
+                    Cancel
+                  </Button>
+                  <Button size="sm" className="h-7 px-3 text-xs bg-primary text-primary-foreground hover:bg-primary/90" onClick={handleServicesSave} disabled={servicesSaving}>
+                    {servicesSaving ? "Saving…" : "Save"}
+                  </Button>
+                </div>
+              )}
             </div>
-            <div className="bg-card border border-border rounded-lg overflow-hidden">
-              <table className="w-full text-sm">
-                <tbody>
-                  {allLineItems.map((item: any, i: number) => (
-                    <tr key={i} className="border-b border-border last:border-0">
-                      <td className="px-4 py-3">
-                        <span className="font-medium">{item.itemName}</span>
-                        <span className="ml-2 text-xs text-muted-foreground capitalize">
-                          ({item.itemType})
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold">
-                        {item.isQuoteBased ? (
-                          <span className="text-primary">Quote</span>
-                        ) : item.unitPrice ? (
-                          `$${Number(item.unitPrice).toFixed(2)}`
-                        ) : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                  {allLineItems.length === 0 && (
-                    <tr><td className="px-4 py-3 text-muted-foreground" colSpan={2}>No items recorded</td></tr>
-                  )}
-                </tbody>
-              </table>
-              <div className="border-t border-border px-4 py-3 space-y-1.5 bg-card/50">
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>Subtotal</span>
-                  <span>${subtotal.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between text-sm text-muted-foreground">
-                  <span>HST (15%)</span>
-                  <span>${hstAmount.toFixed(2)}</span>
-                </div>
-                <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
-                  <span>Total</span>
-                  <span className="text-primary">${total.toFixed(2)}</span>
+
+            {!editingServices ? (
+              <div className="bg-card border border-border rounded-lg overflow-hidden">
+                <table className="w-full text-sm">
+                  <tbody>
+                    {allLineItems.map((item: any, i: number) => (
+                      <tr key={i} className="border-b border-border last:border-0">
+                        <td className="px-4 py-3">
+                          <span className="font-medium">{item.itemName}</span>
+                          <span className="ml-2 text-xs text-muted-foreground capitalize">
+                            ({item.itemType})
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold">
+                          {item.isQuoteBased ? (
+                            <span className="text-primary">Quote</span>
+                          ) : item.unitPrice ? (
+                            `$${Number(item.unitPrice).toFixed(2)}`
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                    {allLineItems.length === 0 && (
+                      <tr><td className="px-4 py-3 text-muted-foreground" colSpan={2}>No items recorded</td></tr>
+                    )}
+                  </tbody>
+                </table>
+                <div className="border-t border-border px-4 py-3 space-y-1.5 bg-card/50">
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>Subtotal</span>
+                    <span>${subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-muted-foreground">
+                    <span>HST (15%)</span>
+                    <span>${hstAmount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
+                    <span>Total</span>
+                    <span className="text-primary">${total.toFixed(2)}</span>
+                  </div>
                 </div>
               </div>
-            </div>
+            ) : (
+              <div className="bg-card border border-border rounded-lg overflow-hidden space-y-0">
+                {/* Quick-add buttons */}
+                <div className="px-4 pt-3 pb-2 border-b border-border">
+                  <p className="text-xs text-muted-foreground mb-2">Quick add</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {QUICK_SERVICES.map(svc => (
+                      <button
+                        key={svc.label}
+                        type="button"
+                        onClick={() => {
+                          const emptyIdx = editLineItems.findIndex(li => !li.description.trim());
+                          if (emptyIdx >= 0) {
+                            setEditLineItems(prev => prev.map((li, j) => j === emptyIdx ? { description: svc.label, price: svc.price } : li));
+                          } else {
+                            setEditLineItems(prev => [...prev, { description: svc.label, price: svc.price }]);
+                          }
+                        }}
+                        className="text-xs px-2 py-1 rounded border border-border bg-background hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                      >
+                        {svc.label} <span className="text-muted-foreground">${svc.price}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Line item rows */}
+                <div className="divide-y divide-border">
+                  {editLineItems.map((li, i) => (
+                    <div key={i} className="flex items-center gap-2 px-3 py-2">
+                      <Input
+                        value={li.description}
+                        onChange={e => setEditLineItems(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                        placeholder="Description"
+                        className="flex-1 h-8 text-sm bg-background border-border"
+                      />
+                      <div className="relative w-24 shrink-0">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+                        <Input
+                          value={li.price}
+                          onChange={e => setEditLineItems(prev => prev.map((x, j) => j === i ? { ...x, price: e.target.value } : x))}
+                          placeholder="0.00"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          className="h-8 text-sm pl-6 bg-background border-border"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditLineItems(prev => prev.filter((_, j) => j !== i))}
+                        className="text-muted-foreground hover:text-red-500 transition-colors p-1"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add row */}
+                <div className="px-3 py-2 border-t border-border">
+                  <button
+                    type="button"
+                    onClick={() => setEditLineItems(prev => [...prev, { description: "", price: "" }])}
+                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    <Plus className="h-3.5 w-3.5" /> Add line item
+                  </button>
+                </div>
+
+                {/* Totals preview + manual override */}
+                {(() => {
+                  const editSubtotal = editIsManualTotal && editTotalOverride
+                    ? parseFloat(editTotalOverride) || 0
+                    : editLineItems.reduce((s, li) => s + (parseFloat(li.price) || 0), 0);
+                  const editHst = editSubtotal * 0.15;
+                  const editGrand = editSubtotal + editHst;
+                  return (
+                    <div className="border-t border-border px-4 py-3 bg-card/50 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={editIsManualTotal}
+                          onCheckedChange={setEditIsManualTotal}
+                          id="edit-manual-total"
+                        />
+                        <label htmlFor="edit-manual-total" className="text-xs text-muted-foreground cursor-pointer">
+                          Override subtotal manually
+                        </label>
+                      </div>
+                      {editIsManualTotal && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-20">Subtotal $</span>
+                          <Input
+                            value={editTotalOverride}
+                            onChange={e => setEditTotalOverride(e.target.value)}
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            placeholder="0.00"
+                            className="h-8 w-28 text-sm bg-background border-border"
+                          />
+                        </div>
+                      )}
+                      <div className="space-y-1 pt-1">
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>Subtotal</span><span>${editSubtotal.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-sm text-muted-foreground">
+                          <span>HST (15%)</span><span>${editHst.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
+                          <span>Total</span><span className="text-primary">${editGrand.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </section>
 
           {/* Notes */}

@@ -1053,6 +1053,14 @@ export const AdminUpdateBookingBody = zod.object({
   conditionScore: zod.number().optional(),
   beforePhotoUrls: zod.array(zod.string()).optional(),
   afterPhotoUrls: zod.array(zod.string()).optional(),
+  lineItems: zod.array(
+    zod.object({
+      description: zod.string(),
+      price: zod.number(),
+    }),
+  ).optional(),
+  totalOverride: zod.number().nullish(),
+  isManualPriceOverride: zod.boolean().optional(),
 });
 
 export const AdminUpdateBookingResponse = zod.object({

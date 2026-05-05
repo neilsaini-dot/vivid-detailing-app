@@ -363,6 +363,31 @@ router.patch("/admin/bookings/:id", async (req, res) => {
       updated = row;
     }
 
+    // Handle line item replacement
+    if (body.lineItems && body.lineItems.length > 0) {
+      await db.delete(bookingItemsTable).where(eq(bookingItemsTable.bookingId, id));
+      await db.insert(bookingItemsTable).values(
+        body.lineItems.map((li) => ({
+          bookingId: id,
+          itemType: "manual" as const,
+          itemName: li.description,
+          unitPrice: String(li.price),
+          quantity: 1,
+          isQuoteBased: false,
+        }))
+      );
+      const lineItemsTotal = body.lineItems.reduce((sum, li) => sum + li.price, 0);
+      const newTotal = body.isManualPriceOverride && body.totalOverride != null
+        ? body.totalOverride
+        : lineItemsTotal;
+      const [refreshed] = await db
+        .update(bookingsTable)
+        .set({ totalEstimate: String(newTotal), isManualPriceOverride: body.isManualPriceOverride ?? false })
+        .where(eq(bookingsTable.id, id))
+        .returning();
+      if (refreshed) updated = refreshed;
+    }
+
     // Fire completion webhook when status transitions to "completed"
     if (body.status === "completed") {
       const items = await db

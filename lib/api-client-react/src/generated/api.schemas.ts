@@ -325,6 +325,9 @@ export interface AdminUpdateBookingBody {
   conditionScore?: number;
   beforePhotoUrls?: string[];
   afterPhotoUrls?: string[];
+  lineItems?: { description: string; price: number }[];
+  totalOverride?: number | null;
+  isManualPriceOverride?: boolean;
 }
 
 export interface AdminUpdateCustomerBody {

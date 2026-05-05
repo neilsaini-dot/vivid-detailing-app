@@ -1321,6 +1321,21 @@ components:
           type: array
           items:
             type: string
+        lineItems:
+          type: array
+          items:
+            type: object
+            required: [description, price]
+            properties:
+              description:
+                type: string
+              price:
+                type: number
+        totalOverride:
+          type: number
+          nullable: true
+        isManualPriceOverride:
+          type: boolean
 
     AdminUpdateCustomerBody:
       type: object

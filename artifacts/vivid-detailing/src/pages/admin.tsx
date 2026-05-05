@@ -1218,6 +1218,30 @@ function AdminDashboard() {
   const queryClient = useQueryClient();
   const [selectedBooking, setSelectedBooking] = useState<any>(null);
   const [showManualBooking, setShowManualBooking] = useState(false);
+  const [activeTab, setActiveTab] = useState<string>(
+    () => (typeof history !== "undefined" && history.state?.adminTab) ? history.state.adminTab : "bookings"
+  );
+
+  useEffect(() => {
+    // Push an initial history entry so the very first back press restores
+    // to "bookings" rather than navigating away from /admin.
+    if (!history.state?.adminTab) {
+      history.replaceState({ adminTab: "bookings" }, "");
+    }
+    const onPop = (e: PopStateEvent) => {
+      const tab = e.state?.adminTab ?? "bookings";
+      setActiveTab(tab);
+      setSelectedBooking(null);
+      setShowManualBooking(false);
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
+  const handleTabChange = (tab: string) => {
+    setActiveTab(tab);
+    history.pushState({ adminTab: tab }, "");
+  };
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<string>("")
   const [bulkWorking, setBulkWorking] = useState(false);
@@ -1409,7 +1433,7 @@ function AdminDashboard() {
         </Card>
       </div>
 
-      <Tabs defaultValue="bookings">
+      <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="bg-surface border border-border mb-6">
           <TabsTrigger value="bookings">Bookings</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>

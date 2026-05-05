@@ -869,8 +869,18 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
       >
         <SheetHeader className="px-6 py-5 border-b border-border sticky top-0 bg-background z-10">
           <div className="flex items-center justify-between">
-            <SheetTitle className="text-lg font-bold">New Manual Booking</SheetTitle>
-            <Badge variant="outline" className="text-xs text-muted-foreground border-border">Admin</Badge>
+            <div className="flex items-center gap-2">
+              <SheetTitle className="text-lg font-bold">New Manual Booking</SheetTitle>
+              <Badge variant="outline" className="text-xs text-muted-foreground border-border">Admin</Badge>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-sm opacity-70 hover:opacity-100 transition-opacity focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <X className="h-5 w-5" />
+              <span className="sr-only">Close</span>
+            </button>
           </div>
         </SheetHeader>
 

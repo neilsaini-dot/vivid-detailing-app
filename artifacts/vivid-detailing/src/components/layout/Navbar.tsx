@@ -8,7 +8,21 @@ export function Navbar() {
   const [location] = useLocation();
   const isBooking = location === "/book";
   const isDashboard = location === "/dashboard";
-  const isSimple = isBooking || isDashboard;
+  const isAdmin = location === "/admin";
+  const isSimple = isBooking || isDashboard || isAdmin;
+
+  if (isAdmin) {
+    return (
+      <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="container flex h-16 items-center">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="Vivid Detailing" className="h-10 w-10 object-contain" />
+            <span className="font-bold text-lg tracking-tight">Vivid Detailing</span>
+          </div>
+        </div>
+      </nav>
+    );
+  }
 
   return (
     <nav className="sticky top-0 z-50 w-full border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">

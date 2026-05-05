@@ -1412,7 +1412,18 @@ function AdminDashboard() {
 
   return (
     <div className="container py-8">
-      <h1 className="text-3xl font-bold mb-8">Admin Dashboard</h1>
+      <div className="flex items-center justify-between mb-8">
+        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
+        <Button
+          variant="outline"
+          size="sm"
+          className="flex items-center gap-2 border-border text-muted-foreground hover:text-foreground"
+          onClick={() => queryClient.invalidateQueries()}
+        >
+          <RefreshCw className="h-4 w-4" />
+          Refresh
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
         <Card className="bg-surface border-border">

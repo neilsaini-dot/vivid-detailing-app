@@ -5,7 +5,10 @@ export function Footer() {
   const [location] = useLocation();
   const isBooking = location === "/book";
   const isDashboard = location === "/dashboard";
-  const isSimple = isBooking || isDashboard;
+  const isAdmin = location === "/admin";
+  const isSimple = isBooking || isDashboard || isAdmin;
+
+  if (isAdmin) return null;
 
   return (
     <footer className="border-t border-border bg-card py-12 md:py-16">

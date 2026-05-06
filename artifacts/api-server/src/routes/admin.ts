@@ -352,7 +352,7 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     if (body.notes !== undefined) updates.notes = body.notes;
     if (body.internalNotes !== undefined) updates.internalNotes = body.internalNotes ?? null;
     if (body.estimatedPickupAt !== undefined) {
-      updates.estimatedPickupAt = body.estimatedPickupAt ? new Date(body.estimatedPickupAt) : null;
+      updates.estimatedPickupAt = body.estimatedPickupAt ? parseHalifaxDatetime(body.estimatedPickupAt) : null;
     }
 
     // Only run UPDATE when there are booking-level fields to change.

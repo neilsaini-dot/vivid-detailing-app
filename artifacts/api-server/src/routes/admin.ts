@@ -1464,6 +1464,41 @@ router.delete("/admin/booking-drafts/:id", async (req, res) => {
   }
 });
 
+// POST /api/admin/bookings/:id/vehicle — create a vehicle and link it to the booking
+router.post("/admin/bookings/:id/vehicle", async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z.object({
+      type: z.enum(["car", "suv", "truck", "van"]),
+      year: z.number().int().nullable().optional(),
+      make: z.string().nullable().optional(),
+      model: z.string().nullable().optional(),
+      colour: z.string().nullable().optional(),
+      licensePlate: z.string().nullable().optional(),
+    }).parse(req.body);
+
+    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+
+    const [vehicle] = await db.insert(vehiclesTable).values({
+      customerId: booking.customerId ?? undefined,
+      type: body.type,
+      year: body.year ?? null,
+      make: body.make ?? null,
+      model: body.model ?? null,
+      colour: body.colour ?? null,
+      licensePlate: body.licensePlate ?? null,
+    }).returning();
+
+    await db.update(bookingsTable).set({ vehicleId: vehicle.id }).where(eq(bookingsTable.id, id));
+
+    res.status(201).json(formatVehicle(vehicle));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create and link vehicle");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // PATCH /api/admin/vehicles/:id — update vehicle fields
 router.patch("/admin/vehicles/:id", async (req, res) => {
   try {

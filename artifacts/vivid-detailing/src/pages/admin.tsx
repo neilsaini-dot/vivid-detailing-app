@@ -323,27 +323,33 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     : "https://calendar.google.com/calendar/r";
 
   const handleVehicleSave = async () => {
-    if (!booking.vehicle?.id) return;
     setVehicleSaving(true);
     try {
-      const res = await fetch(`/api/admin/vehicles/${booking.vehicle.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          type: vehicleEdit.type,
-          year: vehicleEdit.year ? parseInt(vehicleEdit.year) : null,
-          make: vehicleEdit.make || null,
-          model: vehicleEdit.model || null,
-          colour: vehicleEdit.colour || null,
-          licensePlate: vehicleEdit.licensePlate || null,
-        }),
-      });
+      const payload = {
+        type: vehicleEdit.type,
+        year: vehicleEdit.year ? parseInt(vehicleEdit.year) : null,
+        make: vehicleEdit.make || null,
+        model: vehicleEdit.model || null,
+        colour: vehicleEdit.colour || null,
+        licensePlate: vehicleEdit.licensePlate || null,
+      };
+      const res = booking.vehicle?.id
+        ? await fetch(`/api/admin/vehicles/${booking.vehicle.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        : await fetch(`/api/admin/bookings/${booking.id}/vehicle`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          });
       if (!res.ok) throw new Error("Failed");
       queryClient.invalidateQueries();
       setEditingVehicle(false);
-      toast({ title: "Vehicle updated" });
+      toast({ title: booking.vehicle?.id ? "Vehicle updated" : "Vehicle added" });
     } catch {
-      toast({ variant: "destructive", title: "Failed to update vehicle" });
+      toast({ variant: "destructive", title: "Failed to save vehicle" });
     } finally {
       setVehicleSaving(false);
     }
@@ -469,9 +475,9 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                 <Car className="h-4 w-4 text-primary" />
                 <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Vehicle</h3>
               </div>
-              {booking.vehicle && !editingVehicle && (
+              {!editingVehicle && (
                 <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-muted-foreground" onClick={() => setEditingVehicle(true)}>
-                  <Pencil className="h-3 w-3 mr-1" /> Edit
+                  <Pencil className="h-3 w-3 mr-1" /> {booking.vehicle ? "Edit" : "Add Vehicle"}
                 </Button>
               )}
             </div>

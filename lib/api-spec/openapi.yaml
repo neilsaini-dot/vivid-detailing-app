@@ -1339,6 +1339,9 @@ components:
         estimatedPickupAt:
           type: string
           nullable: true
+        internalNotes:
+          type: string
+          nullable: true
 
     AdminUpdateCustomerBody:
       type: object

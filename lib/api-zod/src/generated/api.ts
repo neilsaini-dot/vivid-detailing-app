@@ -1064,6 +1064,7 @@ export const AdminUpdateBookingBody = zod.object({
   totalOverride: zod.number().nullish(),
   isManualPriceOverride: zod.boolean().optional(),
   estimatedPickupAt: zod.string().nullish(),
+  internalNotes: zod.string().nullish(),
 });
 
 export const AdminUpdateBookingResponse = zod.object({

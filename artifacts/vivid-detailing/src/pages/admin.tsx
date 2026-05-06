@@ -115,6 +115,10 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [pickupTime, setPickupTime] = useState("");
   const [pickupTimeSaving, setPickupTimeSaving] = useState(false);
 
+  // Internal notes state
+  const [internalNotes, setInternalNotes] = useState("");
+  const [internalNotesSaving, setInternalNotesSaving] = useState(false);
+
   // Two-step Supabase upload: request signed URL → PUT file directly to CDN.
   // Returns the full public URL (stored in DB, used directly as <img src>).
   const uploadPhoto = async (file: File, photoType: "before" | "after"): Promise<string | null> => {
@@ -148,6 +152,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
         ? format(new Date(booking.estimatedPickupAt), "yyyy-MM-dd'T'HH:mm")
         : ""
     );
+    setInternalNotes(booking.internalNotes ?? "");
   }, [open, booking?.id]);
 
   // Load existing service history when sheet opens
@@ -250,6 +255,22 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
       toast({ variant: "destructive", title: "Failed to update services" });
     } finally {
       setServicesSaving(false);
+    }
+  };
+
+  const handleInternalNotesSave = async () => {
+    setInternalNotesSaving(true);
+    try {
+      await updateBooking.mutateAsync({
+        id: booking.id,
+        data: { internalNotes: internalNotes || null },
+      });
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      toast({ title: "Internal notes saved" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to save internal notes" });
+    } finally {
+      setInternalNotesSaving(false);
     }
   };
 
@@ -671,13 +692,39 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
             <section>
               <div className="flex items-center gap-2 mb-3">
                 <ClipboardList className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Notes</h3>
+                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Customer Notes</h3>
               </div>
               <div className="bg-card border border-border rounded-lg p-4 text-sm text-muted-foreground whitespace-pre-wrap">
                 {booking.notes}
               </div>
             </section>
           )}
+
+          {/* Internal Notes */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <ClipboardList className="h-4 w-4 text-yellow-500" />
+              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Internal Notes</h3>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-yellow-500/10 text-yellow-500 border border-yellow-500/20 font-medium">Admin only</span>
+            </div>
+            <div className="space-y-2">
+              <textarea
+                rows={4}
+                value={internalNotes}
+                onChange={e => setInternalNotes(e.target.value)}
+                placeholder="Add private notes for the team — not visible to the customer…"
+                className="w-full rounded-md border border-border bg-card px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              <Button
+                size="sm"
+                onClick={handleInternalNotesSave}
+                disabled={internalNotesSaving || internalNotes === (booking.internalNotes ?? "")}
+                className="bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                {internalNotesSaving ? "Saving…" : "Save Notes"}
+              </Button>
+            </div>
+          </section>
 
           {/* Photos & Condition */}
           <section>

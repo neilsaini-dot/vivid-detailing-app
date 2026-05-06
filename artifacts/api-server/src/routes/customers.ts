@@ -449,6 +449,7 @@ export function formatBooking(b: any) {
     isManualPriceOverride: b.isManualPriceOverride ?? false,
     createdByAdmin: b.createdByAdmin ?? false,
     estimatedPickupAt: b.estimatedPickupAt?.toISOString() ?? null,
+    internalNotes: b.internalNotes ?? null,
     customer: b.customer ? formatCustomer(b.customer) : null,
     vehicle: b.vehicle ? formatVehicle(b.vehicle) : null,
     serviceHistory: b.serviceHistory ?? null,

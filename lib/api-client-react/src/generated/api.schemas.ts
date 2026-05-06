@@ -334,6 +334,7 @@ export interface AdminUpdateBookingBody {
   totalOverride?: number | null;
   isManualPriceOverride?: boolean;
   estimatedPickupAt?: string | null;
+  internalNotes?: string | null;
 }
 
 export interface AdminUpdateCustomerBody {

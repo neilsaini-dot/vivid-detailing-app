@@ -28,3 +28,6 @@ ALTER TABLE booking_items ADD CONSTRAINT booking_item_type_check
 
 -- 6. Add estimated_pickup_at column for per-appointment pickup time
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS estimated_pickup_at TIMESTAMPTZ;
+
+-- 7. Add internal_notes column — admin-only, never exposed to customers
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS internal_notes TEXT;

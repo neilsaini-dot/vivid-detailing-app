@@ -9,7 +9,8 @@ export function Navbar() {
   const isBooking = location === "/book";
   const isDashboard = location === "/dashboard";
   const isAdmin = location === "/admin";
-  const isSimple = isBooking || isDashboard || isAdmin;
+  const isReview = location === "/review";
+  const isSimple = isBooking || isDashboard || isAdmin || isReview;
 
   if (isAdmin) {
     return (
@@ -40,7 +41,7 @@ export function Navbar() {
             </nav>
           )}
         </div>
-        {!isBooking && (
+        {!isBooking && !isReview && (
           <>
             <div className="hidden md:flex items-center gap-4">
               {!isDashboard && (

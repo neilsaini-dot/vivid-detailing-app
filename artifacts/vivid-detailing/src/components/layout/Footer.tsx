@@ -6,7 +6,8 @@ export function Footer() {
   const isBooking = location === "/book";
   const isDashboard = location === "/dashboard";
   const isAdmin = location === "/admin";
-  const isSimple = isBooking || isDashboard || isAdmin;
+  const isReview = location === "/review";
+  const isSimple = isBooking || isDashboard || isAdmin || isReview;
 
   if (isAdmin) return null;
 

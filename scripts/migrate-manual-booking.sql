@@ -25,3 +25,6 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS created_by_admin BOOLEAN NOT NULL 
 ALTER TABLE booking_items DROP CONSTRAINT IF EXISTS booking_item_type_check;
 ALTER TABLE booking_items ADD CONSTRAINT booking_item_type_check
   CHECK (item_type IN ('service','addon','quote','promo','manual'));
+
+-- 6. Add estimated_pickup_at column for per-appointment pickup time
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS estimated_pickup_at TIMESTAMPTZ;

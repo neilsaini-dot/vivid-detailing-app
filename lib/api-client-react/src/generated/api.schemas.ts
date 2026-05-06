@@ -318,6 +318,11 @@ export const AdminUpdateBookingBodyStatus = {
   cancelled: "cancelled",
 } as const;
 
+export type AdminUpdateBookingBodyLineItemsItem = {
+  description: string;
+  price: number;
+};
+
 export interface AdminUpdateBookingBody {
   status?: AdminUpdateBookingBodyStatus;
   appointmentAt?: string;
@@ -325,9 +330,10 @@ export interface AdminUpdateBookingBody {
   conditionScore?: number;
   beforePhotoUrls?: string[];
   afterPhotoUrls?: string[];
-  lineItems?: { description: string; price: number }[];
+  lineItems?: AdminUpdateBookingBodyLineItemsItem[];
   totalOverride?: number | null;
   isManualPriceOverride?: boolean;
+  estimatedPickupAt?: string | null;
 }
 
 export interface AdminUpdateCustomerBody {

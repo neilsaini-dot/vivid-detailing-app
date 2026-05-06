@@ -1336,6 +1336,9 @@ components:
           nullable: true
         isManualPriceOverride:
           type: boolean
+        estimatedPickupAt:
+          type: string
+          nullable: true
 
     AdminUpdateCustomerBody:
       type: object

@@ -111,6 +111,10 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [editTotalOverride, setEditTotalOverride] = useState("");
   const [servicesSaving, setServicesSaving] = useState(false);
 
+  // Pickup time state
+  const [pickupTime, setPickupTime] = useState("");
+  const [pickupTimeSaving, setPickupTimeSaving] = useState(false);
+
   // Two-step Supabase upload: request signed URL → PUT file directly to CDN.
   // Returns the full public URL (stored in DB, used directly as <img src>).
   const uploadPhoto = async (file: File, photoType: "before" | "after"): Promise<string | null> => {
@@ -135,6 +139,16 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     if (!putRes.ok) throw new Error("Failed to upload to storage");
     return objectPath as string;
   };
+
+  // Sync pickup time from booking whenever sheet opens or booking changes
+  useEffect(() => {
+    if (!open || !booking) return;
+    setPickupTime(
+      booking.estimatedPickupAt
+        ? format(new Date(booking.estimatedPickupAt), "yyyy-MM-dd'T'HH:mm")
+        : ""
+    );
+  }, [open, booking?.id]);
 
   // Load existing service history when sheet opens
   useEffect(() => {
@@ -236,6 +250,22 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
       toast({ variant: "destructive", title: "Failed to update services" });
     } finally {
       setServicesSaving(false);
+    }
+  };
+
+  const handlePickupTimeSave = async () => {
+    setPickupTimeSaving(true);
+    try {
+      await updateBooking.mutateAsync({
+        id: booking.id,
+        data: { estimatedPickupAt: pickupTime || null },
+      });
+      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      toast({ title: pickupTime ? "Pickup time saved — GHL notified" : "Pickup time cleared" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to save pickup time" });
+    } finally {
+      setPickupTimeSaving(false);
     }
   };
 
@@ -406,6 +436,30 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                 >
                   {updateBooking.isPending ? "Saving..." : "Save"}
                 </Button>
+              </div>
+              <div className="border-t border-border pt-3">
+                <p className="text-xs text-muted-foreground mb-1.5">Est. Pickup Time</p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="datetime-local"
+                    value={pickupTime}
+                    onChange={e => setPickupTime(e.target.value)}
+                    className="flex-1 bg-background border-border text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handlePickupTimeSave}
+                    disabled={pickupTimeSaving}
+                    className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+                  >
+                    {pickupTimeSaving ? "Saving…" : "Set"}
+                  </Button>
+                </div>
+                {booking.estimatedPickupAt && (
+                  <p className="text-xs text-muted-foreground mt-1.5">
+                    Current: {format(new Date(booking.estimatedPickupAt), "EEEE, MMM d 'at' h:mm a")}
+                  </p>
+                )}
               </div>
             </div>
           </section>
@@ -923,6 +977,21 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   const [totalOverride, setTotalOverride] = useState("");
   const [isManualTotal, setIsManualTotal] = useState(false);
 
+  // Day availability check
+  const [daySummary, setDaySummary] = useState<{ eventCount: number; events: { title: string; start: string | null }[] } | null>(null);
+  const [dayLoading, setDayLoading] = useState(false);
+  const appointmentDate = appointmentAt ? appointmentAt.slice(0, 10) : "";
+  useEffect(() => {
+    if (!appointmentDate) { setDaySummary(null); return; }
+    let cancelled = false;
+    setDayLoading(true);
+    fetch(`/api/admin/calendar/day-summary?date=${appointmentDate}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (!cancelled) { setDaySummary(data); setDayLoading(false); } })
+      .catch(() => { if (!cancelled) setDayLoading(false); });
+    return () => { cancelled = true; };
+  }, [appointmentDate]);
+
   const searchEnabled = debouncedSearch.length >= 2 && customerMode === "search" && !selectedCustomer;
   const { data: searchResults = [], isFetching: searching } = useAdminSearchCustomers(
     { q: debouncedSearch },
@@ -1382,6 +1451,36 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
                   onChange={e => setAppointmentAt(e.target.value)}
                   className="bg-surface-2 border-border"
                 />
+                {appointmentDate && (
+                  <div className={`mt-1.5 rounded-md px-3 py-2 text-xs border ${
+                    dayLoading ? "border-border text-muted-foreground" :
+                    !daySummary || daySummary.eventCount === 0 ? "border-green-500/30 bg-green-500/5 text-green-400" :
+                    daySummary.eventCount < 3 ? "border-yellow-500/30 bg-yellow-500/5 text-yellow-400" :
+                    "border-red-500/30 bg-red-500/5 text-red-400"
+                  }`}>
+                    {dayLoading ? "Checking calendar…" : !daySummary ? "—" : (
+                      <>
+                        <span className="font-medium">
+                          {daySummary.eventCount === 0
+                            ? "No appointments on this day — looks open"
+                            : `${daySummary.eventCount} appointment${daySummary.eventCount !== 1 ? "s" : ""} already booked`}
+                        </span>
+                        {daySummary.eventCount >= 3 && (
+                          <span className="ml-1 opacity-80">— day may be full (max 3)</span>
+                        )}
+                        {daySummary.events.length > 0 && (
+                          <ul className="mt-1 space-y-0.5 opacity-80">
+                            {daySummary.events.map((e, i) => (
+                              <li key={i}>
+                                · {e.title}{e.start ? ` @ ${format(new Date(e.start), "h:mm a")}` : ""}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-1 sm:col-span-2">
                 <label className="text-xs text-muted-foreground">Notes</label>
@@ -1408,6 +1507,131 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
         </div>
       </SheetContent>
     </Sheet>
+  );
+}
+
+function CalendarTab() {
+  const today = new Date();
+  const [year, setYear] = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth() + 1);
+  const [events, setEvents] = useState<{ id: string; title: string; start: string | null; end: string | null; allDay: boolean }[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/admin/calendar/events?year=${year}&month=${month}`)
+      .then(r => r.ok ? r.json() : [])
+      .then(data => { if (!cancelled) { setEvents(Array.isArray(data) ? data : []); setLoading(false); } })
+      .catch(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [year, month]);
+
+  const monthName = new Date(year, month - 1, 1).toLocaleString("en-CA", { month: "long" });
+  const firstDow = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const eventsByDay: Record<number, typeof events> = {};
+  for (const ev of events) {
+    if (!ev.start) continue;
+    const d = new Date(ev.start);
+    const evYear = d.getFullYear();
+    const evMonth = d.getMonth() + 1;
+    if (evYear === year && evMonth === month) {
+      const day = d.getDate();
+      if (!eventsByDay[day]) eventsByDay[day] = [];
+      eventsByDay[day].push(ev);
+    }
+  }
+
+  const prevMonth = () => {
+    if (month === 1) { setYear(y => y - 1); setMonth(12); }
+    else setMonth(m => m - 1);
+  };
+  const nextMonth = () => {
+    if (month === 12) { setYear(y => y + 1); setMonth(1); }
+    else setMonth(m => m + 1);
+  };
+
+  const cells: (number | null)[] = [
+    ...Array(firstDow).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+  while (cells.length % 7 !== 0) cells.push(null);
+
+  const todayDay = today.getFullYear() === year && today.getMonth() + 1 === month ? today.getDate() : -1;
+
+  return (
+    <Card className="bg-surface border-border">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-lg font-bold">{monthName} {year}</CardTitle>
+          <div className="flex items-center gap-2">
+            {loading && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border" onClick={prevMonth}>
+              <ChevronDown className="h-4 w-4 rotate-90" />
+            </Button>
+            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border" onClick={nextMonth}>
+              <ChevronDown className="h-4 w-4 -rotate-90" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-8 px-3 text-xs border border-border"
+              onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}
+            >
+              Today
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="pb-6">
+        <div className="grid grid-cols-7 mb-1">
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+            <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 border-l border-t border-border">
+          {cells.map((day, i) => {
+            const dayEvents = day ? (eventsByDay[day] ?? []) : [];
+            const isToday = day === todayDay;
+            return (
+              <div
+                key={i}
+                className={`border-r border-b border-border min-h-[80px] p-1.5 ${!day ? "bg-surface/30" : ""}`}
+              >
+                {day && (
+                  <>
+                    <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                      isToday ? "bg-primary text-primary-foreground" : "text-foreground"
+                    }`}>
+                      {day}
+                    </div>
+                    <div className="space-y-0.5">
+                      {dayEvents.slice(0, 3).map((ev, j) => (
+                        <div
+                          key={j}
+                          className="text-[10px] leading-tight px-1 py-0.5 rounded bg-primary/15 text-primary truncate"
+                          title={ev.title + (ev.start ? ` @ ${format(new Date(ev.start), "h:mm a")}` : "")}
+                        >
+                          {ev.allDay ? ev.title : (ev.start ? format(new Date(ev.start), "h:mm a") + " " : "") + ev.title}
+                        </div>
+                      ))}
+                      {dayEvents.length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">+{dayEvents.length - 3} more</div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {events.length === 0 && !loading && (
+          <p className="text-center text-sm text-muted-foreground mt-6">No calendar events found for this month.</p>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -1645,6 +1869,7 @@ function AdminDashboard() {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="bg-surface border border-border mb-6">
           <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
           <TabsTrigger value="services">Services</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="promos">Seasonal</TabsTrigger>
@@ -1790,6 +2015,10 @@ function AdminDashboard() {
               </TableBody>
             </Table>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="calendar">
+          <CalendarTab />
         </TabsContent>
 
         <TabsContent value="services">

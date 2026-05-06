@@ -30,8 +30,9 @@ import {
 } from "@workspace/api-zod";
 import { ilike, or } from "drizzle-orm";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
-import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink } from "../lib/ghl";
+import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink, sendGhlPickupTimeSet } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
+import { googleFetch } from "../lib/googleAuth";
 import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
 
@@ -336,10 +337,21 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     const { id } = AdminUpdateBookingParams.parse(req.params);
     const body = AdminUpdateBookingBody.parse(req.body);
 
+    // Fetch existing booking upfront when pickup time is being set (need old value to detect change)
+    let existingPickupAt: Date | null = null;
+    if (body.estimatedPickupAt !== undefined) {
+      const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+      if (!existing) return res.status(404).json({ error: "Not found" });
+      existingPickupAt = existing.estimatedPickupAt ?? null;
+    }
+
     const updates: Partial<typeof bookingsTable.$inferInsert> = {};
     if (body.status) updates.status = body.status;
     if (body.appointmentAt) updates.appointmentAt = new Date(body.appointmentAt);
     if (body.notes !== undefined) updates.notes = body.notes;
+    if (body.estimatedPickupAt !== undefined) {
+      updates.estimatedPickupAt = body.estimatedPickupAt ? new Date(body.estimatedPickupAt) : null;
+    }
 
     // Only run UPDATE when there are booking-level fields to change.
     // Photo-only saves send no booking fields, which would cause Drizzle
@@ -490,6 +502,41 @@ router.patch("/admin/bookings/:id", async (req, res) => {
       }
     }
 
+    // Fire pickup time webhook when estimatedPickupAt is set or changed
+    if (
+      body.estimatedPickupAt &&
+      updated.estimatedPickupAt &&
+      existingPickupAt?.getTime() !== updated.estimatedPickupAt.getTime()
+    ) {
+      let firstName = "";
+      let lastName = "";
+      let email = "";
+      let phone = "";
+      if (updated.customerId) {
+        const [customer] = await db
+          .select().from(customersTable)
+          .where(eq(customersTable.id, updated.customerId)).limit(1);
+        if (customer) {
+          const parts = (customer.name ?? "").split(" ");
+          firstName = parts[0] ?? "";
+          lastName = parts.slice(1).join(" ");
+          email = customer.email ?? "";
+          phone = customer.phone ?? "";
+        }
+      }
+      sendGhlPickupTimeSet({
+        event: "pickup_time_set",
+        pickup_time_set: true,
+        contact: { firstName, lastName, email, phone },
+        booking: {
+          id: updated.id,
+          appointment_at: updated.appointmentAt?.toISOString() ?? null,
+          estimated_pickup_at: updated.estimatedPickupAt.toISOString(),
+        },
+        source: "vivid-app",
+      }).catch(() => {});
+    }
+
     const items = await db
       .select()
       .from(bookingItemsTable)
@@ -498,6 +545,82 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     res.json(formatBooking({ ...updated, items, customer: null, vehicle: null }));
   } catch (err) {
     req.log.error({ err }, "Failed to update admin booking");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/admin/calendar/day-summary?date=YYYY-MM-DD
+router.get("/admin/calendar/day-summary", async (req, res) => {
+  try {
+    const date = String(req.query.date ?? "");
+    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return res.status(400).json({ error: "date query param required (YYYY-MM-DD)" });
+    }
+    const tzDate = new Date(`${date}T00:00:00`);
+    const dayStart = new Date(tzDate.toLocaleString("en-US", { timeZone: "America/Halifax" }));
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(dayStart);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(dayStart.toISOString())}&timeMax=${encodeURIComponent(dayEnd.toISOString())}&singleEvents=true&orderBy=startTime`;
+    let events: { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string } }[] = [];
+    try {
+      const gcalRes = await googleFetch(url);
+      if (gcalRes.ok) {
+        const data = await gcalRes.json() as { items?: typeof events };
+        events = (data?.items ?? []).filter(e => e.start?.dateTime);
+      }
+    } catch {
+      // non-fatal — return empty
+    }
+
+    res.json({
+      date,
+      eventCount: events.length,
+      events: events.map(e => ({
+        title: e.summary ?? "Appointment",
+        start: e.start?.dateTime ?? null,
+        end: e.end?.dateTime ?? null,
+      })),
+    });
+  } catch (err) {
+    req.log.error({ err }, "Failed to get calendar day summary");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/admin/calendar/events?year=YYYY&month=MM
+router.get("/admin/calendar/events", async (req, res) => {
+  try {
+    const year = parseInt(String(req.query.year ?? new Date().getFullYear()));
+    const month = parseInt(String(req.query.month ?? new Date().getMonth() + 1));
+    if (isNaN(year) || isNaN(month) || month < 1 || month > 12) {
+      return res.status(400).json({ error: "Invalid year/month" });
+    }
+    const monthStart = new Date(Date.UTC(year, month - 1, 1));
+    const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59));
+    const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(monthStart.toISOString())}&timeMax=${encodeURIComponent(monthEnd.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=200`;
+
+    let events: { id?: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string } }[] = [];
+    try {
+      const gcalRes = await googleFetch(url);
+      if (gcalRes.ok) {
+        const data = await gcalRes.json() as { items?: typeof events };
+        events = data?.items ?? [];
+      }
+    } catch {
+      // non-fatal
+    }
+
+    res.json(events.map(e => ({
+      id: e.id ?? "",
+      title: e.summary ?? "Appointment",
+      start: e.start?.dateTime ?? e.start?.date ?? null,
+      end: e.end?.dateTime ?? null,
+      allDay: !e.start?.dateTime,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Failed to get calendar events");
     res.status(500).json({ error: "Internal server error" });
   }
 });

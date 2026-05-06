@@ -172,6 +172,36 @@ export async function sendGhlMagicLink(payload: GhlMagicLinkPayload): Promise<vo
   }
 }
 
+export interface GhlPickupTimePayload {
+  event: "pickup_time_set";
+  pickup_time_set: true;
+  contact: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  booking: {
+    id: string;
+    appointment_at: string | null;
+    estimated_pickup_at: string;
+  };
+  source: "vivid-app";
+}
+
+// Pickup time set/updated — goes to GHL_WEBHOOK_URL
+export async function sendGhlPickupTimeSet(payload: GhlPickupTimePayload): Promise<void> {
+  if (!GHL_WEBHOOK_URL) {
+    logger.warn("GHL_WEBHOOK_URL not configured - skipping pickup time webhook");
+    return;
+  }
+  try {
+    await postTo(GHL_WEBHOOK_URL, payload, "pickup_time_set");
+  } catch (err) {
+    logger.error({ err }, "Failed to send GHL pickup time webhook");
+  }
+}
+
 // Booking confirmed — goes to dedicated GHL_BOOKING_CONFIRMED_WEBHOOK_URL
 // Falls back to GHL_WEBHOOK_URL if the dedicated URL is not configured
 export async function sendGhlBookingConfirmed(payload: GhlBookingConfirmedPayload): Promise<void> {

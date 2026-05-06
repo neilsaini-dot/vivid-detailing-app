@@ -4,6 +4,7 @@ const GHL_WEBHOOK_URL = process.env.GHL_WEBHOOK_URL;
 const GHL_BOOKING_CONFIRMED_WEBHOOK_URL = process.env.GHL_BOOKING_CONFIRMED_WEBHOOK_URL;
 const GHL_MAGIC_LINK_WEBHOOK_URL = process.env.GHL_MAGIC_LINK_WEBHOOK_URL;
 const GHL_BOOKING_COMPLETED_WEBHOOK_URL = process.env.GHL_BOOKING_COMPLETED_WEBHOOK_URL;
+const GHL_PICKUP_TIME_WEBHOOK_URL = process.env.GHL_PICKUP_TIME_WEBHOOK_URL;
 
 export type GhlEvent =
   | "lead_captured"
@@ -189,14 +190,16 @@ export interface GhlPickupTimePayload {
   source: "vivid-app";
 }
 
-// Pickup time set/updated — goes to GHL_WEBHOOK_URL
+// Pickup time set/updated — goes to dedicated GHL_PICKUP_TIME_WEBHOOK_URL
+// Falls back to GHL_WEBHOOK_URL if the dedicated URL is not configured
 export async function sendGhlPickupTimeSet(payload: GhlPickupTimePayload): Promise<void> {
-  if (!GHL_WEBHOOK_URL) {
-    logger.warn("GHL_WEBHOOK_URL not configured - skipping pickup time webhook");
+  const url = GHL_PICKUP_TIME_WEBHOOK_URL || GHL_WEBHOOK_URL;
+  if (!url) {
+    logger.warn("No GHL webhook URL configured - skipping pickup time webhook");
     return;
   }
   try {
-    await postTo(GHL_WEBHOOK_URL, payload, "pickup_time_set");
+    await postTo(url, payload, "pickup_time_set");
   } catch (err) {
     logger.error({ err }, "Failed to send GHL pickup time webhook");
   }

@@ -5,6 +5,7 @@ import {
   useDeleteSeasonalPromo, useAdminUpdateService, useAdminUpdateBooking,
   useAdminCreateBooking, useAdminSearchCustomers,
   useAdminListBookingDrafts, useAdminDeleteBookingDraft,
+  useAdminListReviews,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +25,7 @@ import {
   User, Car, CalendarDays, Package, CheckCircle2, RefreshCw,
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
   Camera, Upload, X, Eye, Plus, Trash2, Pencil, Tag, CalendarRange,
-  ChevronDown, Link as LinkIcon,
+  ChevronDown, Link as LinkIcon, Star,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useEffect, useCallback, useMemo } from "react";
@@ -1733,9 +1734,12 @@ function AdminDashboard() {
   const [editingPromoId, setEditingPromoId] = useState<string | null>(null);
   const [editPromo, setEditPromo] = useState<any>({});
 
+  const [reviewRatingFilter, setReviewRatingFilter] = useState<number | null>(null);
+
   const { data: bookings = [] } = useAdminListBookings({});
   const { data: bookingDrafts = [], refetch: refetchDrafts } = useAdminListBookingDrafts();
   const deleteDraft = useAdminDeleteBookingDraft();
+  const { data: reviews = [] } = useAdminListReviews(reviewRatingFilter ? { rating: reviewRatingFilter } : {});
   const { data: services = [] } = useAdminListServices();
   const { data: analytics } = useGetAnalytics();
   const { data: promos = [] } = useListSeasonalPromos();
@@ -1979,6 +1983,7 @@ function AdminDashboard() {
           <TabsTrigger value="services">Services</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="promos">Seasonal</TabsTrigger>
+          <TabsTrigger value="reviews">Reviews</TabsTrigger>
         </TabsList>
 
         <TabsContent value="bookings">
@@ -2440,6 +2445,89 @@ function AdminDashboard() {
               </Card>
             )}
           </div>
+        </TabsContent>
+        <TabsContent value="reviews">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-sm text-muted-foreground">
+              {(reviews as any[]).length} review{(reviews as any[]).length !== 1 ? "s" : ""}
+              {reviewRatingFilter ? ` — ${reviewRatingFilter}★ filter` : ""}
+            </p>
+            <Select
+              value={reviewRatingFilter ? String(reviewRatingFilter) : "all"}
+              onValueChange={v => setReviewRatingFilter(v === "all" ? null : Number(v))}
+            >
+              <SelectTrigger className="h-8 w-[140px] text-xs bg-surface border-border">
+                <SelectValue placeholder="All ratings" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All ratings</SelectItem>
+                <SelectItem value="5">5 stars</SelectItem>
+                <SelectItem value="4">4 stars</SelectItem>
+                <SelectItem value="3">3 stars</SelectItem>
+                <SelectItem value="2">2 stars</SelectItem>
+                <SelectItem value="1">1 star</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <Card className="bg-surface border-border">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border hover:bg-transparent">
+                  <TableHead>Customer</TableHead>
+                  <TableHead>Vehicle</TableHead>
+                  <TableHead>Rating</TableHead>
+                  <TableHead>Feedback</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Google</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(reviews as any[]).map((r: any) => (
+                  <TableRow key={r.id} className="border-border">
+                    <TableCell className="text-sm font-medium">{r.customerName ?? "—"}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{r.vehicle ?? "—"}</TableCell>
+                    <TableCell>
+                      <div className="flex gap-0.5">
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <Star
+                            key={s}
+                            className={`h-4 w-4 ${s <= r.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/30"}`}
+                          />
+                        ))}
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground max-w-[280px]">
+                      {r.feedback ? (
+                        <span className="line-clamp-2">{r.feedback}</span>
+                      ) : (
+                        <span className="italic opacity-50">No comment</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                      {format(new Date(r.submittedAt), "MMM d, yyyy")}
+                    </TableCell>
+                    <TableCell>
+                      <Badge
+                        variant="outline"
+                        className={`text-xs ${r.redirectedToGoogle ? "border-green-500/30 text-green-400 bg-green-500/5" : "border-border text-muted-foreground"}`}
+                      >
+                        {r.redirectedToGoogle ? "Yes" : "No"}
+                      </Badge>
+                    </TableCell>
+                  </TableRow>
+                ))}
+                {(reviews as any[]).length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={6} className="text-center text-muted-foreground py-12">
+                      <Star className="h-8 w-8 mx-auto mb-3 opacity-20" />
+                      No reviews yet.
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </Card>
         </TabsContent>
       </Tabs>
 

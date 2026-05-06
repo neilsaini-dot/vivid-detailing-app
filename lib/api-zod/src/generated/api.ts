@@ -912,6 +912,46 @@ export const AdminUpdateAddOnResponse = zod.object({
 });
 
 /**
+ * @summary Submit a customer review (no auth required)
+ */
+export const SubmitReviewBody = zod.object({
+  bookingId: zod.string(),
+  rating: zod.number(),
+  feedback: zod.string().nullish(),
+});
+
+/**
+ * @summary Check if a booking already has a review
+ */
+export const CheckReviewQueryParams = zod.object({
+  bookingId: zod.coerce.string(),
+});
+
+export const CheckReviewResponse = zod.object({
+  exists: zod.boolean().optional(),
+});
+
+/**
+ * @summary List customer reviews with optional rating filter
+ */
+export const AdminListReviewsQueryParams = zod.object({
+  rating: zod.coerce.number().optional(),
+});
+
+export const AdminListReviewsResponseItem = zod.object({
+  id: zod.string().optional(),
+  bookingId: zod.string().nullish(),
+  customerId: zod.string().nullish(),
+  customerName: zod.string().nullish(),
+  vehicle: zod.string().nullish(),
+  rating: zod.number().optional(),
+  feedback: zod.string().nullish(),
+  submittedAt: zod.string().optional(),
+  redirectedToGoogle: zod.boolean().optional(),
+});
+export const AdminListReviewsResponse = zod.array(AdminListReviewsResponseItem);
+
+/**
  * @summary Create an incomplete booking draft at step 1
  */
 export const CreateBookingDraftBody = zod.object({

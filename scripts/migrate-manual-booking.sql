@@ -42,3 +42,14 @@ CREATE TABLE IF NOT EXISTS booking_drafts (
   completed_at TIMESTAMPTZ,
   completed_booking_id UUID
 );
+
+-- 9. Create reviews table for customer ratings submitted via email link
+CREATE TABLE IF NOT EXISTS reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  customer_id UUID REFERENCES customers(id) ON DELETE SET NULL,
+  rating INT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  feedback TEXT,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  redirected_to_google BOOLEAN NOT NULL DEFAULT false
+);

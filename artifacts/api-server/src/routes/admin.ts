@@ -8,6 +8,7 @@ import {
   bookingsTable,
   bookingItemsTable,
   bookingDraftsTable,
+  reviewsTable,
   customersTable,
   vehiclesTable,
   serviceHistoryTable,
@@ -464,6 +465,7 @@ router.patch("/admin/bookings/:id", async (req, res) => {
           total_estimate: Number(updated.totalEstimate ?? 0),
           notes: updated.notes ?? null,
           completed_at: formatCompletedAt(new Date()),
+          rating_link: `https://book.vividpei.com/review?booking_id=${updated.id}`,
         },
         source: "vivid-app",
       }).catch(() => {});
@@ -1382,6 +1384,47 @@ router.post("/admin/bookings/bulk-status", async (req, res) => {
     res.json({ ok: true, updated: updated.length });
   } catch (err) {
     req.log.error({ err }, "Failed to bulk-update booking status");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/admin/reviews — list customer reviews with optional rating filter
+router.get("/admin/reviews", async (req, res) => {
+  try {
+    const ratingFilter = req.query.rating ? parseInt(req.query.rating as string, 10) : null;
+    const rows = await db
+      .select({
+        id: reviewsTable.id,
+        bookingId: reviewsTable.bookingId,
+        customerId: reviewsTable.customerId,
+        rating: reviewsTable.rating,
+        feedback: reviewsTable.feedback,
+        submittedAt: reviewsTable.submittedAt,
+        redirectedToGoogle: reviewsTable.redirectedToGoogle,
+        customerName: customersTable.name,
+        vehicleYear: vehiclesTable.year,
+        vehicleMake: vehiclesTable.make,
+        vehicleModel: vehiclesTable.model,
+      })
+      .from(reviewsTable)
+      .leftJoin(customersTable, eq(reviewsTable.customerId, customersTable.id))
+      .leftJoin(bookingsTable, eq(reviewsTable.bookingId, bookingsTable.id))
+      .leftJoin(vehiclesTable, eq(bookingsTable.vehicleId, vehiclesTable.id))
+      .where(ratingFilter ? eq(reviewsTable.rating, ratingFilter) : undefined)
+      .orderBy(desc(reviewsTable.submittedAt));
+    res.json(rows.map(r => ({
+      id: r.id,
+      bookingId: r.bookingId ?? null,
+      customerId: r.customerId ?? null,
+      customerName: r.customerName ?? null,
+      vehicle: [r.vehicleYear, r.vehicleMake, r.vehicleModel].filter(Boolean).join(" ") || null,
+      rating: r.rating,
+      feedback: r.feedback ?? null,
+      submittedAt: r.submittedAt.toISOString(),
+      redirectedToGoogle: r.redirectedToGoogle,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Failed to list reviews");
     res.status(500).json({ error: "Internal server error" });
   }
 });

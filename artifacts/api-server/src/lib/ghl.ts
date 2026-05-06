@@ -131,6 +131,7 @@ export interface GhlBookingCompletedPayload {
     total_estimate: number;
     notes: string | null;
     completed_at: string;
+    rating_link: string;
   };
   source: "vivid-app";
 }

@@ -22,6 +22,7 @@ import type {
   AddOn,
   AdminCreateBookingBody,
   AdminListBookingsParams,
+  AdminListReviewsParams,
   AdminSearchCustomersParams,
   AdminUpdateAddOnBody,
   AdminUpdateBookingBody,
@@ -32,6 +33,8 @@ import type {
   BookingDraft,
   CalendarAvailability,
   CaptureLeadBody,
+  CheckReview200,
+  CheckReviewParams,
   CompleteBookingDraftBody,
   CreateBookingBody,
   CreateBookingDraft201,
@@ -53,8 +56,11 @@ import type {
   PriceCalculateBody,
   PriceResult,
   QuoteRequest,
+  ReviewWithDetails,
   SeasonalPromo,
   Service,
+  SubmitReviewBody,
+  SubmitReviewResponse,
   UpdateBookingBody,
   UpdateSeasonalPromoBody,
   UpsertCustomerBody,
@@ -2321,6 +2327,283 @@ export const useAdminUpdateAddOn = <
 > => {
   return useMutation(getAdminUpdateAddOnMutationOptions(options));
 };
+
+/**
+ * @summary Submit a customer review (no auth required)
+ */
+export const getSubmitReviewUrl = () => {
+  return `/api/reviews`;
+};
+
+export const submitReview = async (
+  submitReviewBody: SubmitReviewBody,
+  options?: RequestInit,
+): Promise<SubmitReviewResponse> => {
+  return customFetch<SubmitReviewResponse>(getSubmitReviewUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(submitReviewBody),
+  });
+};
+
+export const getSubmitReviewMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitReview>>,
+    TError,
+    { data: BodyType<SubmitReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof submitReview>>,
+  TError,
+  { data: BodyType<SubmitReviewBody> },
+  TContext
+> => {
+  const mutationKey = ["submitReview"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof submitReview>>,
+    { data: BodyType<SubmitReviewBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return submitReview(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SubmitReviewMutationResult = NonNullable<
+  Awaited<ReturnType<typeof submitReview>>
+>;
+export type SubmitReviewMutationBody = BodyType<SubmitReviewBody>;
+export type SubmitReviewMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Submit a customer review (no auth required)
+ */
+export const useSubmitReview = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof submitReview>>,
+    TError,
+    { data: BodyType<SubmitReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof submitReview>>,
+  TError,
+  { data: BodyType<SubmitReviewBody> },
+  TContext
+> => {
+  return useMutation(getSubmitReviewMutationOptions(options));
+};
+
+/**
+ * @summary Check if a booking already has a review
+ */
+export const getCheckReviewUrl = (params: CheckReviewParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/reviews/check?${stringifiedParams}`
+    : `/api/reviews/check`;
+};
+
+export const checkReview = async (
+  params: CheckReviewParams,
+  options?: RequestInit,
+): Promise<CheckReview200> => {
+  return customFetch<CheckReview200>(getCheckReviewUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getCheckReviewQueryKey = (params?: CheckReviewParams) => {
+  return [`/api/reviews/check`, ...(params ? [params] : [])] as const;
+};
+
+export const getCheckReviewQueryOptions = <
+  TData = Awaited<ReturnType<typeof checkReview>>,
+  TError = ErrorType<unknown>,
+>(
+  params: CheckReviewParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkReview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getCheckReviewQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof checkReview>>> = ({
+    signal,
+  }) => checkReview(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof checkReview>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type CheckReviewQueryResult = NonNullable<
+  Awaited<ReturnType<typeof checkReview>>
+>;
+export type CheckReviewQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Check if a booking already has a review
+ */
+
+export function useCheckReview<
+  TData = Awaited<ReturnType<typeof checkReview>>,
+  TError = ErrorType<unknown>,
+>(
+  params: CheckReviewParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof checkReview>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getCheckReviewQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary List customer reviews with optional rating filter
+ */
+export const getAdminListReviewsUrl = (params?: AdminListReviewsParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/reviews?${stringifiedParams}`
+    : `/api/admin/reviews`;
+};
+
+export const adminListReviews = async (
+  params?: AdminListReviewsParams,
+  options?: RequestInit,
+): Promise<ReviewWithDetails[]> => {
+  return customFetch<ReviewWithDetails[]>(getAdminListReviewsUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListReviewsQueryKey = (
+  params?: AdminListReviewsParams,
+) => {
+  return [`/api/admin/reviews`, ...(params ? [params] : [])] as const;
+};
+
+export const getAdminListReviewsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListReviews>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AdminListReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminListReviewsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListReviews>>
+  > = ({ signal }) => adminListReviews(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListReviews>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListReviewsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListReviews>>
+>;
+export type AdminListReviewsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List customer reviews with optional rating filter
+ */
+
+export function useAdminListReviews<
+  TData = Awaited<ReturnType<typeof adminListReviews>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: AdminListReviewsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListReviews>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListReviewsQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Create an incomplete booking draft at step 1

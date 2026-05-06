@@ -1,0 +1,71 @@
+Add a customer review and rating system to the app. This should be a standalone page that works from an email link — customers do not need to be logged in to rate their experience.
+1. New Database Table
+Provide the SQL to create this table so I can run it in Supabase before deploying:
+sqlreviews (
+  id uuid default gen_random_uuid() primary key,
+  booking_id uuid references bookings(id),
+  customer_id uuid references customers(id),
+  rating int CHECK(rating BETWEEN 1 AND 5),
+  feedback text,
+  submitted_at timestamptz default now(),
+  redirected_to_google boolean default false
+)
+2. Review Page
+Create a page at /review that accepts query parameters rating and booking_id:
+
+https://book.vividpei.com/review?rating=5&booking_id=xxx
+
+The page should:
+
+Show the Vivid Detailing logo and branding in the existing dark teal theme
+Display a large star rating selector (1-5 stars) pre-selected to the rating from the URL parameter
+Customer can change the star selection before submitting
+Below the stars show a text area: "Tell us more about your experience (optional)"
+A single submit button: "Submit My Review"
+No login required — the booking_id from the URL is enough to identify the customer
+
+3. Submission Logic
+When the customer submits:
+
+Save the rating and feedback to the reviews table linked to the booking_id
+If rating is 4 or 5 stars:
+
+Show a thank you message: "Thank you! We're so glad you loved your experience."
+After 2 seconds automatically redirect to the Google Business review page — use environment variable GOOGLE_REVIEW_URL for the URL
+
+
+If rating is 1, 2, or 3 stars:
+
+Do NOT redirect to Google
+Show a thank you message: "Thank you for your honest feedback. We take every comment seriously and will use this to improve."
+No redirect — stay on the page
+
+
+
+4. Prevent Duplicate Reviews
+If a review already exists for that booking_id, show the message "You've already submitted a review for this visit. Thank you!" and do not allow a second submission.
+5. Environment Variable
+Add GOOGLE_REVIEW_URL as a new environment variable placeholder in the codebase. I will add the actual Google Business review URL in Railway variables.
+6. GHL Webhook Payload Update
+When a booking is marked completed and the vehicle ready email fires, include a rating_link field in the webhook payload formatted as:
+https://book.vividpei.com/review?booking_id={{booking_id}}
+This allows GHL to insert the link directly into the email template using the {{rating_link}} merge tag.
+7. Admin Reviews View
+Add a new "Reviews" tab in the admin dashboard that shows:
+
+Customer name
+Vehicle
+Star rating (shown as stars not a number)
+Feedback text
+Date submitted
+Whether they were redirected to Google (yes/no badge)
+Sort by most recent first
+Filter by star rating
+
+Important rules:
+
+Do not require login on the /review page
+Do not modify the existing vehicle ready or booking completed email flows — just add the rating_link to the webhook payload
+Run tsc --noEmit after all changes and confirm zero TypeScript errors
+Provide the migration SQL separately before listing file changes
+List every file changed when done

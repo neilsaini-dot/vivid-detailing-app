@@ -578,6 +578,67 @@ paths:
               schema:
                 $ref: "#/components/schemas/AddOn"
 
+  /reviews:
+    post:
+      operationId: submitReview
+      tags: [reviews]
+      summary: Submit a customer review (no auth required)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SubmitReviewBody"
+      responses:
+        "201":
+          description: Review submitted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SubmitReviewResponse"
+
+  /reviews/check:
+    get:
+      operationId: checkReview
+      tags: [reviews]
+      summary: Check if a booking already has a review
+      parameters:
+        - name: bookingId
+          in: query
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  exists:
+                    type: boolean
+
+  /admin/reviews:
+    get:
+      operationId: adminListReviews
+      tags: [admin]
+      summary: List customer reviews with optional rating filter
+      parameters:
+        - name: rating
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of reviews
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ReviewWithDetails"
+
   /bookings/draft:
     post:
       operationId: createBookingDraft
@@ -1710,6 +1771,56 @@ components:
           items:
             type: string
       required: [beforePhotoUrls, afterPhotoUrls]
+
+    SubmitReviewBody:
+      type: object
+      required: [bookingId, rating]
+      properties:
+        bookingId:
+          type: string
+        rating:
+          type: integer
+        feedback:
+          type: string
+          nullable: true
+
+    SubmitReviewResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        alreadySubmitted:
+          type: boolean
+        redirectUrl:
+          type: string
+          nullable: true
+
+    ReviewWithDetails:
+      type: object
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+          nullable: true
+        customerId:
+          type: string
+          nullable: true
+        customerName:
+          type: string
+          nullable: true
+        vehicle:
+          type: string
+          nullable: true
+        rating:
+          type: integer
+        feedback:
+          type: string
+          nullable: true
+        submittedAt:
+          type: string
+        redirectedToGoogle:
+          type: boolean
 
     CreateBookingDraftBody:
       type: object

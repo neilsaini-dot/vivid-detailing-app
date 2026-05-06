@@ -14,6 +14,7 @@ import TintVisualizer from "@/pages/tint-visualizer";
 import Dashboard from "@/pages/dashboard";
 import AdminPanel from "@/pages/admin";
 import QuoteRequest from "@/pages/quote";
+import ReviewPage from "@/pages/review";
 
 const queryClient = new QueryClient();
 
@@ -29,6 +30,7 @@ function Router() {
           <Route path="/dashboard" component={Dashboard} />
           <Route path="/admin" component={AdminPanel} />
           <Route path="/quote" component={QuoteRequest} />
+          <Route path="/review" component={ReviewPage} />
           <Route component={NotFound} />
         </Switch>
       </main>

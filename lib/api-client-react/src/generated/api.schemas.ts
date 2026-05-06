@@ -485,6 +485,30 @@ export interface CustomerSearchResult {
   vehicles: Vehicle[];
 }
 
+export interface SubmitReviewBody {
+  bookingId: string;
+  rating: number;
+  feedback?: string | null;
+}
+
+export interface SubmitReviewResponse {
+  success?: boolean;
+  alreadySubmitted?: boolean;
+  redirectUrl?: string | null;
+}
+
+export interface ReviewWithDetails {
+  id?: string;
+  bookingId?: string | null;
+  customerId?: string | null;
+  customerName?: string | null;
+  vehicle?: string | null;
+  rating?: number;
+  feedback?: string | null;
+  submittedAt?: string;
+  redirectedToGoogle?: boolean;
+}
+
 export interface CreateBookingDraftBody {
   name: string;
   phone: string;
@@ -552,6 +576,18 @@ export type AbandonBookingBody = {
 
 export type AbandonBooking200 = {
   success: boolean;
+};
+
+export type CheckReviewParams = {
+  bookingId: string;
+};
+
+export type CheckReview200 = {
+  exists?: boolean;
+};
+
+export type AdminListReviewsParams = {
+  rating?: number;
 };
 
 export type CreateBookingDraft201 = {

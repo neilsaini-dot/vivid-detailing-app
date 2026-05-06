@@ -7,3 +7,4 @@ export * from "./quotes";
 export * from "./promos";
 export * from "./history";
 export * from "./booking-drafts";
+export * from "./reviews";

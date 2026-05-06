@@ -61,6 +61,16 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - `DELETE /api/admin/booking-drafts/:id` — dismiss a draft from admin view
 - Admin Bookings tab shows a yellow pulsing panel above the table when any incomplete drafts exist; each row shows name, phone, vehicle type, start time, and a dismiss (×) button
 
+### Customer Review & Rating System
+- `reviews` table: id, booking_id, customer_id, rating (1–5), feedback, submitted_at, redirected_to_google
+- `/review` page (no login): accepts `?rating=N&booking_id=UUID` query params, star selector, feedback textarea
+- `POST /api/reviews` — submit a review; returns `{ redirectUrl }` for 4-5 star ratings; blocks duplicates
+- `GET /api/reviews/check?bookingId=` — check if already reviewed (used on page load)
+- `GET /api/admin/reviews?rating=N` — list reviews with customer name, vehicle, filterable by star
+- `GOOGLE_REVIEW_URL` env var — set in Railway; server returns this as `redirectUrl` for 4-5 star submissions
+- When booking marked completed, `GhlBookingCompletedPayload.booking.rating_link` = `https://book.vividpei.com/review?booking_id=<id>` for GHL `{{rating_link}}` merge tag
+- Admin: new "Reviews" tab with star display, feedback, date, Google redirect badge, filter by rating
+
 ### Internal Notes
 - `bookings.internal_notes TEXT` column; PATCH endpoint; admin-only UI with yellow "Admin only" badge
 

@@ -25,9 +25,14 @@ export default function ReviewPage() {
   useEffect(() => {
     if (!bookingId) return;
     fetch(`/api/reviews/check?bookingId=${encodeURIComponent(bookingId)}`)
-      .then(r => r.json())
-      .then(d => { if (d.exists) setAlreadySubmitted(true); })
-      .catch(() => {});
+      .then(async r => {
+        const d = await r.json();
+        console.log("[review] check response:", r.status, d);
+        if (d.exists) setAlreadySubmitted(true);
+      })
+      .catch(err => {
+        console.error("[review] check error:", err);
+      });
   }, [bookingId]);
 
   // Countdown before Google redirect
@@ -54,14 +59,28 @@ export default function ReviewPage() {
         body: JSON.stringify({ bookingId, rating, feedback: feedback || null }),
       });
       const data = await res.json();
+      console.log("[review] submit response:", res.status, data);
+
+      if (!res.ok) {
+        console.error("[review] submit failed:", res.status, data);
+        toast({
+          variant: "destructive",
+          title: "Could not submit review",
+          description: data?.error ?? "Please try again or contact us directly.",
+        });
+        return;
+      }
+
       if (data.alreadySubmitted) {
         setAlreadySubmitted(true);
         return;
       }
+
       setIsHighRating(rating >= 4);
       setRedirectUrl(data.redirectUrl ?? null);
       setSubmitted(true);
-    } catch {
+    } catch (err) {
+      console.error("[review] submit exception:", err);
       toast({ variant: "destructive", title: "Failed to submit", description: "Please try again." });
     } finally {
       setSubmitting(false);
@@ -103,6 +122,11 @@ export default function ReviewPage() {
             {isHighRating && redirectUrl && (
               <p className="text-muted-foreground text-sm mt-2">
                 Redirecting you to Google in {countdown} second{countdown !== 1 ? "s" : ""}…
+              </p>
+            )}
+            {isHighRating && !redirectUrl && (
+              <p className="text-muted-foreground text-sm mt-2">
+                Your review has been saved. Thank you for the kind words!
               </p>
             )}
           </CardContent>

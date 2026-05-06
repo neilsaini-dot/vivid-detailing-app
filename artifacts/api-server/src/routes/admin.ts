@@ -573,11 +573,8 @@ router.get("/admin/calendar/day-summary", async (req, res) => {
     if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
       return res.status(400).json({ error: "date query param required (YYYY-MM-DD)" });
     }
-    const tzDate = new Date(`${date}T00:00:00`);
-    const dayStart = new Date(tzDate.toLocaleString("en-US", { timeZone: "America/Halifax" }));
-    dayStart.setHours(0, 0, 0, 0);
-    const dayEnd = new Date(dayStart);
-    dayEnd.setHours(23, 59, 59, 999);
+    const dayStart = parseHalifaxDatetime(`${date}T00:00:00`);
+    const dayEnd = parseHalifaxDatetime(`${date}T23:59:59`);
 
     const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(dayStart.toISOString())}&timeMax=${encodeURIComponent(dayEnd.toISOString())}&singleEvents=true&orderBy=startTime`;
     let events: { summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string } }[] = [];

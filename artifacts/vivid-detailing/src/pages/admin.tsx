@@ -147,9 +147,10 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     return objectPath as string;
   };
 
-  // Sync pickup time from booking whenever sheet opens or booking changes
+  // Sync state from booking whenever sheet opens or booking changes
   useEffect(() => {
     if (!open || !booking) return;
+    setStatus(booking.status ?? "pending");
     setPickupTime(
       booking.estimatedPickupAt
         ? format(new Date(booking.estimatedPickupAt), "yyyy-MM-dd'T'HH:mm")

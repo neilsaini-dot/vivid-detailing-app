@@ -1715,6 +1715,15 @@ function AdminDashboard() {
   const [bulkStatus, setBulkStatus] = useState<string>("")
   const [bulkWorking, setBulkWorking] = useState(false);
 
+  // Column sort state
+  type SortCol = "date" | "customer" | "vehicle" | "service" | "source" | "status" | "total";
+  const [sortCol, setSortCol] = useState<SortCol>("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const handleSort = (col: SortCol) => {
+    if (sortCol === col) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortCol(col); setSortDir("asc"); }
+  };
+
   // Promo create form state
   const [showCreatePromo, setShowCreatePromo] = useState(false);
   const [newPromo, setNewPromo] = useState({
@@ -1873,6 +1882,49 @@ function AdminDashboard() {
     }
   };
 
+  const sortedBookings = useMemo(() => {
+    const arr = [...bookings];
+    arr.sort((a: any, b: any) => {
+      let aVal: any, bVal: any;
+      switch (sortCol) {
+        case "date":
+          aVal = a.appointmentAt ? new Date(a.appointmentAt).getTime() : 0;
+          bVal = b.appointmentAt ? new Date(b.appointmentAt).getTime() : 0;
+          break;
+        case "customer":
+          aVal = (a.customer?.name ?? "").toLowerCase();
+          bVal = (b.customer?.name ?? "").toLowerCase();
+          break;
+        case "vehicle":
+          aVal = `${a.vehicle?.year ?? ""} ${a.vehicle?.model ?? ""}`.trim().toLowerCase();
+          bVal = `${b.vehicle?.year ?? ""} ${b.vehicle?.model ?? ""}`.trim().toLowerCase();
+          break;
+        case "service":
+          aVal = (a.items?.[0]?.itemName ?? "").toLowerCase();
+          bVal = (b.items?.[0]?.itemName ?? "").toLowerCase();
+          break;
+        case "source":
+          aVal = a.source ?? "";
+          bVal = b.source ?? "";
+          break;
+        case "status":
+          aVal = a.status ?? "";
+          bVal = b.status ?? "";
+          break;
+        case "total":
+          aVal = Number(a.totalEstimate ?? 0);
+          bVal = Number(b.totalEstimate ?? 0);
+          break;
+        default:
+          return 0;
+      }
+      if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return arr;
+  }, [bookings, sortCol, sortDir]);
+
   const chartData = analytics?.revenueByCategory || [
     { category: "Protection", revenue: 4500, bookingCount: 15 },
     { category: "Detailing", revenue: 3200, bookingCount: 22 },
@@ -1999,18 +2051,24 @@ function AdminDashboard() {
                       className="border-border"
                     />
                   </TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Vehicle</TableHead>
-                  <TableHead>Service</TableHead>
-                  <TableHead>Source</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Total</TableHead>
+                  {(["date","customer","vehicle","service","source","status","total"] as const).map(col => (
+                    <TableHead key={col}>
+                      <button
+                        onClick={() => handleSort(col)}
+                        className="flex items-center gap-1 hover:text-foreground capitalize transition-colors"
+                      >
+                        {col}
+                        <span className="text-[10px] leading-none">
+                          {sortCol === col ? (sortDir === "asc" ? "▲" : "▼") : <span className="opacity-30">⇅</span>}
+                        </span>
+                      </button>
+                    </TableHead>
+                  ))}
                   <TableHead></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {bookings.map((b: any) => (
+                {sortedBookings.map((b: any) => (
                   <TableRow
                     key={b.id}
                     className={`border-border ${selectedIds.has(b.id) ? "bg-primary/5" : ""}`}

@@ -25,7 +25,7 @@ import {
   User, Car, CalendarDays, Package, CheckCircle2, RefreshCw,
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
   Camera, Upload, X, Eye, Plus, Trash2, Pencil, Tag, CalendarRange,
-  ChevronDown, Link as LinkIcon, Star,
+  ChevronDown, Link as LinkIcon, Star, Copy, Check,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useRef, useEffect, useCallback, useMemo } from "react";
@@ -87,6 +87,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const queryClient = useQueryClient();
   const updateBooking = useAdminUpdateBooking();
 
+  const [copiedId, setCopiedId] = useState(false);
   const [status, setStatus] = useState<string>(booking?.status ?? "pending");
   const [resyncing, setResyncing] = useState(false);
   const [resynced, setResynced] = useState(false);
@@ -367,6 +368,24 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
         </SheetHeader>
 
         <div className="px-6 py-6 space-y-6">
+
+          {/* Booking ID */}
+          <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2">
+            <span className="text-xs text-muted-foreground shrink-0 font-medium">Booking ID</span>
+            <span className="font-mono text-xs text-foreground flex-1 truncate select-all">{booking.id}</span>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(booking.id).then(() => {
+                  setCopiedId(true);
+                  setTimeout(() => setCopiedId(false), 2000);
+                });
+              }}
+              className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+              title="Copy booking ID"
+            >
+              {copiedId ? <Check className="h-3.5 w-3.5 text-green-400" /> : <Copy className="h-3.5 w-3.5" />}
+            </button>
+          </div>
 
           {/* Customer */}
           <section>

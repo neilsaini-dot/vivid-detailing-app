@@ -238,6 +238,7 @@ export default function BookingFlow() {
   const [currentPricing, setCurrentPricing] = useState<any>(null);
 
   const [capturedLeadId, setCapturedLeadId] = useState<string | null>(null);
+  const [capturedDraftId, setCapturedDraftId] = useState<string | null>(null);
   const [touched, setTouched] = useState({ name: false, phone: false, yearMakeModel: false, email: false });
   const [totalFlash, setTotalFlash] = useState(false);
 
@@ -605,6 +606,17 @@ export default function BookingFlow() {
         // Non-blocking — proceed even if lead save fails
       }
     }
+    // Non-blocking — create incomplete draft so admin can see who started the flow
+    if (!capturedDraftId) {
+      fetch("/api/bookings/draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: state.customer.name, phone: state.customer.phone, vehicleType: state.vehicle.type }),
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.id) setCapturedDraftId(d.id); })
+        .catch(() => {});
+    }
     go(1);
   };
 
@@ -666,7 +678,16 @@ export default function BookingFlow() {
           totalEstimate: adjustedTotal,
         }
       });
-      setConfirmedBookingId((bookingResult as any)?.id ?? null);
+      const confirmedId = (bookingResult as any)?.id ?? null;
+      setConfirmedBookingId(confirmedId);
+      // Mark draft as completed non-blockingly
+      if (capturedDraftId && confirmedId) {
+        fetch(`/api/bookings/draft/${capturedDraftId}/complete`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ bookingId: confirmedId }),
+        }).catch(() => {});
+      }
       toast({ title: "Booking Confirmed", description: "Your appointment has been scheduled." });
       go(1);
     } catch {

@@ -31,3 +31,14 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS estimated_pickup_at TIMESTAMPTZ;
 
 -- 7. Add internal_notes column — admin-only, never exposed to customers
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS internal_notes TEXT;
+
+-- 8. Create booking_drafts table for tracking incomplete booking sessions
+CREATE TABLE IF NOT EXISTS booking_drafts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  vehicle_type TEXT NOT NULL DEFAULT 'car',
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ,
+  completed_booking_id UUID
+);

@@ -4,6 +4,7 @@ import {
   useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
   useDeleteSeasonalPromo, useAdminUpdateService, useAdminUpdateBooking,
   useAdminCreateBooking, useAdminSearchCustomers,
+  useAdminListBookingDrafts, useAdminDeleteBookingDraft,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -1716,7 +1717,7 @@ function AdminDashboard() {
   const [bulkWorking, setBulkWorking] = useState(false);
 
   // Column sort state
-  type SortCol = "date" | "customer" | "vehicle" | "service" | "source" | "status" | "total";
+  type SortCol = "date" | "customer" | "vehicle" | "service" | "source" | "status" | "total" | "booked";
   const [sortCol, setSortCol] = useState<SortCol>("date");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const handleSort = (col: SortCol) => {
@@ -1733,6 +1734,8 @@ function AdminDashboard() {
   const [editPromo, setEditPromo] = useState<any>({});
 
   const { data: bookings = [] } = useAdminListBookings({});
+  const { data: bookingDrafts = [], refetch: refetchDrafts } = useAdminListBookingDrafts();
+  const deleteDraft = useAdminDeleteBookingDraft();
   const { data: services = [] } = useAdminListServices();
   const { data: analytics } = useGetAnalytics();
   const { data: promos = [] } = useListSeasonalPromos();
@@ -1915,6 +1918,10 @@ function AdminDashboard() {
           aVal = Number(a.totalEstimate ?? 0);
           bVal = Number(b.totalEstimate ?? 0);
           break;
+        case "booked":
+          aVal = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          bVal = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          break;
         default:
           return 0;
       }
@@ -1988,6 +1995,54 @@ function AdminDashboard() {
             </Button>
           </div>
 
+          {/* Incomplete bookings panel */}
+          {bookingDrafts.length > 0 && (
+            <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
+                  <span className="text-sm font-semibold text-yellow-400">
+                    {bookingDrafts.length} incomplete booking{bookingDrafts.length !== 1 ? "s" : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">— started the form but didn't finish</span>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-xs text-muted-foreground"
+                  onClick={() => refetchDrafts()}
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" /> Refresh
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {(bookingDrafts as any[]).map((d: any) => (
+                  <div key={d.id} className="flex items-center gap-3 rounded-md bg-background/60 border border-border px-3 py-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium mr-2">{d.name}</span>
+                      <span className="text-xs text-muted-foreground mr-3">{d.phone}</span>
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize mr-2">{d.vehicleType}</Badge>
+                      <span className="text-xs text-muted-foreground">
+                        started {format(new Date(d.startedAt), "MMM d 'at' h:mm a")}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+                      onClick={async () => {
+                        await deleteDraft.mutateAsync({ id: d.id });
+                        refetchDrafts();
+                      }}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Bulk action toolbar — only visible when rows are selected */}
           {selectedIds.size > 0 && (
             <div className="flex items-center gap-3 mb-3 px-4 py-3 bg-primary/10 border border-primary/30 rounded-lg">
@@ -2051,13 +2106,13 @@ function AdminDashboard() {
                       className="border-border"
                     />
                   </TableHead>
-                  {(["date","customer","vehicle","service","source","status","total"] as const).map(col => (
+                  {(["date","customer","vehicle","service","source","status","total","booked"] as const).map(col => (
                     <TableHead key={col}>
                       <button
                         onClick={() => handleSort(col)}
                         className="flex items-center gap-1 hover:text-foreground capitalize transition-colors"
                       >
-                        {col}
+                        {col === "booked" ? "Booked On" : col}
                         <span className="text-[10px] leading-none">
                           {sortCol === col ? (sortDir === "asc" ? "▲" : "▼") : <span className="opacity-30">⇅</span>}
                         </span>
@@ -2098,6 +2153,9 @@ function AdminDashboard() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm font-semibold">${b.totalEstimate}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {b.createdAt ? format(new Date(b.createdAt), "MMM d, yyyy") : "—"}
+                    </TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"
@@ -2112,7 +2170,7 @@ function AdminDashboard() {
                 ))}
                 {bookings.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                       No bookings yet.
                     </TableCell>
                   </TableRow>

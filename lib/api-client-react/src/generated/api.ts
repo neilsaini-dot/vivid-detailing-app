@@ -29,9 +29,13 @@ import type {
   AdminUpdateServiceBody,
   AnalyticsData,
   Booking,
+  BookingDraft,
   CalendarAvailability,
   CaptureLeadBody,
+  CompleteBookingDraftBody,
   CreateBookingBody,
+  CreateBookingDraft201,
+  CreateBookingDraftBody,
   CreateQuoteBody,
   CreateSeasonalPromoBody,
   CreateVehicleBody,
@@ -2316,6 +2320,340 @@ export const useAdminUpdateAddOn = <
   TContext
 > => {
   return useMutation(getAdminUpdateAddOnMutationOptions(options));
+};
+
+/**
+ * @summary Create an incomplete booking draft at step 1
+ */
+export const getCreateBookingDraftUrl = () => {
+  return `/api/bookings/draft`;
+};
+
+export const createBookingDraft = async (
+  createBookingDraftBody: CreateBookingDraftBody,
+  options?: RequestInit,
+): Promise<CreateBookingDraft201> => {
+  return customFetch<CreateBookingDraft201>(getCreateBookingDraftUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createBookingDraftBody),
+  });
+};
+
+export const getCreateBookingDraftMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBookingDraft>>,
+    TError,
+    { data: BodyType<CreateBookingDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof createBookingDraft>>,
+  TError,
+  { data: BodyType<CreateBookingDraftBody> },
+  TContext
+> => {
+  const mutationKey = ["createBookingDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof createBookingDraft>>,
+    { data: BodyType<CreateBookingDraftBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return createBookingDraft(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CreateBookingDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof createBookingDraft>>
+>;
+export type CreateBookingDraftMutationBody = BodyType<CreateBookingDraftBody>;
+export type CreateBookingDraftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create an incomplete booking draft at step 1
+ */
+export const useCreateBookingDraft = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof createBookingDraft>>,
+    TError,
+    { data: BodyType<CreateBookingDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof createBookingDraft>>,
+  TError,
+  { data: BodyType<CreateBookingDraftBody> },
+  TContext
+> => {
+  return useMutation(getCreateBookingDraftMutationOptions(options));
+};
+
+/**
+ * @summary Mark draft as completed when booking is submitted
+ */
+export const getCompleteBookingDraftUrl = (id: string) => {
+  return `/api/bookings/draft/${id}/complete`;
+};
+
+export const completeBookingDraft = async (
+  id: string,
+  completeBookingDraftBody: CompleteBookingDraftBody,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getCompleteBookingDraftUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(completeBookingDraftBody),
+  });
+};
+
+export const getCompleteBookingDraftMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeBookingDraft>>,
+    TError,
+    { id: string; data: BodyType<CompleteBookingDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof completeBookingDraft>>,
+  TError,
+  { id: string; data: BodyType<CompleteBookingDraftBody> },
+  TContext
+> => {
+  const mutationKey = ["completeBookingDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof completeBookingDraft>>,
+    { id: string; data: BodyType<CompleteBookingDraftBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return completeBookingDraft(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CompleteBookingDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof completeBookingDraft>>
+>;
+export type CompleteBookingDraftMutationBody =
+  BodyType<CompleteBookingDraftBody>;
+export type CompleteBookingDraftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark draft as completed when booking is submitted
+ */
+export const useCompleteBookingDraft = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof completeBookingDraft>>,
+    TError,
+    { id: string; data: BodyType<CompleteBookingDraftBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof completeBookingDraft>>,
+  TError,
+  { id: string; data: BodyType<CompleteBookingDraftBody> },
+  TContext
+> => {
+  return useMutation(getCompleteBookingDraftMutationOptions(options));
+};
+
+/**
+ * @summary List incomplete booking drafts
+ */
+export const getAdminListBookingDraftsUrl = () => {
+  return `/api/admin/booking-drafts`;
+};
+
+export const adminListBookingDrafts = async (
+  options?: RequestInit,
+): Promise<BookingDraft[]> => {
+  return customFetch<BookingDraft[]>(getAdminListBookingDraftsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListBookingDraftsQueryKey = () => {
+  return [`/api/admin/booking-drafts`] as const;
+};
+
+export const getAdminListBookingDraftsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListBookingDrafts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListBookingDrafts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminListBookingDraftsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListBookingDrafts>>
+  > = ({ signal }) => adminListBookingDrafts({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListBookingDrafts>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListBookingDraftsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListBookingDrafts>>
+>;
+export type AdminListBookingDraftsQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List incomplete booking drafts
+ */
+
+export function useAdminListBookingDrafts<
+  TData = Awaited<ReturnType<typeof adminListBookingDrafts>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListBookingDrafts>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListBookingDraftsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Delete a booking draft
+ */
+export const getAdminDeleteBookingDraftUrl = (id: string) => {
+  return `/api/admin/booking-drafts/${id}`;
+};
+
+export const adminDeleteBookingDraft = async (
+  id: string,
+  options?: RequestInit,
+): Promise<void> => {
+  return customFetch<void>(getAdminDeleteBookingDraftUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getAdminDeleteBookingDraftMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteBookingDraft>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminDeleteBookingDraft>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["adminDeleteBookingDraft"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminDeleteBookingDraft>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return adminDeleteBookingDraft(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminDeleteBookingDraftMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminDeleteBookingDraft>>
+>;
+
+export type AdminDeleteBookingDraftMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Delete a booking draft
+ */
+export const useAdminDeleteBookingDraft = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminDeleteBookingDraft>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminDeleteBookingDraft>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAdminDeleteBookingDraftMutationOptions(options));
 };
 
 /**

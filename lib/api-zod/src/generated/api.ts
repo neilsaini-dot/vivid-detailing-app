@@ -912,6 +912,49 @@ export const AdminUpdateAddOnResponse = zod.object({
 });
 
 /**
+ * @summary Create an incomplete booking draft at step 1
+ */
+export const CreateBookingDraftBody = zod.object({
+  name: zod.string(),
+  phone: zod.string(),
+  vehicleType: zod.string(),
+});
+
+/**
+ * @summary Mark draft as completed when booking is submitted
+ */
+export const CompleteBookingDraftParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CompleteBookingDraftBody = zod.object({
+  bookingId: zod.string(),
+});
+
+/**
+ * @summary List incomplete booking drafts
+ */
+export const AdminListBookingDraftsResponseItem = zod.object({
+  id: zod.string().optional(),
+  name: zod.string().optional(),
+  phone: zod.string().optional(),
+  vehicleType: zod.string().optional(),
+  startedAt: zod.string().optional(),
+  completedAt: zod.string().nullish(),
+  completedBookingId: zod.string().nullish(),
+});
+export const AdminListBookingDraftsResponse = zod.array(
+  AdminListBookingDraftsResponseItem,
+);
+
+/**
+ * @summary Delete a booking draft
+ */
+export const AdminDeleteBookingDraftParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+/**
  * @summary List bookings with optional filters
  */
 export const AdminListBookingsQueryParams = zod.object({

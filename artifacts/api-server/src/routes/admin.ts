@@ -7,6 +7,7 @@ import {
   addOnPricesTable,
   bookingsTable,
   bookingItemsTable,
+  bookingDraftsTable,
   customersTable,
   vehiclesTable,
   serviceHistoryTable,
@@ -1381,6 +1382,40 @@ router.post("/admin/bookings/bulk-status", async (req, res) => {
     res.json({ ok: true, updated: updated.length });
   } catch (err) {
     req.log.error({ err }, "Failed to bulk-update booking status");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// GET /api/admin/booking-drafts — list incomplete (not yet completed) drafts
+router.get("/admin/booking-drafts", async (req, res) => {
+  try {
+    const drafts = await db
+      .select()
+      .from(bookingDraftsTable)
+      .where(sql`${bookingDraftsTable.completedAt} IS NULL`)
+      .orderBy(desc(bookingDraftsTable.startedAt));
+    res.json(drafts.map(d => ({
+      id: d.id,
+      name: d.name,
+      phone: d.phone,
+      vehicleType: d.vehicleType,
+      startedAt: d.startedAt.toISOString(),
+      completedAt: d.completedAt?.toISOString() ?? null,
+      completedBookingId: d.completedBookingId ?? null,
+    })));
+  } catch (err) {
+    req.log.error({ err }, "Failed to list booking drafts");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// DELETE /api/admin/booking-drafts/:id — dismiss a draft
+router.delete("/admin/booking-drafts/:id", async (req, res) => {
+  try {
+    await db.delete(bookingDraftsTable).where(eq(bookingDraftsTable.id, req.params.id));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete booking draft");
     res.status(500).json({ error: "Internal server error" });
   }
 });

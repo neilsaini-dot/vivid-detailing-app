@@ -3,6 +3,7 @@ import { db } from "@workspace/db";
 import {
   bookingsTable,
   bookingItemsTable,
+  bookingDraftsTable,
   customersTable,
   vehiclesTable,
   servicesTable,
@@ -432,6 +433,38 @@ router.patch("/bookings/:id", async (req, res) => {
     res.json(formatBooking({ ...updated, items, customer: null, vehicle: null }));
   } catch (err) {
     req.log.error({ err }, "Failed to update booking");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/bookings/draft — create an incomplete booking draft when customer starts step 1
+router.post("/bookings/draft", async (req, res) => {
+  try {
+    const { name, phone, vehicleType } = req.body as { name: string; phone: string; vehicleType: string };
+    if (!name || !phone) return res.status(400).json({ error: "name and phone required" });
+    const [draft] = await db
+      .insert(bookingDraftsTable)
+      .values({ name: name.trim(), phone: phone.trim(), vehicleType: vehicleType ?? "car" })
+      .returning();
+    res.status(201).json({ id: draft.id });
+  } catch (err) {
+    req.log.error({ err }, "Failed to create booking draft");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/bookings/draft/:id/complete — mark draft as completed when booking submits
+router.patch("/bookings/draft/:id/complete", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { bookingId } = req.body as { bookingId: string };
+    await db
+      .update(bookingDraftsTable)
+      .set({ completedAt: new Date(), completedBookingId: bookingId })
+      .where(eq(bookingDraftsTable.id, id));
+    res.json({ ok: true });
+  } catch (err) {
+    req.log.error({ err }, "Failed to complete booking draft");
     res.status(500).json({ error: "Internal server error" });
   }
 });

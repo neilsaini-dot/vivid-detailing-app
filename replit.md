@@ -49,11 +49,27 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 - Fetches `GET /api/admin/calendar/events?year=YYYY&month=MM` from Google Calendar
 - Monthly grid view: today highlighted, events shown per day cell, prev/next/today navigation
 
+### Sortable Bookings Table + "Booked On" Column
+- All columns sortable: date, customer, vehicle, service, source, status, total, booked-on (`createdAt`)
+- "Booked On" shows the date the booking record was created (sortable, displayed as MMM d, yyyy)
+
+### Incomplete Bookings Tracking
+- `booking_drafts` table: id, name, phone, vehicle_type, started_at, completed_at (nullable), completed_booking_id (nullable)
+- `POST /api/bookings/draft` — called non-blockingly after step 1 lead capture in booking form; stores draftId in component state
+- `PATCH /api/bookings/draft/:id/complete` — called after successful booking submit to mark draft complete
+- `GET /api/admin/booking-drafts` — returns only incomplete (completedAt IS NULL) drafts, newest first
+- `DELETE /api/admin/booking-drafts/:id` — dismiss a draft from admin view
+- Admin Bookings tab shows a yellow pulsing panel above the table when any incomplete drafts exist; each row shows name, phone, vehicle type, start time, and a dismiss (×) button
+
+### Internal Notes
+- `bookings.internal_notes TEXT` column; PATCH endpoint; admin-only UI with yellow "Admin only" badge
+
 ### Migration SQL
-`scripts/migrate-manual-booking.sql` — includes all schema changes; run in Supabase SQL Editor before deploying.
+`scripts/migrate-manual-booking.sql` — includes all schema changes (steps 1–8); run in Supabase SQL Editor before deploying. Step 8 adds `booking_drafts` table.
 
 ## Gotchas
 
 - After changing `lib/api-spec/openapi.yaml`, always run `pnpm --filter @workspace/api-spec run codegen` before typechecking frontend packages.
 - Admin password is `vivid2024` (hardcoded, stored in `sessionStorage` key `adminAuth`).
 - GHL webhooks fire to `GHL_WEBHOOK_URL`; pickup-time webhook fires to same URL with a distinct `event` field.
+- `booking_drafts` table was added via `pnpm --filter @workspace/db run push`; also documented in migration SQL step 8 for Supabase production deployments.

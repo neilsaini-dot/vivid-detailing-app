@@ -485,6 +485,22 @@ export interface CustomerSearchResult {
   vehicles: Vehicle[];
 }
 
+export interface CreateBookingDraftBody {
+  name: string;
+  phone: string;
+  vehicleType: string;
+}
+
+export interface BookingDraft {
+  id?: string;
+  name?: string;
+  phone?: string;
+  vehicleType?: string;
+  startedAt?: string;
+  completedAt?: string | null;
+  completedBookingId?: string | null;
+}
+
 export type GetCalendarAvailabilityParams = {
   /**
    * Date in YYYY-MM-DD format
@@ -536,6 +552,14 @@ export type AbandonBookingBody = {
 
 export type AbandonBooking200 = {
   success: boolean;
+};
+
+export type CreateBookingDraft201 = {
+  id?: string;
+};
+
+export type CompleteBookingDraftBody = {
+  bookingId: string;
 };
 
 export type AdminListBookingsParams = {

@@ -578,6 +578,83 @@ paths:
               schema:
                 $ref: "#/components/schemas/AddOn"
 
+  /bookings/draft:
+    post:
+      operationId: createBookingDraft
+      tags: [bookings]
+      summary: Create an incomplete booking draft at step 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBookingDraftBody"
+      responses:
+        "201":
+          description: Draft created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+
+  /bookings/draft/{id}/complete:
+    patch:
+      operationId: completeBookingDraft
+      tags: [bookings]
+      summary: Mark draft as completed when booking is submitted
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                bookingId:
+                  type: string
+              required: [bookingId]
+      responses:
+        "200":
+          description: Draft marked complete
+
+  /admin/booking-drafts:
+    get:
+      operationId: adminListBookingDrafts
+      tags: [admin]
+      summary: List incomplete booking drafts
+      responses:
+        "200":
+          description: List of incomplete drafts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BookingDraft"
+
+  /admin/booking-drafts/{id}:
+    delete:
+      operationId: adminDeleteBookingDraft
+      tags: [admin]
+      summary: Delete a booking draft
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Deleted
+
   /admin/bookings:
     get:
       operationId: adminListBookings
@@ -1633,3 +1710,34 @@ components:
           items:
             type: string
       required: [beforePhotoUrls, afterPhotoUrls]
+
+    CreateBookingDraftBody:
+      type: object
+      required: [name, phone, vehicleType]
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        vehicleType:
+          type: string
+
+    BookingDraft:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        phone:
+          type: string
+        vehicleType:
+          type: string
+        startedAt:
+          type: string
+        completedAt:
+          type: string
+          nullable: true
+        completedBookingId:
+          type: string
+          nullable: true

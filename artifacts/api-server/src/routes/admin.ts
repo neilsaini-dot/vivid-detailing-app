@@ -524,6 +524,17 @@ router.patch("/admin/bookings/:id", async (req, res) => {
           phone = customer.phone ?? "";
         }
       }
+      const formatADT = (date: Date): string =>
+        date.toLocaleString("en-CA", {
+          timeZone: "America/Halifax",
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+          hour: "numeric",
+          minute: "2-digit",
+          hour12: true,
+        }).replace(/(\w+ \d+, \d+),/, "$1 at");
+
       sendGhlPickupTimeSet({
         event: "pickup_time_set",
         pickup_time_set: true,
@@ -531,7 +542,9 @@ router.patch("/admin/bookings/:id", async (req, res) => {
         booking: {
           id: updated.id,
           appointment_at: updated.appointmentAt?.toISOString() ?? null,
+          appointment_at_formatted: updated.appointmentAt ? formatADT(updated.appointmentAt) : null,
           estimated_pickup_at: updated.estimatedPickupAt.toISOString(),
+          estimated_pickup_at_formatted: formatADT(updated.estimatedPickupAt),
         },
         source: "vivid-app",
       }).catch(() => {});

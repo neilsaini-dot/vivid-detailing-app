@@ -185,7 +185,9 @@ export interface GhlPickupTimePayload {
   booking: {
     id: string;
     appointment_at: string | null;
+    appointment_at_formatted: string | null;
     estimated_pickup_at: string;
+    estimated_pickup_at_formatted: string;
   };
   source: "vivid-app";
 }

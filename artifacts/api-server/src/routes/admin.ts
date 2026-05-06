@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { z } from "zod/v4";
 import { db } from "@workspace/db";
 import {
   servicesTable,
@@ -1459,6 +1460,42 @@ router.delete("/admin/booking-drafts/:id", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     req.log.error({ err }, "Failed to delete booking draft");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/admin/vehicles/:id — update vehicle fields
+router.patch("/admin/vehicles/:id", async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z.object({
+      type: z.enum(["car", "suv", "truck", "van"]).optional(),
+      year: z.number().int().nullable().optional(),
+      make: z.string().nullable().optional(),
+      model: z.string().nullable().optional(),
+      colour: z.string().nullable().optional(),
+      licensePlate: z.string().nullable().optional(),
+    }).parse(req.body);
+
+    const updates: Partial<typeof vehiclesTable.$inferInsert> = {};
+    if (body.type !== undefined) updates.type = body.type;
+    if (body.year !== undefined) updates.year = body.year;
+    if (body.make !== undefined) updates.make = body.make;
+    if (body.model !== undefined) updates.model = body.model;
+    if (body.colour !== undefined) updates.colour = body.colour;
+    if (body.licensePlate !== undefined) updates.licensePlate = body.licensePlate;
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    const [updated] = await db
+      .update(vehiclesTable)
+      .set(updates)
+      .where(eq(vehiclesTable.id, id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Vehicle not found" });
+    res.json(formatVehicle(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to update vehicle");
     res.status(500).json({ error: "Internal server error" });
   }
 });

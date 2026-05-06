@@ -114,6 +114,11 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [editTotalOverride, setEditTotalOverride] = useState("");
   const [servicesSaving, setServicesSaving] = useState(false);
 
+  // Vehicle edit state
+  const [editingVehicle, setEditingVehicle] = useState(false);
+  const [vehicleEdit, setVehicleEdit] = useState({ type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
+  const [vehicleSaving, setVehicleSaving] = useState(false);
+
   // Pickup time state
   const [pickupTime, setPickupTime] = useState("");
   const [pickupTimeSaving, setPickupTimeSaving] = useState(false);
@@ -157,6 +162,15 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
         : ""
     );
     setInternalNotes(booking.internalNotes ?? "");
+    setEditingVehicle(false);
+    setVehicleEdit({
+      type: booking.vehicle?.type ?? "car",
+      year: booking.vehicle?.year ? String(booking.vehicle.year) : "",
+      make: booking.vehicle?.make ?? "",
+      model: booking.vehicle?.model ?? "",
+      colour: booking.vehicle?.colour ?? "",
+      licensePlate: booking.vehicle?.licensePlate ?? "",
+    });
   }, [open, booking?.id]);
 
   // Load existing service history when sheet opens
@@ -308,6 +322,33 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     ? `https://calendar.google.com/calendar/r/search?q=${encodeURIComponent("Vivid Detailing " + (booking.customer?.name ?? ""))}&date=${format(new Date(booking.appointmentAt), "yyyyMMdd")}`
     : "https://calendar.google.com/calendar/r";
 
+  const handleVehicleSave = async () => {
+    if (!booking.vehicle?.id) return;
+    setVehicleSaving(true);
+    try {
+      const res = await fetch(`/api/admin/vehicles/${booking.vehicle.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: vehicleEdit.type,
+          year: vehicleEdit.year ? parseInt(vehicleEdit.year) : null,
+          make: vehicleEdit.make || null,
+          model: vehicleEdit.model || null,
+          colour: vehicleEdit.colour || null,
+          licensePlate: vehicleEdit.licensePlate || null,
+        }),
+      });
+      if (!res.ok) throw new Error("Failed");
+      queryClient.invalidateQueries();
+      setEditingVehicle(false);
+      toast({ title: "Vehicle updated" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to update vehicle" });
+    } finally {
+      setVehicleSaving(false);
+    }
+  };
+
   const handleStatusSave = async () => {
     try {
       await updateBooking.mutateAsync({ id: booking.id, data: { status: status as any } });
@@ -423,26 +464,81 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
 
           {/* Vehicle */}
           <section>
-            <div className="flex items-center gap-2 mb-3">
-              <Car className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Vehicle</h3>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Vehicle</h3>
+              </div>
+              {booking.vehicle && !editingVehicle && (
+                <Button size="sm" variant="ghost" className="h-7 text-xs px-2 text-muted-foreground" onClick={() => setEditingVehicle(true)}>
+                  <Pencil className="h-3 w-3 mr-1" /> Edit
+                </Button>
+              )}
             </div>
-            <div className="bg-card border border-border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-              <div className="text-muted-foreground">Type</div>
-              <div className="capitalize">{booking.vehicle?.type ?? "—"}</div>
-              <div className="text-muted-foreground">Year</div>
-              <div>{booking.vehicle?.year ?? "—"}</div>
-              <div className="text-muted-foreground">Make / Model</div>
-              <div>{[booking.vehicle?.make, booking.vehicle?.model].filter(Boolean).join(" ") || "—"}</div>
-              {booking.vehicle?.colour && <>
-                <div className="text-muted-foreground">Colour</div>
-                <div>{booking.vehicle.colour}</div>
-              </>}
-              {booking.vehicle?.licensePlate && <>
-                <div className="text-muted-foreground">Plate</div>
-                <div>{booking.vehicle.licensePlate}</div>
-              </>}
-            </div>
+            {editingVehicle ? (
+              <div className="bg-card border border-border rounded-lg p-4 space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Type</label>
+                    <Select value={vehicleEdit.type} onValueChange={v => setVehicleEdit(p => ({ ...p, type: v }))}>
+                      <SelectTrigger className="bg-surface-2 border-border h-9 text-sm">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {["car", "suv", "truck", "van"].map(t => (
+                          <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Year</label>
+                    <Input value={vehicleEdit.year} onChange={e => setVehicleEdit(p => ({ ...p, year: e.target.value }))} placeholder="e.g. 2021" className="bg-surface-2 border-border h-9 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Make</label>
+                    <Input value={vehicleEdit.make} onChange={e => setVehicleEdit(p => ({ ...p, make: e.target.value }))} placeholder="e.g. Toyota" className="bg-surface-2 border-border h-9 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Model</label>
+                    <Input value={vehicleEdit.model} onChange={e => setVehicleEdit(p => ({ ...p, model: e.target.value }))} placeholder="e.g. Camry" className="bg-surface-2 border-border h-9 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">Colour</label>
+                    <Input value={vehicleEdit.colour} onChange={e => setVehicleEdit(p => ({ ...p, colour: e.target.value }))} placeholder="e.g. Silver" className="bg-surface-2 border-border h-9 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">License Plate</label>
+                    <Input value={vehicleEdit.licensePlate} onChange={e => setVehicleEdit(p => ({ ...p, licensePlate: e.target.value }))} placeholder="e.g. ABC 123" className="bg-surface-2 border-border h-9 text-sm" />
+                  </div>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <Button size="sm" onClick={handleVehicleSave} disabled={vehicleSaving} className="h-8 text-xs">
+                    {vehicleSaving ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Saving…</> : "Save"}
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setEditingVehicle(false)} className="h-8 text-xs text-muted-foreground">
+                    Cancel
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-card border border-border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
+                <div className="text-muted-foreground">Type</div>
+                <div className="capitalize">{booking.vehicle?.type ?? "—"}</div>
+                <div className="text-muted-foreground">Year</div>
+                <div>{booking.vehicle?.year ?? "—"}</div>
+                <div className="text-muted-foreground">Make / Model</div>
+                <div>{[booking.vehicle?.make, booking.vehicle?.model].filter(Boolean).join(" ") || "—"}</div>
+                {booking.vehicle?.colour && <>
+                  <div className="text-muted-foreground">Colour</div>
+                  <div>{booking.vehicle.colour}</div>
+                </>}
+                {booking.vehicle?.licensePlate && <>
+                  <div className="text-muted-foreground">Plate</div>
+                  <div>{booking.vehicle.licensePlate}</div>
+                </>}
+              </div>
+            )}
           </section>
 
           {/* Appointment & Status */}

@@ -227,7 +227,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
           afterPhotoUrls: afterUrls,
         },
       });
-      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      queryClient.invalidateQueries();
       toast({ title: "Photos saved" });
     } catch {
       toast({ variant: "destructive", title: "Failed to save photos" });
@@ -252,7 +252,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
           totalOverride: editIsManualTotal && editTotalOverride ? parseFloat(editTotalOverride) || null : null,
         },
       });
-      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      queryClient.invalidateQueries();
       setEditingServices(false);
       toast({ title: "Services updated" });
     } catch {
@@ -269,7 +269,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
         id: booking.id,
         data: { internalNotes: internalNotes || null },
       });
-      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      queryClient.invalidateQueries();
       toast({ title: "Internal notes saved" });
     } catch {
       toast({ variant: "destructive", title: "Failed to save internal notes" });
@@ -285,7 +285,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
         id: booking.id,
         data: { estimatedPickupAt: pickupTime || null },
       });
-      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      queryClient.invalidateQueries();
       toast({ title: pickupTime ? "Pickup time saved — GHL notified" : "Pickup time cleared" });
     } catch {
       toast({ variant: "destructive", title: "Failed to save pickup time" });
@@ -311,7 +311,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const handleStatusSave = async () => {
     try {
       await updateBooking.mutateAsync({ id: booking.id, data: { status: status as any } });
-      queryClient.invalidateQueries({ queryKey: ["adminListBookings"] });
+      queryClient.invalidateQueries();
       toast({ title: "Status updated" });
     } catch {
       toast({ variant: "destructive", title: "Failed to update status" });
@@ -359,9 +359,18 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                 Created {booking.createdAt ? format(new Date(booking.createdAt), "MMM d, yyyy 'at' h:mm a") : "—"}
               </p>
             </div>
-            <Badge variant="outline" className={statusBadgeClass(booking.status)}>
-              {booking.status}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className={statusBadgeClass(booking.status)}>
+                {booking.status}
+              </Badge>
+              <button
+                onClick={onClose}
+                className="rounded-sm p-1 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                aria-label="Close"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </SheetHeader>
 

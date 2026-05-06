@@ -5,6 +5,11 @@ import { eq } from "drizzle-orm";
 
 const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(v: string): boolean {
+  return UUID_RE.test(v);
+}
+
 const router = Router();
 
 // POST /api/reviews — submit a customer review (no auth required)
@@ -15,10 +20,14 @@ router.post("/reviews", async (req, res) => {
       rating: number;
       feedback?: string | null;
     };
+
     if (!bookingId || !rating) {
       return res.status(400).json({ error: "bookingId and rating required" });
     }
-    if (rating < 1 || rating > 5) {
+    if (!isUuid(bookingId)) {
+      return res.status(400).json({ error: "bookingId must be a valid UUID" });
+    }
+    if (typeof rating !== "number" || rating < 1 || rating > 5) {
       return res.status(400).json({ error: "rating must be between 1 and 5" });
     }
 
@@ -55,7 +64,8 @@ router.post("/reviews", async (req, res) => {
 
     res.status(201).json({ success: true, alreadySubmitted: false, redirectUrl });
   } catch (err) {
-    req.log.error({ err }, "Failed to submit review");
+    const message = err instanceof Error ? err.message : String(err);
+    req.log.error({ err, message }, "Failed to submit review");
     res.status(500).json({ error: "Internal server error" });
   }
 });
@@ -64,7 +74,12 @@ router.post("/reviews", async (req, res) => {
 router.get("/reviews/check", async (req, res) => {
   try {
     const bookingId = req.query.bookingId as string;
-    if (!bookingId) return res.status(400).json({ error: "bookingId required" });
+    if (!bookingId) {
+      return res.status(400).json({ error: "bookingId required" });
+    }
+    if (!isUuid(bookingId)) {
+      return res.status(400).json({ error: "bookingId must be a valid UUID" });
+    }
     const [existing] = await db
       .select({ id: reviewsTable.id })
       .from(reviewsTable)
@@ -72,7 +87,8 @@ router.get("/reviews/check", async (req, res) => {
       .limit(1);
     res.json({ exists: !!existing });
   } catch (err) {
-    req.log.error({ err }, "Failed to check review");
+    const message = err instanceof Error ? err.message : String(err);
+    req.log.error({ err, message }, "Failed to check review");
     res.status(500).json({ error: "Internal server error" });
   }
 });

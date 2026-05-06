@@ -1704,7 +1704,8 @@ function CalendarTab() {
 function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [selectedBooking, setSelectedBooking] = useState<any>(null);
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [showManualBooking, setShowManualBooking] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(
     () => (typeof history !== "undefined" && history.state?.adminTab) ? history.state.adminTab : "bookings"
@@ -1719,7 +1720,7 @@ function AdminDashboard() {
     const onPop = (e: PopStateEvent) => {
       const tab = e.state?.adminTab ?? "bookings";
       setActiveTab(tab);
-      setSelectedBooking(null);
+      setSelectedBookingId(null);
       setShowManualBooking(false);
     };
     window.addEventListener("popstate", onPop);
@@ -1754,6 +1755,7 @@ function AdminDashboard() {
   const [reviewRatingFilter, setReviewRatingFilter] = useState<number | null>(null);
 
   const { data: bookings = [] } = useAdminListBookings({});
+  const selectedBooking = bookings.find((b: any) => b.id === selectedBookingId) ?? null;
   const { data: bookingDrafts = [], refetch: refetchDrafts } = useAdminListBookingDrafts();
   const deleteDraft = useAdminDeleteBookingDraft();
   const { data: reviews = [] } = useAdminListReviews(reviewRatingFilter ? { rating: reviewRatingFilter } : {});
@@ -1967,9 +1969,13 @@ function AdminDashboard() {
           variant="outline"
           size="sm"
           className="flex items-center gap-2 border-border text-muted-foreground hover:text-foreground"
-          onClick={() => queryClient.invalidateQueries()}
+          onClick={async () => {
+            setIsRefreshing(true);
+            await queryClient.invalidateQueries();
+            setIsRefreshing(false);
+          }}
         >
-          <RefreshCw className="h-4 w-4" />
+          <RefreshCw className={`h-4 w-4 transition-transform ${isRefreshing ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
@@ -2183,7 +2189,7 @@ function AdminDashboard() {
                         variant="ghost"
                         size="sm"
                         className="text-primary hover:text-primary hover:bg-primary/10"
-                        onClick={() => setSelectedBooking(b)}
+                        onClick={() => setSelectedBookingId(b.id)}
                       >
                         View
                       </Button>
@@ -2550,8 +2556,8 @@ function AdminDashboard() {
 
       <BookingDetailSheet
         booking={selectedBooking}
-        open={!!selectedBooking}
-        onClose={() => setSelectedBooking(null)}
+        open={!!selectedBookingId}
+        onClose={() => setSelectedBookingId(null)}
       />
       <ManualBookingSheet
         open={showManualBooking}

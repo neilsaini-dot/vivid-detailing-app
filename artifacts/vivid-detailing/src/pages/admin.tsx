@@ -295,10 +295,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
 
   if (!booking) return null;
 
-  const serviceItems = booking.items?.filter((i: any) => i.itemType === "service" || i.itemType === "quote") ?? [];
-  const addonItems = booking.items?.filter((i: any) => i.itemType === "addon") ?? [];
-  const promoItems = booking.items?.filter((i: any) => i.itemType === "promo") ?? [];
-  const allLineItems = [...serviceItems, ...addonItems, ...promoItems];
+  const allLineItems = booking.items ?? [];
   const total = Number(booking.totalEstimate ?? 0);
   const hstAmount = Math.round(total / 1.15 * 0.15 * 100) / 100;
   const subtotal = Math.round((total - hstAmount) * 100) / 100;
@@ -908,7 +905,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                 </span>
               </div>
               <p className="text-xs text-muted-foreground">
-                Contact created/updated in GHL with tags: Booking, Vivid Detailing, {serviceItems[0]?.itemName ?? "Service"}.
+                Contact created/updated in GHL with tags: Booking, Vivid Detailing, {allLineItems[0]?.itemName ?? "Service"}.
                 Opportunity marked as Won with value ${total.toFixed(2)}.
               </p>
               <Button

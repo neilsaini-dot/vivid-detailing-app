@@ -392,9 +392,10 @@ router.patch("/admin/bookings/:id", async (req, res) => {
         }))
       );
       const lineItemsTotal = body.lineItems.reduce((sum, li) => sum + li.price, 0);
-      const newTotal = body.isManualPriceOverride && body.totalOverride != null
+      const editSubtotal = body.isManualPriceOverride && body.totalOverride != null
         ? body.totalOverride
         : lineItemsTotal;
+      const newTotal = Math.round(editSubtotal * 1.15 * 100) / 100;
       const [refreshed] = await db
         .update(bookingsTable)
         .set({ totalEstimate: String(newTotal), isManualPriceOverride: body.isManualPriceOverride ?? false })
@@ -1196,10 +1197,12 @@ router.post("/admin/bookings", async (req, res) => {
     }
 
     // ── 3. Compute total ─────────────────────────────────────────
+    // totalEstimate is always stored as the grand total (tax-included).
     const lineItemsTotal = body.lineItems.reduce((sum, li) => sum + li.price, 0);
-    const total = body.isManualPriceOverride && body.totalOverride != null
+    const subtotal = body.isManualPriceOverride && body.totalOverride != null
       ? body.totalOverride
       : lineItemsTotal;
+    const total = Math.round(subtotal * 1.15 * 100) / 100;
 
     // ── 4. Create booking ────────────────────────────────────────
     const [booking] = await db

@@ -1901,7 +1901,7 @@ function SortableSupplyRow({
 function SuppliesTab() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { data: suppliesRaw = [] } = useAdminListSupplies();
+  const { data: suppliesRaw = [], isLoading: suppliesLoading, isError: suppliesError } = useAdminListSupplies();
   const createSupply = useAdminCreateSupply();
   const updateSupply = useAdminUpdateSupply();
   const deleteSupply = useAdminDeleteSupply();
@@ -2011,6 +2011,38 @@ function SuppliesTab() {
       .then(() => toast({ title: "Copied to clipboard" }))
       .catch(() => toast({ variant: "destructive", title: "Failed to copy" }));
   };
+
+  if (suppliesLoading) {
+    return (
+      <div className="flex items-center justify-center py-24 gap-3 text-muted-foreground">
+        <RefreshCw className="h-5 w-5 animate-spin" />
+        <span>Loading supplies…</span>
+      </div>
+    );
+  }
+
+  if (suppliesError) {
+    return (
+      <Card className="bg-surface border-red-500/20">
+        <CardContent className="p-10 text-center">
+          <AlertTriangle className="h-10 w-10 text-red-400 mx-auto mb-3" />
+          <p className="text-red-400 font-medium mb-1">Could not load supplies</p>
+          <p className="text-sm text-muted-foreground mb-4">
+            The supplies table may not exist in your production database yet.<br />
+            Run the migration SQL (step 10) in Supabase, then click Refresh.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5"
+            onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies"] })}
+          >
+            <RefreshCw className="h-3.5 w-3.5" /> Retry
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div>

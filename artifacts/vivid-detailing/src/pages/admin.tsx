@@ -2497,15 +2497,17 @@ function AdminDashboard() {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList className="bg-surface border border-border mb-6">
-          <TabsTrigger value="bookings">Bookings</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
-          <TabsTrigger value="services">Services</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          <TabsTrigger value="promos">Seasonal</TabsTrigger>
-          <TabsTrigger value="reviews">Reviews</TabsTrigger>
-          <TabsTrigger value="supplies">Supplies</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto mb-6 -mx-1 px-1">
+          <TabsList className="bg-surface border border-border w-max min-w-full">
+            <TabsTrigger value="bookings">Bookings</TabsTrigger>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
+            <TabsTrigger value="services">Services</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            <TabsTrigger value="promos">Seasonal</TabsTrigger>
+            <TabsTrigger value="reviews">Reviews</TabsTrigger>
+            <TabsTrigger value="supplies">Supplies</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="bookings">
           {/* Bookings tab header */}

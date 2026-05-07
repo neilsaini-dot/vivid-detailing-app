@@ -74,8 +74,17 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 ### Internal Notes
 - `bookings.internal_notes TEXT` column; PATCH endpoint; admin-only UI with yellow "Admin only" badge
 
+### Supplies Inventory Tab
+- `supplies` table: id, name, category, notes, is_low_stock, sort_order, last_updated
+- `GET /api/admin/supplies` — list all supplies sorted by sort_order
+- `POST /api/admin/supplies` — create supply (name, category?, notes?)
+- `PATCH /api/admin/supplies/reorder` — save new sort order (orderedIds array)
+- `PATCH /api/admin/supplies/:id` — update name/category/notes/isLowStock
+- `DELETE /api/admin/supplies/:id` — delete supply
+- Admin Supplies tab: drag-to-reorder rows (@dnd-kit), low-stock toggle switch, category badges, filter by category or low-stock-only, Order List dialog (copy/print all low-stock items)
+
 ### Migration SQL
-`scripts/migrate-manual-booking.sql` — includes all schema changes (steps 1–8); run in Supabase SQL Editor before deploying. Step 8 adds `booking_drafts` table.
+`scripts/migrate-manual-booking.sql` — includes all schema changes (steps 1–10); run in Supabase SQL Editor before deploying. Step 10 adds `supplies` table.
 
 ## Gotchas
 

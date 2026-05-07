@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import {
   useAdminListBookings, useAdminListServices, useGetAnalytics,
   useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
@@ -6,7 +6,16 @@ import {
   useAdminCreateBooking, useAdminSearchCustomers,
   useAdminListBookingDrafts, useAdminDeleteBookingDraft,
   useAdminListReviews,
+  useAdminListSupplies, useAdminCreateSupply, useAdminUpdateSupply,
+  useAdminDeleteSupply, useAdminReorderSupplies,
 } from "@workspace/api-client-react";
+import {
+  DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, verticalListSortingStrategy, useSortable, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -26,9 +35,11 @@ import {
   ExternalLink, Phone, Mail, ClipboardList, ArrowUpRight,
   Camera, Upload, X, Eye, Plus, Trash2, Pencil, Tag, CalendarRange,
   ChevronDown, Link as LinkIcon, Star, Copy, Check,
+  GripVertical, FlaskConical, Printer, AlertTriangle,
 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import { useRef, useEffect, useCallback, useMemo } from "react";
 import { useDebounce } from "@/hooks/use-debounce";
 
 export default function AdminPanel() {
@@ -1812,6 +1823,381 @@ function CalendarTab() {
   );
 }
 
+// ── Supplies ─────────────────────────────────────────────────────────────────
+
+const SUPPLY_CATEGORIES = ["General", "Interior", "Exterior", "Ceramic", "Tint"];
+
+const categoryColour: Record<string, string> = {
+  Interior: "bg-blue-500/15 text-blue-300 border-blue-500/20",
+  Exterior: "bg-green-500/15 text-green-300 border-green-500/20",
+  Ceramic:  "bg-purple-500/15 text-purple-300 border-purple-500/20",
+  Tint:     "bg-amber-500/15 text-amber-300 border-amber-500/20",
+  General:  "bg-zinc-500/15 text-zinc-300 border-zinc-500/20",
+};
+
+function SortableSupplyRow({
+  supply, onToggleLowStock, onEdit, onDelete,
+}: {
+  supply: any;
+  onToggleLowStock: (id: string, val: boolean) => void;
+  onEdit: (s: any) => void;
+  onDelete: (id: string, name: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: supply.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const cat = supply.category ?? "General";
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex items-center gap-3 px-4 py-3 rounded-lg border text-sm transition-colors ${
+        supply.isLowStock
+          ? "bg-amber-500/10 border-amber-500/30"
+          : "bg-card border-border hover:border-border/80"
+      }`}
+    >
+      <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-muted-foreground/40 hover:text-muted-foreground flex-shrink-0">
+        <GripVertical className="h-4 w-4" />
+      </button>
+
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="font-medium truncate">{supply.name}</span>
+          {supply.category && (
+            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium border ${categoryColour[cat] ?? categoryColour.General}`}>
+              {supply.category}
+            </span>
+          )}
+          {supply.isLowStock && (
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <AlertTriangle className="h-2.5 w-2.5" /> Low Stock
+            </span>
+          )}
+        </div>
+        {supply.notes && <p className="text-xs text-muted-foreground mt-0.5 truncate">{supply.notes}</p>}
+        <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+          Updated {format(new Date(supply.lastUpdated), "MMM d, yyyy 'at' h:mm a")}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Switch
+          checked={supply.isLowStock}
+          onCheckedChange={(val) => onToggleLowStock(supply.id, val)}
+          className="data-[state=checked]:bg-amber-500"
+        />
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-muted-foreground" onClick={() => onEdit(supply)}>
+          <Pencil className="h-3.5 w-3.5" />
+        </Button>
+        <Button size="sm" variant="ghost" className="h-7 w-7 p-0 text-red-400 hover:text-red-300 hover:bg-red-500/10" onClick={() => onDelete(supply.id, supply.name)}>
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function SuppliesTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const { data: suppliesRaw = [] } = useAdminListSupplies();
+  const createSupply = useAdminCreateSupply();
+  const updateSupply = useAdminUpdateSupply();
+  const deleteSupply = useAdminDeleteSupply();
+  const reorderSupplies = useAdminReorderSupplies();
+
+  const [localSupplies, setLocalSupplies] = useState<any[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState("all");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newSupply, setNewSupply] = useState({ name: "", category: "General", notes: "" });
+  const [editingSupply, setEditingSupply] = useState<any>(null);
+  const [editForm, setEditForm] = useState({ name: "", category: "General", notes: "" });
+  const [showOrderList, setShowOrderList] = useState(false);
+
+  useEffect(() => {
+    setLocalSupplies(suppliesRaw as any[]);
+  }, [suppliesRaw]);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setLocalSupplies(prev => {
+      const oldIndex = prev.findIndex(s => s.id === active.id);
+      const newIndex = prev.findIndex(s => s.id === over.id);
+      const reordered = arrayMove(prev, oldIndex, newIndex);
+      reorderSupplies.mutate({ data: { orderedIds: reordered.map(s => s.id) } }, {
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies"] }),
+        onError: () => {
+          setLocalSupplies(prev);
+          toast({ variant: "destructive", title: "Failed to save order" });
+        },
+      });
+      return reordered;
+    });
+  }, [reorderSupplies, queryClient, toast]);
+
+  const handleToggleLowStock = async (id: string, val: boolean) => {
+    setLocalSupplies(prev => prev.map(s => s.id === id ? { ...s, isLowStock: val, lastUpdated: new Date().toISOString() } : s));
+    try {
+      await updateSupply.mutateAsync({ id, data: { isLowStock: val } });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies"] });
+    } catch {
+      setLocalSupplies(suppliesRaw as any[]);
+      toast({ variant: "destructive", title: "Failed to update stock status" });
+    }
+  };
+
+  const handleCreate = async () => {
+    if (!newSupply.name.trim()) return;
+    try {
+      await createSupply.mutateAsync({ data: { name: newSupply.name.trim(), category: newSupply.category || null, notes: newSupply.notes.trim() || null } });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies"] });
+      setNewSupply({ name: "", category: "General", notes: "" });
+      setShowAddForm(false);
+      toast({ title: "Supply added" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to add supply" });
+    }
+  };
+
+  const handleEditSave = async () => {
+    if (!editingSupply || !editForm.name.trim()) return;
+    try {
+      await updateSupply.mutateAsync({ id: editingSupply.id, data: { name: editForm.name.trim(), category: editForm.category || null, notes: editForm.notes.trim() || null } });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies"] });
+      setEditingSupply(null);
+      toast({ title: "Supply updated" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to update supply" });
+    }
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Delete "${name}"? This cannot be undone.`)) return;
+    try {
+      await deleteSupply.mutateAsync({ id });
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/supplies"] });
+      toast({ title: "Supply deleted" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to delete supply" });
+    }
+  };
+
+  const openEdit = (s: any) => {
+    setEditingSupply(s);
+    setEditForm({ name: s.name, category: s.category ?? "General", notes: s.notes ?? "" });
+  };
+
+  const filtered = useMemo(() => {
+    return localSupplies.filter(s => {
+      if (showLowStockOnly && !s.isLowStock) return false;
+      if (categoryFilter !== "all" && s.category !== categoryFilter) return false;
+      return true;
+    });
+  }, [localSupplies, showLowStockOnly, categoryFilter]);
+
+  const lowStockItems = localSupplies.filter(s => s.isLowStock);
+
+  const orderListText = lowStockItems
+    .map(s => `• ${s.name}${s.category ? ` (${s.category})` : ""}${s.notes ? ` — ${s.notes}` : ""}`)
+    .join("\n");
+
+  const handleCopyOrderList = () => {
+    navigator.clipboard.writeText(`ORDER LIST — ${new Date().toLocaleDateString()}\n\n${orderListText}`)
+      .then(() => toast({ title: "Copied to clipboard" }))
+      .catch(() => toast({ variant: "destructive", title: "Failed to copy" }));
+  };
+
+  return (
+    <div>
+      {/* Header row */}
+      <div className="flex flex-wrap items-center gap-3 mb-6">
+        <div className="flex items-center gap-2 flex-1">
+          <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+            <SelectTrigger className="w-40 bg-surface border-border h-9 text-sm">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All categories</SelectItem>
+              {SUPPLY_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <button
+            onClick={() => setShowLowStockOnly(v => !v)}
+            className={`flex items-center gap-1.5 px-3 h-9 rounded-md border text-sm transition-colors ${
+              showLowStockOnly
+                ? "bg-amber-500/20 text-amber-300 border-amber-500/30"
+                : "border-border text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <AlertTriangle className="h-3.5 w-3.5" /> Low Stock Only
+          </button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-9 gap-1.5 border-amber-500/30 text-amber-300 hover:bg-amber-500/10"
+            onClick={() => setShowOrderList(true)}
+            disabled={lowStockItems.length === 0}
+          >
+            <Printer className="h-3.5 w-3.5" />
+            Order List {lowStockItems.length > 0 && `(${lowStockItems.length})`}
+          </Button>
+          <Button size="sm" className="h-9 gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => setShowAddForm(v => !v)}>
+            <Plus className="h-3.5 w-3.5" /> Add Supply
+          </Button>
+        </div>
+      </div>
+
+      {/* Add form */}
+      {showAddForm && (
+        <div className="bg-card border border-primary/30 rounded-lg p-4 mb-4 space-y-3">
+          <h4 className="text-sm font-semibold">New Supply</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Name *</label>
+              <Input value={newSupply.name} onChange={e => setNewSupply(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Gyeon Shampoo" className="bg-surface-2 border-border h-9 text-sm" autoFocus />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Category</label>
+              <Select value={newSupply.category} onValueChange={v => setNewSupply(p => ({ ...p, category: v }))}>
+                <SelectTrigger className="bg-surface-2 border-border h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{SUPPLY_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Notes (brand, supplier, etc.)</label>
+            <Input value={newSupply.notes} onChange={e => setNewSupply(p => ({ ...p, notes: e.target.value }))} placeholder="Optional" className="bg-surface-2 border-border h-9 text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleCreate} disabled={!newSupply.name.trim() || createSupply.isPending} className="h-8 text-xs">
+              {createSupply.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Saving…</> : "Add Supply"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setShowAddForm(false)} className="h-8 text-xs text-muted-foreground">Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit panel */}
+      {editingSupply && (
+        <div className="bg-card border border-primary/30 rounded-lg p-4 mb-4 space-y-3">
+          <h4 className="text-sm font-semibold">Edit: {editingSupply.name}</h4>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Name *</label>
+              <Input value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} className="bg-surface-2 border-border h-9 text-sm" autoFocus />
+            </div>
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Category</label>
+              <Select value={editForm.category} onValueChange={v => setEditForm(p => ({ ...p, category: v }))}>
+                <SelectTrigger className="bg-surface-2 border-border h-9 text-sm"><SelectValue /></SelectTrigger>
+                <SelectContent>{SUPPLY_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div>
+            <label className="text-xs text-muted-foreground mb-1 block">Notes</label>
+            <Input value={editForm.notes} onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))} className="bg-surface-2 border-border h-9 text-sm" />
+          </div>
+          <div className="flex gap-2">
+            <Button size="sm" onClick={handleEditSave} disabled={!editForm.name.trim() || updateSupply.isPending} className="h-8 text-xs">
+              {updateSupply.isPending ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Saving…</> : "Save Changes"}
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => setEditingSupply(null)} className="h-8 text-xs text-muted-foreground">Cancel</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Supplies list */}
+      {filtered.length === 0 ? (
+        <Card className="bg-surface border-border">
+          <CardContent className="p-12 text-center">
+            <FlaskConical className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-40" />
+            <p className="text-muted-foreground mb-4">
+              {localSupplies.length === 0 ? "No supplies yet. Add your first supply to get started." : "No supplies match your current filters."}
+            </p>
+            {localSupplies.length === 0 && (
+              <Button size="sm" onClick={() => setShowAddForm(true)} className="gap-1.5">
+                <Plus className="h-3.5 w-3.5" /> Add First Supply
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={filtered.map(s => s.id)} strategy={verticalListSortingStrategy}>
+            <div className="space-y-2">
+              {filtered.map(supply => (
+                <SortableSupplyRow
+                  key={supply.id}
+                  supply={supply}
+                  onToggleLowStock={handleToggleLowStock}
+                  onEdit={openEdit}
+                  onDelete={handleDelete}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+      )}
+
+      {/* Order List Dialog */}
+      <Dialog open={showOrderList} onOpenChange={setShowOrderList}>
+        <DialogContent className="bg-background border-border max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400" />
+              Order List — {lowStockItems.length} item{lowStockItems.length !== 1 ? "s" : ""}
+            </DialogTitle>
+          </DialogHeader>
+
+          {lowStockItems.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No items marked as low stock.</p>
+          ) : (
+            <>
+              <div className="space-y-2 max-h-80 overflow-y-auto py-2">
+                {lowStockItems.map(s => (
+                  <div key={s.id} className="flex items-start gap-3 py-2 border-b border-border last:border-0">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium">{s.name}</p>
+                      {s.category && <p className="text-xs text-muted-foreground">{s.category}</p>}
+                      {s.notes && <p className="text-xs text-muted-foreground italic">{s.notes}</p>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="flex gap-2 pt-2 border-t border-border">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="gap-1.5 flex-1"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="h-3.5 w-3.5" /> Print
+                </Button>
+                <Button
+                  size="sm"
+                  className="gap-1.5 flex-1"
+                  onClick={handleCopyOrderList}
+                >
+                  <Copy className="h-3.5 w-3.5" /> Copy to Clipboard
+                </Button>
+              </div>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 function AdminDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -2118,6 +2504,7 @@ function AdminDashboard() {
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
           <TabsTrigger value="promos">Seasonal</TabsTrigger>
           <TabsTrigger value="reviews">Reviews</TabsTrigger>
+          <TabsTrigger value="supplies">Supplies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="bookings">
@@ -2662,6 +3049,10 @@ function AdminDashboard() {
               </TableBody>
             </Table>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="supplies">
+          <SuppliesTab />
         </TabsContent>
       </Tabs>
 

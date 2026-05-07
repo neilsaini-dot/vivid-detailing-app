@@ -14,6 +14,7 @@ import {
   vehiclesTable,
   serviceHistoryTable,
   seasonalPromosTable,
+  suppliesTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc, asc, sql, sum, count, inArray } from "drizzle-orm";
 import {
@@ -1460,6 +1461,95 @@ router.delete("/admin/booking-drafts/:id", async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     req.log.error({ err }, "Failed to delete booking draft");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ── Supplies ─────────────────────────────────────────────────────────────────
+
+const SupplyUpdateBody = z.object({
+  name: z.string().optional(),
+  category: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
+  isLowStock: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+function formatSupply(s: typeof suppliesTable.$inferSelect) {
+  return {
+    id: s.id,
+    name: s.name,
+    category: s.category ?? null,
+    notes: s.notes ?? null,
+    isLowStock: s.isLowStock,
+    lastUpdated: s.lastUpdated.toISOString(),
+    sortOrder: s.sortOrder,
+  };
+}
+
+router.get("/admin/supplies", async (req, res) => {
+  try {
+    const rows = await db.select().from(suppliesTable).orderBy(asc(suppliesTable.sortOrder), asc(suppliesTable.name));
+    res.json(rows.map(formatSupply));
+  } catch (err) {
+    req.log.error({ err }, "Failed to list supplies");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.post("/admin/supplies", async (req, res) => {
+  try {
+    const body = z.object({ name: z.string().min(1), category: z.string().nullable().optional(), notes: z.string().nullable().optional() }).parse(req.body);
+    const maxRow = await db.select({ max: sql<number>`coalesce(max(${suppliesTable.sortOrder}), -1)` }).from(suppliesTable);
+    const nextOrder = (maxRow[0]?.max ?? -1) + 1;
+    const [created] = await db.insert(suppliesTable).values({ name: body.name, category: body.category ?? null, notes: body.notes ?? null, sortOrder: nextOrder }).returning();
+    res.status(201).json(formatSupply(created));
+  } catch (err) {
+    req.log.error({ err }, "Failed to create supply");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/admin/supplies/reorder", async (req, res) => {
+  try {
+    const { orderedIds } = z.object({ orderedIds: z.array(z.string().uuid()) }).parse(req.body);
+    await Promise.all(orderedIds.map((id, index) =>
+      db.update(suppliesTable).set({ sortOrder: index }).where(eq(suppliesTable.id, id))
+    ));
+    res.status(204).end();
+  } catch (err) {
+    req.log.error({ err }, "Failed to reorder supplies");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.patch("/admin/supplies/:id", async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = SupplyUpdateBody.parse(req.body);
+    const updates: Partial<typeof suppliesTable.$inferInsert> = {};
+    if (body.name !== undefined) updates.name = body.name;
+    if (body.category !== undefined) updates.category = body.category;
+    if (body.notes !== undefined) updates.notes = body.notes;
+    if (body.isLowStock !== undefined) updates.isLowStock = body.isLowStock;
+    if (body.sortOrder !== undefined) updates.sortOrder = body.sortOrder;
+    updates.lastUpdated = new Date();
+    const [updated] = await db.update(suppliesTable).set(updates).where(eq(suppliesTable.id, id)).returning();
+    if (!updated) return res.status(404).json({ error: "Not found" });
+    res.json(formatSupply(updated));
+  } catch (err) {
+    req.log.error({ err }, "Failed to update supply");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+router.delete("/admin/supplies/:id", async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    await db.delete(suppliesTable).where(eq(suppliesTable.id, id));
+    res.status(204).end();
+  } catch (err) {
+    req.log.error({ err }, "Failed to delete supply");
     res.status(500).json({ error: "Internal server error" });
   }
 });

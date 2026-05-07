@@ -947,6 +947,91 @@ paths:
         "204":
           description: Deleted
 
+  /admin/supplies:
+    get:
+      operationId: adminListSupplies
+      tags: [admin]
+      summary: List all supplies
+      responses:
+        "200":
+          description: Supplies list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Supply"
+    post:
+      operationId: adminCreateSupply
+      tags: [admin]
+      summary: Create a supply item
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSupplyBody"
+      responses:
+        "201":
+          description: Created supply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supply"
+
+  /admin/supplies/reorder:
+    patch:
+      operationId: adminReorderSupplies
+      tags: [admin]
+      summary: Save a new sort order for supplies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReorderSuppliesBody"
+      responses:
+        "204":
+          description: Reordered
+
+  /admin/supplies/{id}:
+    patch:
+      operationId: adminUpdateSupply
+      tags: [admin]
+      summary: Update a supply item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSupplyBody"
+      responses:
+        "200":
+          description: Updated supply
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Supply"
+    delete:
+      operationId: adminDeleteSupply
+      tags: [admin]
+      summary: Delete a supply item
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
@@ -1852,3 +1937,62 @@ components:
         completedBookingId:
           type: string
           nullable: true
+
+    Supply:
+      type: object
+      required: [id, name, isLowStock, sortOrder, lastUpdated]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        isLowStock:
+          type: boolean
+        lastUpdated:
+          type: string
+        sortOrder:
+          type: integer
+
+    CreateSupplyBody:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+
+    UpdateSupplyBody:
+      type: object
+      properties:
+        name:
+          type: string
+        category:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        isLowStock:
+          type: boolean
+        sortOrder:
+          type: integer
+
+    ReorderSuppliesBody:
+      type: object
+      required: [orderedIds]
+      properties:
+        orderedIds:
+          type: array
+          items:
+            type: string

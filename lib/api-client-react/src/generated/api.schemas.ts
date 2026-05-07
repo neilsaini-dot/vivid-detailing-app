@@ -525,6 +525,34 @@ export interface BookingDraft {
   completedBookingId?: string | null;
 }
 
+export interface Supply {
+  id: string;
+  name: string;
+  category?: string | null;
+  notes?: string | null;
+  isLowStock: boolean;
+  lastUpdated: string;
+  sortOrder: number;
+}
+
+export interface CreateSupplyBody {
+  name: string;
+  category?: string | null;
+  notes?: string | null;
+}
+
+export interface UpdateSupplyBody {
+  name?: string;
+  category?: string | null;
+  notes?: string | null;
+  isLowStock?: boolean;
+  sortOrder?: number;
+}
+
+export interface ReorderSuppliesBody {
+  orderedIds: string[];
+}
+
 export type GetCalendarAvailabilityParams = {
   /**
    * Date in YYYY-MM-DD format

@@ -53,3 +53,14 @@ CREATE TABLE IF NOT EXISTS reviews (
   submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   redirected_to_google BOOLEAN NOT NULL DEFAULT false
 );
+
+-- 10. Create supplies table for admin inventory tracking
+CREATE TABLE IF NOT EXISTS supplies (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT,
+  notes TEXT,
+  is_low_stock BOOLEAN NOT NULL DEFAULT false,
+  sort_order INT NOT NULL DEFAULT 0,
+  last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
+);

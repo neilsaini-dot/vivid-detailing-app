@@ -1375,3 +1375,67 @@ export const UpdateSeasonalPromoResponse = zod.object({
 export const DeleteSeasonalPromoParams = zod.object({
   id: zod.coerce.string(),
 });
+
+/**
+ * @summary List all supplies
+ */
+export const AdminListSuppliesResponseItem = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  category: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  isLowStock: zod.boolean(),
+  lastUpdated: zod.string(),
+  sortOrder: zod.number(),
+});
+export const AdminListSuppliesResponse = zod.array(
+  AdminListSuppliesResponseItem,
+);
+
+/**
+ * @summary Create a supply item
+ */
+export const AdminCreateSupplyBody = zod.object({
+  name: zod.string(),
+  category: zod.string().nullish(),
+  notes: zod.string().nullish(),
+});
+
+/**
+ * @summary Save a new sort order for supplies
+ */
+export const AdminReorderSuppliesBody = zod.object({
+  orderedIds: zod.array(zod.string()),
+});
+
+/**
+ * @summary Update a supply item
+ */
+export const AdminUpdateSupplyParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AdminUpdateSupplyBody = zod.object({
+  name: zod.string().optional(),
+  category: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  isLowStock: zod.boolean().optional(),
+  sortOrder: zod.number().optional(),
+});
+
+export const AdminUpdateSupplyResponse = zod.object({
+  id: zod.string(),
+  name: zod.string(),
+  category: zod.string().nullish(),
+  notes: zod.string().nullish(),
+  isLowStock: zod.boolean(),
+  lastUpdated: zod.string(),
+  sortOrder: zod.number(),
+});
+
+/**
+ * @summary Delete a supply item
+ */
+export const AdminDeleteSupplyParams = zod.object({
+  id: zod.coerce.string(),
+});

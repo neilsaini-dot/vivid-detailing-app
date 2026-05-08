@@ -2264,6 +2264,10 @@ function AdminDashboard() {
   const [bulkStatus, setBulkStatus] = useState<string>("")
   const [bulkWorking, setBulkWorking] = useState(false);
 
+  // Booking view filter
+  type BookingView = "today" | "scheduled" | "completed" | "all";
+  const [bookingView, setBookingView] = useState<BookingView>("today");
+
   // Column sort state
   type SortCol = "date" | "customer" | "vehicle" | "service" | "source" | "status" | "total" | "booked";
   const [sortCol, setSortCol] = useState<SortCol>("date");
@@ -2376,10 +2380,10 @@ function AdminDashboard() {
   };
 
   const toggleSelectAll = () => {
-    if (selectedIds.size === bookings.length) {
+    if (viewedBookings.every((b: any) => selectedIds.has(b.id))) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(bookings.map((b: any) => b.id)));
+      setSelectedIds(new Set(viewedBookings.map((b: any) => b.id)));
     }
   };
 
@@ -2484,6 +2488,26 @@ function AdminDashboard() {
     return arr;
   }, [bookings, sortCol, sortDir]);
 
+  const viewedBookings = useMemo(() => {
+    const todayStr = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD in local time
+    switch (bookingView) {
+      case "today":
+        return sortedBookings.filter((b: any) => {
+          if (!b.appointmentAt) return false;
+          return new Date(b.appointmentAt).toLocaleDateString("en-CA") === todayStr;
+        });
+      case "scheduled":
+        return sortedBookings.filter((b: any) =>
+          b.status === "pending" || b.status === "confirmed"
+        );
+      case "completed":
+        return sortedBookings.filter((b: any) => b.status === "completed");
+      case "all":
+      default:
+        return sortedBookings;
+    }
+  }, [sortedBookings, bookingView]);
+
   const chartData = analytics?.revenueByCategory || [
     { category: "Protection", revenue: 4500, bookingCount: 15 },
     { category: "Detailing", revenue: 3200, bookingCount: 22 },
@@ -2543,11 +2567,40 @@ function AdminDashboard() {
 
         <TabsContent value="bookings">
           {/* Bookings tab header */}
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm text-muted-foreground">{bookings.length} booking{bookings.length !== 1 ? "s" : ""}</p>
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            {/* View pills */}
+            <div className="flex items-center gap-1 p-1 bg-surface border border-border rounded-lg flex-1">
+              {(["today","scheduled","completed","all"] as const).map(v => {
+                const labels: Record<string, string> = { today: "Today", scheduled: "Scheduled", completed: "Completed", all: "All" };
+                const counts: Record<string, number> = {
+                  today: sortedBookings.filter((b: any) => b.appointmentAt && new Date(b.appointmentAt).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA")).length,
+                  scheduled: sortedBookings.filter((b: any) => b.status === "pending" || b.status === "confirmed").length,
+                  completed: sortedBookings.filter((b: any) => b.status === "completed").length,
+                  all: sortedBookings.length,
+                };
+                return (
+                  <button
+                    key={v}
+                    onClick={() => { setBookingView(v); setSelectedIds(new Set()); }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
+                      bookingView === v
+                        ? "bg-primary text-primary-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-background/60"
+                    }`}
+                  >
+                    {labels[v]}
+                    <span className={`text-[11px] px-1.5 py-0.5 rounded-full font-semibold ${
+                      bookingView === v ? "bg-white/20 text-white" : "bg-muted text-muted-foreground"
+                    }`}>
+                      {counts[v]}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
             <Button
               size="sm"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2"
+              className="bg-primary text-primary-foreground hover:bg-primary/90 gap-2 shrink-0"
               onClick={() => setShowManualBooking(true)}
             >
               <Plus className="h-4 w-4" />
@@ -2660,7 +2713,7 @@ function AdminDashboard() {
                 <TableRow className="border-border hover:bg-transparent">
                   <TableHead className="w-10">
                     <Checkbox
-                      checked={bookings.length > 0 && selectedIds.size === bookings.length}
+                      checked={viewedBookings.length > 0 && viewedBookings.every((b: any) => selectedIds.has(b.id))}
                       onCheckedChange={toggleSelectAll}
                       aria-label="Select all"
                       className="border-border"
@@ -2683,7 +2736,7 @@ function AdminDashboard() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sortedBookings.map((b: any) => (
+                {viewedBookings.map((b: any) => (
                   <TableRow
                     key={b.id}
                     className={`border-border ${selectedIds.has(b.id) ? "bg-primary/5" : ""}`}
@@ -2728,10 +2781,13 @@ function AdminDashboard() {
                     </TableCell>
                   </TableRow>
                 ))}
-                {bookings.length === 0 && (
+                {viewedBookings.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                      No bookings yet.
+                      {bookingView === "today" && "No appointments today."}
+                      {bookingView === "scheduled" && "No scheduled appointments."}
+                      {bookingView === "completed" && "No completed appointments."}
+                      {bookingView === "all" && "No bookings yet."}
                     </TableCell>
                   </TableRow>
                 )}

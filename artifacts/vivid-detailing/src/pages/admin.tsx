@@ -95,7 +95,7 @@ function statusBadgeClass(status: string) {
   return "text-yellow-500 border-yellow-500/20 bg-yellow-500/10";
 }
 
-function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: boolean; onClose: () => void }) {
+function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspection }: { booking: any; open: boolean; onClose: () => void; inspection: any | null; onStartInspection: () => void }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateBooking = useAdminUpdateBooking();
@@ -139,10 +139,6 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   // Internal notes state
   const [internalNotes, setInternalNotes] = useState("");
   const [internalNotesSaving, setInternalNotesSaving] = useState(false);
-
-  // Inspection state
-  const [inspection, setInspection] = useState<any | null>(null);
-  const [showInspection, setShowInspection] = useState(false);
 
   // Two-step Supabase upload: request signed URL → PUT file directly to CDN.
   // Returns the full public URL (stored in DB, used directly as <img src>).
@@ -190,15 +186,6 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
     });
   }, [open, booking?.id]);
 
-  // Load inspection when sheet opens
-  useEffect(() => {
-    if (!open || !booking?.id) return;
-    setInspection(null);
-    fetch(`/api/admin/inspections/booking/${booking.id}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data) => setInspection(data))
-      .catch(() => {});
-  }, [open, booking?.id]);
 
   // Load existing service history when sheet opens
   useEffect(() => {
@@ -474,14 +461,14 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
               {!inspection ? (
                 <Button
                   className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold gap-2"
-                  onClick={() => setShowInspection(true)}
+                  onClick={onStartInspection}
                 >
                   Start Vehicle Intake Inspection
                 </Button>
               ) : inspection.status === "draft" ? (
                 <Button
                   className="w-full bg-amber-500/80 hover:bg-amber-500 text-black font-semibold gap-2"
-                  onClick={() => setShowInspection(true)}
+                  onClick={onStartInspection}
                 >
                   Continue Inspection (Draft)
                 </Button>
@@ -490,7 +477,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                   <span className="text-xs text-green-400 font-semibold flex items-center gap-1">
                     ✓ Inspection Complete
                   </span>
-                  <Button size="sm" variant="outline" className="ml-auto border-border" onClick={() => setShowInspection(true)}>
+                  <Button size="sm" variant="outline" className="ml-auto border-border" onClick={onStartInspection}>
                     View Inspection
                   </Button>
                 </div>
@@ -1146,22 +1133,6 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
         </div>
       </SheetContent>
 
-      {showInspection && (
-        <InspectionFlow
-          booking={booking}
-          inspection={inspection}
-          onClose={() => setShowInspection(false)}
-          onComplete={() => {
-            setShowInspection(false);
-            setInspection(null);
-            fetch(`/api/admin/inspections/booking/${booking.id}`)
-              .then((r) => (r.ok ? r.json() : null))
-              .then(setInspection)
-              .catch(() => {});
-            queryClient.invalidateQueries();
-          }}
-        />
-      )}
     </Sheet>
   );
 }
@@ -2300,6 +2271,8 @@ function AdminDashboard() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showManualBooking, setShowManualBooking] = useState(false);
+  const [inspection, setInspection] = useState<any | null>(null);
+  const [showInspection, setShowInspection] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(
     () => (typeof history !== "undefined" && history.state?.adminTab) ? history.state.adminTab : "bookings"
   );
@@ -2324,6 +2297,16 @@ function AdminDashboard() {
     setActiveTab(tab);
     history.pushState({ adminTab: tab }, "");
   };
+
+  // Load inspection whenever the selected booking changes
+  useEffect(() => {
+    if (!selectedBookingId) { setInspection(null); return; }
+    setInspection(null);
+    fetch(`/api/admin/inspections/booking/${selectedBookingId}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setInspection(data))
+      .catch(() => {});
+  }, [selectedBookingId]);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<string>("")
   const [bulkWorking, setBulkWorking] = useState(false);
@@ -3214,11 +3197,29 @@ function AdminDashboard() {
         booking={selectedBooking}
         open={!!selectedBookingId}
         onClose={() => setSelectedBookingId(null)}
+        inspection={inspection}
+        onStartInspection={() => setShowInspection(true)}
       />
       <ManualBookingSheet
         open={showManualBooking}
         onClose={() => setShowManualBooking(false)}
       />
+      {showInspection && selectedBooking && (
+        <InspectionFlow
+          booking={selectedBooking}
+          inspection={inspection}
+          onClose={() => setShowInspection(false)}
+          onComplete={() => {
+            setShowInspection(false);
+            setInspection(null);
+            fetch(`/api/admin/inspections/booking/${selectedBooking.id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then(setInspection)
+              .catch(() => {});
+            queryClient.invalidateQueries();
+          }}
+        />
+      )}
     </div>
   );
 }

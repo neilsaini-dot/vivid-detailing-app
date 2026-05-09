@@ -39,6 +39,7 @@ import type {
   CreateBookingBody,
   CreateBookingDraft201,
   CreateBookingDraftBody,
+  CreateInspectionBody,
   CreateQuoteBody,
   CreateSeasonalPromoBody,
   CreateSupplyBody,
@@ -50,6 +51,7 @@ import type {
   GetCalendarAvailabilityParams,
   GetCalendarNextSlotsParams,
   HealthStatus,
+  Inspection,
   ListAddOnsParams,
   ListServicesParams,
   LoyaltyInfo,
@@ -65,6 +67,7 @@ import type {
   SubmitReviewResponse,
   Supply,
   UpdateBookingBody,
+  UpdateInspectionBody,
   UpdateSeasonalPromoBody,
   UpdateSupplyBody,
   UpsertCustomerBody,
@@ -4319,4 +4322,350 @@ export const useAdminDeleteSupply = <
   TContext
 > => {
   return useMutation(getAdminDeleteSupplyMutationOptions(options));
+};
+
+/**
+ * @summary Get inspection for a booking (null if none exists)
+ */
+export const getAdminGetInspectionUrl = (bookingId: string) => {
+  return `/api/admin/inspections/booking/${bookingId}`;
+};
+
+export const adminGetInspection = async (
+  bookingId: string,
+  options?: RequestInit,
+): Promise<Inspection | null> => {
+  return customFetch<Inspection | null>(getAdminGetInspectionUrl(bookingId), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminGetInspectionQueryKey = (bookingId: string) => {
+  return [`/api/admin/inspections/booking/${bookingId}`] as const;
+};
+
+export const getAdminGetInspectionQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminGetInspection>>,
+  TError = ErrorType<unknown>,
+>(
+  bookingId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminGetInspection>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminGetInspectionQueryKey(bookingId);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminGetInspection>>
+  > = ({ signal }) =>
+    adminGetInspection(bookingId, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!bookingId,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminGetInspection>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminGetInspectionQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminGetInspection>>
+>;
+export type AdminGetInspectionQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get inspection for a booking (null if none exists)
+ */
+
+export function useAdminGetInspection<
+  TData = Awaited<ReturnType<typeof adminGetInspection>>,
+  TError = ErrorType<unknown>,
+>(
+  bookingId: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminGetInspection>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminGetInspectionQueryOptions(bookingId, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Create (or return existing) inspection for a booking
+ */
+export const getAdminCreateInspectionUrl = () => {
+  return `/api/admin/inspections`;
+};
+
+export const adminCreateInspection = async (
+  createInspectionBody: CreateInspectionBody,
+  options?: RequestInit,
+): Promise<Inspection> => {
+  return customFetch<Inspection>(getAdminCreateInspectionUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(createInspectionBody),
+  });
+};
+
+export const getAdminCreateInspectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminCreateInspection>>,
+    TError,
+    { data: BodyType<CreateInspectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminCreateInspection>>,
+  TError,
+  { data: BodyType<CreateInspectionBody> },
+  TContext
+> => {
+  const mutationKey = ["adminCreateInspection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminCreateInspection>>,
+    { data: BodyType<CreateInspectionBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return adminCreateInspection(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminCreateInspectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminCreateInspection>>
+>;
+export type AdminCreateInspectionMutationBody = BodyType<CreateInspectionBody>;
+export type AdminCreateInspectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Create (or return existing) inspection for a booking
+ */
+export const useAdminCreateInspection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminCreateInspection>>,
+    TError,
+    { data: BodyType<CreateInspectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminCreateInspection>>,
+  TError,
+  { data: BodyType<CreateInspectionBody> },
+  TContext
+> => {
+  return useMutation(getAdminCreateInspectionMutationOptions(options));
+};
+
+/**
+ * @summary Auto-save inspection data between steps
+ */
+export const getAdminUpdateInspectionUrl = (id: string) => {
+  return `/api/admin/inspections/${id}`;
+};
+
+export const adminUpdateInspection = async (
+  id: string,
+  updateInspectionBody: UpdateInspectionBody,
+  options?: RequestInit,
+): Promise<Inspection> => {
+  return customFetch<Inspection>(getAdminUpdateInspectionUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(updateInspectionBody),
+  });
+};
+
+export const getAdminUpdateInspectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminUpdateInspection>>,
+    TError,
+    { id: string; data: BodyType<UpdateInspectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminUpdateInspection>>,
+  TError,
+  { id: string; data: BodyType<UpdateInspectionBody> },
+  TContext
+> => {
+  const mutationKey = ["adminUpdateInspection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminUpdateInspection>>,
+    { id: string; data: BodyType<UpdateInspectionBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminUpdateInspection(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminUpdateInspectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminUpdateInspection>>
+>;
+export type AdminUpdateInspectionMutationBody = BodyType<UpdateInspectionBody>;
+export type AdminUpdateInspectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Auto-save inspection data between steps
+ */
+export const useAdminUpdateInspection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminUpdateInspection>>,
+    TError,
+    { id: string; data: BodyType<UpdateInspectionBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminUpdateInspection>>,
+  TError,
+  { id: string; data: BodyType<UpdateInspectionBody> },
+  TContext
+> => {
+  return useMutation(getAdminUpdateInspectionMutationOptions(options));
+};
+
+/**
+ * @summary Mark inspection complete and set booking to in_progress
+ */
+export const getAdminCompleteInspectionUrl = (id: string) => {
+  return `/api/admin/inspections/${id}/complete`;
+};
+
+export const adminCompleteInspection = async (
+  id: string,
+  options?: RequestInit,
+): Promise<Inspection> => {
+  return customFetch<Inspection>(getAdminCompleteInspectionUrl(id), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getAdminCompleteInspectionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminCompleteInspection>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminCompleteInspection>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["adminCompleteInspection"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminCompleteInspection>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return adminCompleteInspection(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminCompleteInspectionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminCompleteInspection>>
+>;
+
+export type AdminCompleteInspectionMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Mark inspection complete and set booking to in_progress
+ */
+export const useAdminCompleteInspection = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminCompleteInspection>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminCompleteInspection>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getAdminCompleteInspectionMutationOptions(options));
 };

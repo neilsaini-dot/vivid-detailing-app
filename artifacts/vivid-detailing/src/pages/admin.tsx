@@ -1,4 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { InspectionFlow } from "@/components/InspectionFlow";
 import {
   useAdminListBookings, useAdminListServices, useGetAnalytics,
   useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
@@ -90,6 +91,7 @@ function statusBadgeClass(status: string) {
   if (status === "completed") return "text-green-500 border-green-500/20 bg-green-500/10";
   if (status === "confirmed") return "text-primary border-primary/20 bg-primary/10";
   if (status === "cancelled") return "text-red-500 border-red-500/20 bg-red-500/10";
+  if (status === "in_progress") return "text-sky-400 border-sky-400/20 bg-sky-400/10";
   return "text-yellow-500 border-yellow-500/20 bg-yellow-500/10";
 }
 
@@ -138,6 +140,10 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
   const [internalNotes, setInternalNotes] = useState("");
   const [internalNotesSaving, setInternalNotesSaving] = useState(false);
 
+  // Inspection state
+  const [inspection, setInspection] = useState<any | null>(null);
+  const [showInspection, setShowInspection] = useState(false);
+
   // Two-step Supabase upload: request signed URL → PUT file directly to CDN.
   // Returns the full public URL (stored in DB, used directly as <img src>).
   const uploadPhoto = async (file: File, photoType: "before" | "after"): Promise<string | null> => {
@@ -182,6 +188,16 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
       colour: booking.vehicle?.colour ?? "",
       licensePlate: booking.vehicle?.licensePlate ?? "",
     });
+  }, [open, booking?.id]);
+
+  // Load inspection when sheet opens
+  useEffect(() => {
+    if (!open || !booking?.id) return;
+    setInspection(null);
+    fetch(`/api/admin/inspections/booking/${booking.id}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => setInspection(data))
+      .catch(() => {});
   }, [open, booking?.id]);
 
   // Load existing service history when sheet opens
@@ -452,6 +468,36 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
             </button>
           </div>
 
+          {/* Inspection button */}
+          {(booking.status === "pending" || booking.status === "confirmed" || booking.status === "in_progress") && (
+            <div>
+              {!inspection ? (
+                <Button
+                  className="w-full bg-amber-500 hover:bg-amber-600 text-black font-semibold gap-2"
+                  onClick={() => setShowInspection(true)}
+                >
+                  Start Vehicle Intake Inspection
+                </Button>
+              ) : inspection.status === "draft" ? (
+                <Button
+                  className="w-full bg-amber-500/80 hover:bg-amber-500 text-black font-semibold gap-2"
+                  onClick={() => setShowInspection(true)}
+                >
+                  Continue Inspection (Draft)
+                </Button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-green-400 font-semibold flex items-center gap-1">
+                    ✓ Inspection Complete
+                  </span>
+                  <Button size="sm" variant="outline" className="ml-auto border-border" onClick={() => setShowInspection(true)}>
+                    View Inspection
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Customer */}
           <section>
             <div className="flex items-center gap-2 mb-3">
@@ -585,6 +631,7 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
                     <SelectContent>
                       <SelectItem value="pending">Pending</SelectItem>
                       <SelectItem value="confirmed">Confirmed</SelectItem>
+                      <SelectItem value="in_progress">In Progress</SelectItem>
                       <SelectItem value="completed">Completed</SelectItem>
                       <SelectItem value="cancelled">Cancelled</SelectItem>
                     </SelectContent>
@@ -1098,6 +1145,23 @@ function BookingDetailSheet({ booking, open, onClose }: { booking: any; open: bo
 
         </div>
       </SheetContent>
+
+      {showInspection && (
+        <InspectionFlow
+          booking={booking}
+          inspection={inspection}
+          onClose={() => setShowInspection(false)}
+          onComplete={() => {
+            setShowInspection(false);
+            setInspection(null);
+            fetch(`/api/admin/inspections/booking/${booking.id}`)
+              .then((r) => (r.ok ? r.json() : null))
+              .then(setInspection)
+              .catch(() => {});
+            queryClient.invalidateQueries();
+          }}
+        />
+      )}
     </Sheet>
   );
 }
@@ -2498,7 +2562,7 @@ function AdminDashboard() {
         });
       case "scheduled":
         return sortedBookings.filter((b: any) =>
-          b.status === "pending" || b.status === "confirmed"
+          b.status === "pending" || b.status === "confirmed" || b.status === "in_progress"
         );
       case "completed":
         return sortedBookings.filter((b: any) => b.status === "completed");

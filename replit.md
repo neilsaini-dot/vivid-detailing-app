@@ -74,6 +74,19 @@ See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and pa
 ### Internal Notes
 - `bookings.internal_notes TEXT` column; PATCH endpoint; admin-only UI with yellow "Admin only" badge
 
+### Vehicle Intake Inspection Flow
+- `inspections` table: id, booking_id, vehicle_snapshot (jsonb), damage_entries (jsonb), dashboard_lights (jsonb), condition_notes, package_override, addons_selected (jsonb), estimated_pickup_at, job_notes, before_photo_urls (text[]), signature_url, client_present, status (draft/completed), completed_at, created_at
+- `GET /api/admin/inspections/booking/:bookingId` — fetch inspection for a booking (null if none)
+- `POST /api/admin/inspections` — create or return existing inspection (idempotent)
+- `PATCH /api/admin/inspections/:id` — auto-save inspection data between steps
+- `POST /api/admin/inspections/:id/complete` — mark inspection completed + set booking status to in_progress
+- 5-step full-screen overlay: Customer & Vehicle, Vehicle Condition (SVG diagram zones A–O, damage type/severity, dashboard lights), Job Details (package/addons selector with running total incl. HST), Before Photos (upload grid), Sign Off (disclaimer, signature canvas)
+- View-only summary for completed inspections with Print button (`window.print()`)
+- `booking_status_check` constraint updated to include `in_progress`
+- `supabaseStorage.ts` extended with `"signature"` photoType → fixed path `customerId/bookingId/signature/signature.png`
+- Admin BookingDetailSheet: shows Start/Continue/View Inspection button; `in_progress` status badge (sky blue); status dropdown includes In Progress
+- Bookings "Scheduled" view filter includes `in_progress` bookings
+
 ### Supplies Inventory Tab
 - `supplies` table: id, name, category, notes, is_low_stock, sort_order, last_updated
 - `GET /api/admin/supplies` — list all supplies sorted by sort_order

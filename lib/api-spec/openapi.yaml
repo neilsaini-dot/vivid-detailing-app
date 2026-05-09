@@ -1032,6 +1032,89 @@ paths:
         "204":
           description: Deleted
 
+  /admin/inspections/booking/{bookingId}:
+    get:
+      operationId: adminGetInspection
+      tags: [admin]
+      summary: Get inspection for a booking (null if none exists)
+      parameters:
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Inspection or null
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inspection"
+                nullable: true
+
+  /admin/inspections:
+    post:
+      operationId: adminCreateInspection
+      tags: [admin]
+      summary: Create (or return existing) inspection for a booking
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInspectionBody"
+      responses:
+        "201":
+          description: Created inspection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inspection"
+
+  /admin/inspections/{id}:
+    patch:
+      operationId: adminUpdateInspection
+      tags: [admin]
+      summary: Auto-save inspection data between steps
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateInspectionBody"
+      responses:
+        "200":
+          description: Updated inspection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inspection"
+
+  /admin/inspections/{id}/complete:
+    post:
+      operationId: adminCompleteInspection
+      tags: [admin]
+      summary: Mark inspection complete and set booking to in_progress
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Completed inspection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Inspection"
+
 components:
   schemas:
     HealthStatus:
@@ -1529,7 +1612,7 @@ components:
       properties:
         status:
           type: string
-          enum: [pending, confirmed, completed, cancelled]
+          enum: [pending, confirmed, completed, cancelled, in_progress]
         appointmentAt:
           type: string
         notes:
@@ -1996,3 +2079,109 @@ components:
           type: array
           items:
             type: string
+
+    Inspection:
+      type: object
+      required: [id, status, damageEntries, dashboardLights, addonsSelected, beforePhotoUrls, clientPresent]
+      properties:
+        id:
+          type: string
+        bookingId:
+          type: string
+          nullable: true
+        vehicleSnapshot:
+          type: object
+          nullable: true
+          additionalProperties: true
+        damageEntries:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        dashboardLights:
+          type: array
+          items:
+            type: string
+        conditionNotes:
+          type: string
+          nullable: true
+        packageOverride:
+          type: string
+          nullable: true
+        addonsSelected:
+          type: array
+          items:
+            type: string
+        estimatedPickupAt:
+          type: string
+          nullable: true
+        jobNotes:
+          type: string
+          nullable: true
+        beforePhotoUrls:
+          type: array
+          items:
+            type: string
+        signatureUrl:
+          type: string
+          nullable: true
+        clientPresent:
+          type: boolean
+        status:
+          type: string
+          enum: [draft, completed]
+        completedAt:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          nullable: true
+
+    CreateInspectionBody:
+      type: object
+      required: [bookingId]
+      properties:
+        bookingId:
+          type: string
+
+    UpdateInspectionBody:
+      type: object
+      properties:
+        vehicleSnapshot:
+          type: object
+          nullable: true
+          additionalProperties: true
+        damageEntries:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        dashboardLights:
+          type: array
+          items:
+            type: string
+        conditionNotes:
+          type: string
+          nullable: true
+        packageOverride:
+          type: string
+          nullable: true
+        addonsSelected:
+          type: array
+          items:
+            type: string
+        estimatedPickupAt:
+          type: string
+          nullable: true
+        jobNotes:
+          type: string
+          nullable: true
+        beforePhotoUrls:
+          type: array
+          items:
+            type: string
+        signatureUrl:
+          type: string
+          nullable: true
+        clientPresent:
+          type: boolean

@@ -15,6 +15,7 @@ import {
   serviceHistoryTable,
   seasonalPromosTable,
   suppliesTable,
+  inspectionsTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, desc, asc, sql, sum, count, inArray } from "drizzle-orm";
 import {
@@ -1621,6 +1622,153 @@ router.patch("/admin/vehicles/:id", async (req, res) => {
     res.json(formatVehicle(updated));
   } catch (err) {
     req.log.error({ err }, "Failed to update vehicle");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// ─── Inspection routes ────────────────────────────────────────────────────────
+
+// GET /api/admin/inspections/booking/:bookingId — fetch inspection for a booking
+router.get("/admin/inspections/booking/:bookingId", async (req, res) => {
+  try {
+    const { bookingId } = z.object({ bookingId: z.uuid() }).parse(req.params);
+    const [inspection] = await db
+      .select()
+      .from(inspectionsTable)
+      .where(eq(inspectionsTable.bookingId, bookingId))
+      .limit(1);
+    res.json(inspection ?? null);
+  } catch (err) {
+    req.log.error({ err }, "Failed to get inspection");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/inspections — create or return existing inspection
+router.post("/admin/inspections", async (req, res) => {
+  try {
+    const { bookingId } = z.object({ bookingId: z.uuid() }).parse(req.body);
+
+    const [existing] = await db
+      .select()
+      .from(inspectionsTable)
+      .where(eq(inspectionsTable.bookingId, bookingId))
+      .limit(1);
+    if (existing) return res.json(existing);
+
+    const [booking] = await db
+      .select()
+      .from(bookingsTable)
+      .where(eq(bookingsTable.id, bookingId))
+      .limit(1);
+    if (!booking) return res.status(404).json({ error: "Booking not found" });
+
+    let vehicleSnap: Record<string, unknown> | null = null;
+    let customerSnap: Record<string, unknown> | null = null;
+    if (booking.vehicleId) {
+      const [v] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId)).limit(1);
+      if (v) vehicleSnap = v as unknown as Record<string, unknown>;
+    }
+    if (booking.customerId) {
+      const [c] = await db.select().from(customersTable).where(eq(customersTable.id, booking.customerId)).limit(1);
+      if (c) customerSnap = c as unknown as Record<string, unknown>;
+    }
+
+    const [inspection] = await db
+      .insert(inspectionsTable)
+      .values({
+        bookingId,
+        vehicleSnapshot: { vehicle: vehicleSnap, customer: customerSnap },
+        damageEntries: [],
+        dashboardLights: [],
+        addonsSelected: [],
+        beforePhotoUrls: [],
+        clientPresent: true,
+        status: "draft",
+      })
+      .returning();
+
+    res.status(201).json(inspection);
+  } catch (err) {
+    req.log.error({ err }, "Failed to create inspection");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// PATCH /api/admin/inspections/:id — auto-save inspection data
+router.patch("/admin/inspections/:id", async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+    const body = z.object({
+      vehicleSnapshot: z.record(z.string(), z.unknown()).nullable().optional(),
+      damageEntries: z.array(z.unknown()).optional(),
+      dashboardLights: z.array(z.string()).optional(),
+      conditionNotes: z.string().nullable().optional(),
+      packageOverride: z.string().nullable().optional(),
+      addonsSelected: z.array(z.string()).optional(),
+      estimatedPickupAt: z.string().nullable().optional(),
+      jobNotes: z.string().nullable().optional(),
+      beforePhotoUrls: z.array(z.string()).optional(),
+      signatureUrl: z.string().nullable().optional(),
+      clientPresent: z.boolean().optional(),
+    }).parse(req.body);
+
+    const updates: Partial<typeof inspectionsTable.$inferInsert> = {};
+    if (body.vehicleSnapshot !== undefined) updates.vehicleSnapshot = body.vehicleSnapshot;
+    if (body.damageEntries !== undefined) updates.damageEntries = body.damageEntries;
+    if (body.dashboardLights !== undefined) updates.dashboardLights = body.dashboardLights;
+    if (body.conditionNotes !== undefined) updates.conditionNotes = body.conditionNotes;
+    if (body.packageOverride !== undefined) updates.packageOverride = body.packageOverride;
+    if (body.addonsSelected !== undefined) updates.addonsSelected = body.addonsSelected;
+    if (body.estimatedPickupAt !== undefined) updates.estimatedPickupAt = body.estimatedPickupAt ? new Date(body.estimatedPickupAt) : null;
+    if (body.jobNotes !== undefined) updates.jobNotes = body.jobNotes;
+    if (body.beforePhotoUrls !== undefined) updates.beforePhotoUrls = body.beforePhotoUrls;
+    if (body.signatureUrl !== undefined) updates.signatureUrl = body.signatureUrl;
+    if (body.clientPresent !== undefined) updates.clientPresent = body.clientPresent;
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ error: "No fields to update" });
+
+    const [updated] = await db
+      .update(inspectionsTable)
+      .set(updates)
+      .where(eq(inspectionsTable.id, id))
+      .returning();
+    if (!updated) return res.status(404).json({ error: "Inspection not found" });
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Failed to update inspection");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+// POST /api/admin/inspections/:id/complete — mark inspection done, set booking in_progress
+router.post("/admin/inspections/:id/complete", async (req, res) => {
+  try {
+    const { id } = z.object({ id: z.uuid() }).parse(req.params);
+
+    const [inspection] = await db
+      .select()
+      .from(inspectionsTable)
+      .where(eq(inspectionsTable.id, id))
+      .limit(1);
+    if (!inspection) return res.status(404).json({ error: "Inspection not found" });
+
+    const [updated] = await db
+      .update(inspectionsTable)
+      .set({ status: "completed", completedAt: new Date() })
+      .where(eq(inspectionsTable.id, id))
+      .returning();
+
+    if (inspection.bookingId) {
+      await db
+        .update(bookingsTable)
+        .set({ status: "in_progress" })
+        .where(eq(bookingsTable.id, inspection.bookingId));
+    }
+
+    res.json(updated);
+  } catch (err) {
+    req.log.error({ err }, "Failed to complete inspection");
     res.status(500).json({ error: "Internal server error" });
   }
 });

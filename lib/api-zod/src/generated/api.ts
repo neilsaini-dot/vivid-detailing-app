@@ -1129,7 +1129,7 @@ export const AdminUpdateBookingParams = zod.object({
 
 export const AdminUpdateBookingBody = zod.object({
   status: zod
-    .enum(["pending", "confirmed", "completed", "cancelled"])
+    .enum(["pending", "confirmed", "completed", "cancelled", "in_progress"])
     .optional(),
   appointmentAt: zod.string().optional(),
   notes: zod.string().optional(),
@@ -1438,4 +1438,105 @@ export const AdminUpdateSupplyResponse = zod.object({
  */
 export const AdminDeleteSupplyParams = zod.object({
   id: zod.coerce.string(),
+});
+
+/**
+ * @summary Get inspection for a booking (null if none exists)
+ */
+export const AdminGetInspectionParams = zod.object({
+  bookingId: zod.coerce.string(),
+});
+
+export const AdminGetInspectionResponse = zod
+  .object({
+    id: zod.string(),
+    bookingId: zod.string().nullish(),
+    vehicleSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
+    damageEntries: zod.array(zod.record(zod.string(), zod.unknown())),
+    dashboardLights: zod.array(zod.string()),
+    conditionNotes: zod.string().nullish(),
+    packageOverride: zod.string().nullish(),
+    addonsSelected: zod.array(zod.string()),
+    estimatedPickupAt: zod.string().nullish(),
+    jobNotes: zod.string().nullish(),
+    beforePhotoUrls: zod.array(zod.string()),
+    signatureUrl: zod.string().nullish(),
+    clientPresent: zod.boolean(),
+    status: zod.enum(["draft", "completed"]),
+    completedAt: zod.string().nullish(),
+    createdAt: zod.string().nullish(),
+  })
+  .nullable();
+
+/**
+ * @summary Create (or return existing) inspection for a booking
+ */
+export const AdminCreateInspectionBody = zod.object({
+  bookingId: zod.string(),
+});
+
+/**
+ * @summary Auto-save inspection data between steps
+ */
+export const AdminUpdateInspectionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AdminUpdateInspectionBody = zod.object({
+  vehicleSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
+  damageEntries: zod.array(zod.record(zod.string(), zod.unknown())).optional(),
+  dashboardLights: zod.array(zod.string()).optional(),
+  conditionNotes: zod.string().nullish(),
+  packageOverride: zod.string().nullish(),
+  addonsSelected: zod.array(zod.string()).optional(),
+  estimatedPickupAt: zod.string().nullish(),
+  jobNotes: zod.string().nullish(),
+  beforePhotoUrls: zod.array(zod.string()).optional(),
+  signatureUrl: zod.string().nullish(),
+  clientPresent: zod.boolean().optional(),
+});
+
+export const AdminUpdateInspectionResponse = zod.object({
+  id: zod.string(),
+  bookingId: zod.string().nullish(),
+  vehicleSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
+  damageEntries: zod.array(zod.record(zod.string(), zod.unknown())),
+  dashboardLights: zod.array(zod.string()),
+  conditionNotes: zod.string().nullish(),
+  packageOverride: zod.string().nullish(),
+  addonsSelected: zod.array(zod.string()),
+  estimatedPickupAt: zod.string().nullish(),
+  jobNotes: zod.string().nullish(),
+  beforePhotoUrls: zod.array(zod.string()),
+  signatureUrl: zod.string().nullish(),
+  clientPresent: zod.boolean(),
+  status: zod.enum(["draft", "completed"]),
+  completedAt: zod.string().nullish(),
+  createdAt: zod.string().nullish(),
+});
+
+/**
+ * @summary Mark inspection complete and set booking to in_progress
+ */
+export const AdminCompleteInspectionParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const AdminCompleteInspectionResponse = zod.object({
+  id: zod.string(),
+  bookingId: zod.string().nullish(),
+  vehicleSnapshot: zod.record(zod.string(), zod.unknown()).nullish(),
+  damageEntries: zod.array(zod.record(zod.string(), zod.unknown())),
+  dashboardLights: zod.array(zod.string()),
+  conditionNotes: zod.string().nullish(),
+  packageOverride: zod.string().nullish(),
+  addonsSelected: zod.array(zod.string()),
+  estimatedPickupAt: zod.string().nullish(),
+  jobNotes: zod.string().nullish(),
+  beforePhotoUrls: zod.array(zod.string()),
+  signatureUrl: zod.string().nullish(),
+  clientPresent: zod.boolean(),
+  status: zod.enum(["draft", "completed"]),
+  completedAt: zod.string().nullish(),
+  createdAt: zod.string().nullish(),
 });

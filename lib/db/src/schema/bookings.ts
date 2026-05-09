@@ -26,7 +26,7 @@ export const bookingsTable = pgTable("bookings", {
   internalNotes: text("internal_notes"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
-  check("booking_status_check", sql`${t.status} IN ('pending','confirmed','completed','cancelled')`),
+  check("booking_status_check", sql`${t.status} IN ('pending','confirmed','completed','cancelled','in_progress')`),
   check("booking_source_check", sql`${t.source} IN ('online','phone','walkin','referral','other')`),
 ]);
 

@@ -1,0 +1,142 @@
+Here's the complete prompt — all 5 steps in one:
+
+
+Add a Vehicle Intake Inspection flow to the admin booking detail view. This is a multi-step digital intake form that replaces the paper inspection sheet. Do not modify the customer-facing booking flow in any way.
+1. Migration SQL
+Provide the complete migration SQL to run in Supabase before deploying:
+sqlCREATE TABLE IF NOT EXISTS inspections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+  vehicle_snapshot JSONB,
+  damage_entries JSONB DEFAULT '[]',
+  dashboard_lights JSONB DEFAULT '[]',
+  condition_notes TEXT,
+  package_override TEXT,
+  addons_selected JSONB DEFAULT '[]',
+  estimated_pickup_at TIMESTAMPTZ,
+  job_notes TEXT,
+  before_photo_urls TEXT[] DEFAULT '{}',
+  signature_url TEXT,
+  client_present BOOLEAN DEFAULT true,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','completed')),
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+2. Start Inspection Button
+On the admin booking detail view add a Start Inspection button. Only appears when booking status is confirmed or pending. Clicking it opens a full-screen overlay with a 5-step inspection flow. Show a step progress indicator at the top. If an inspection already exists for this booking the button changes to Continue Inspection or View Inspection depending on whether status is draft or completed.
+3. Step 1 — Customer & Vehicle
+Pre-populate all fields from the booking record. All fields editable inline. Changes update the customer and vehicle records in the database.
+Customer fields:
+
+First name
+Last name
+Phone number
+Email address
+
+Vehicle fields:
+
+Year
+Make
+Model
+Colour
+Licence plate
+Additional vehicle notes
+
+Drop-off time auto-populates to current time and is editable.
+4. Step 2 — Vehicle Condition
+Show a clean SVG top-down vehicle outline — do not use a photo. Overlay zone letters A through O on the diagram:
+A — Front bumper left
+B — Front bumper right
+C — Hood left
+D — Hood right
+E — Roof left
+F — Roof right
+G — Trunk left
+H — Trunk right
+I — Rear bumper left
+J — Rear bumper right
+K — Driver front door / quarter panel
+L — Driver rear door / quarter panel
+M — Passenger front door / quarter panel
+N — Passenger rear door / quarter panel
+O — Undercarriage / other
+Tapping a zone letter opens a damage entry form:
+
+Zone (pre-filled)
+Damage type: Scratch / Dent / Chip / Crack / Other
+Severity: Minor / Moderate / Significant
+Notes (optional free text)
+
+Zones with damage entries highlight in amber on the diagram. All entries show as a list below with zone, type, severity, notes, and a delete button.
+Dashboard warning lights section below the diagram — checkboxes for:
+
+Engine / Check Engine
+Oil Pressure
+Battery
+Tire Pressure (TPMS)
+ABS
+Airbag / SRS
+Transmission
+Service Due
+Other (with text field)
+
+General condition notes text area below warning lights.
+5. Step 3 — Job Details
+
+Package selector dropdown — options match the vehicle type on the booking with correct pricing. Changing package updates the booking record and recalculates total.
+Add-ons checklist for the correct vehicle type with name and price. Pre-check any add-ons already on the booking. Checking or unchecking updates booking_items in the database.
+Estimated pickup time picker — saves to booking record and fires existing GHL webhook with event type pickup_time_set and payload containing customer name, phone, email, vehicle, and estimated_pickup_at_formatted.
+Job notes text area for internal staff notes.
+Running total shown at the bottom updating in real time as package or addons change.
+
+6. Step 4 — Before Photos
+Allow upload of multiple photos. Photos go to Supabase Storage at path: client-photos/customer_id/booking_id/before/. Show thumbnails of uploaded photos with a delete button on each. Show upload progress indicator. Minimum 0 photos required — this step is optional but encouraged. Show a note: "Photos protect you and your customer — document the vehicle before work begins."
+7. Step 5 — Sign Off
+Show the full disclaimer text:
+"By signing below, I confirm that the vehicle condition described in this inspection accurately reflects the state of my vehicle at the time of drop-off. I authorize Vivid Detailing to perform the services selected above.
+I understand and agree that:
+Vivid Detailing is not responsible for pre-existing damage, wear, or defects not noted at the time of inspection, including but not limited to paint chips, scratches, dents, or mechanical issues.
+Vivid Detailing is not responsible for damage caused by loose or broken trim, badges, seals, or mouldings that may be dislodged during the cleaning process.
+Vivid Detailing is not responsible for damage resulting from pre-existing window tint, aftermarket accessories, or non-factory installations.
+Vehicles left on premises after the agreed pickup time are left at the owner's risk. Vivid Detailing is not responsible for damage caused by weather events, including hail, wind, or flooding, while the vehicle is on our property or in our parking lot.
+Interior steam cleaning and moisture-based services may cause temporary condensation or moisture within the vehicle. Vivid Detailing is not responsible for damage to electronics, sensitive materials, or personal items left in the vehicle during service.
+Personal items left in the vehicle are the owner's responsibility. Vivid Detailing is not responsible for lost, stolen, or damaged personal belongings.
+Payment is due upon pickup. Vivid Detailing reserves the right to hold the vehicle until full payment is received."
+Below the disclaimer show two options:
+Option A — Signature canvas: finger or mouse drawable signature box with a Clear button. On submit the signature is saved as a PNG to Supabase Storage at client-photos/customer_id/booking_id/signature.png and the URL saved to inspections.signature_url.
+Option B — Checkbox: "Client not present at inspection — signature waived." When checked the signature canvas is hidden.
+A Complete Inspection button at the bottom. When clicked:
+
+Validates that either a signature is drawn or the client not present checkbox is checked
+Saves all inspection data to the inspections table
+Sets inspection status to completed and completed_at to now
+Sets booking status to in_progress
+Shows a success confirmation: "Inspection complete. Job is now in progress."
+Closes the overlay and returns to the booking detail view
+The booking detail now shows a View Inspection button and an Inspection Complete badge
+
+8. Navigation
+Back and Next buttons on every step. Data saves automatically when moving between steps. Loading indicator while saving. Error toast if save fails — do not advance on failure. Allow jumping back to any completed step freely.
+9. Inspection Summary View
+When viewing a completed inspection from the booking detail show a read-only summary of all fields including:
+
+Customer and vehicle details
+Damage entries with zone map showing highlighted zones
+Dashboard lights checked
+Package and addons selected
+Estimated pickup time
+Before photos gallery
+Signature image or client not present note
+Completed at timestamp
+
+Add a Print Inspection button that opens a clean print-formatted version of the summary suitable for keeping as a physical record.
+10. Important Rules
+
+Do not modify the customer-facing booking flow
+Do not modify any existing admin functionality
+All inspection data saves to the inspections table
+Package and addon changes also update bookings and booking_items tables
+booking status in_progress should be added to the existing status check constraint — provide the ALTER TABLE SQL for this
+Run tsc --noEmit after all changes and confirm zero TypeScript errors
+Provide all migration SQL separately before listing file changes
+List every file changed when done

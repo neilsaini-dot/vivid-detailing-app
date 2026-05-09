@@ -316,6 +316,7 @@ export const AdminUpdateBookingBodyStatus = {
   confirmed: "confirmed",
   completed: "completed",
   cancelled: "cancelled",
+  in_progress: "in_progress",
 } as const;
 
 export type AdminUpdateBookingBodyLineItemsItem = {
@@ -551,6 +552,61 @@ export interface UpdateSupplyBody {
 
 export interface ReorderSuppliesBody {
   orderedIds: string[];
+}
+
+export type InspectionVehicleSnapshot = { [key: string]: unknown } | null;
+
+export type InspectionDamageEntriesItem = { [key: string]: unknown };
+
+export type InspectionStatus =
+  (typeof InspectionStatus)[keyof typeof InspectionStatus];
+
+export const InspectionStatus = {
+  draft: "draft",
+  completed: "completed",
+} as const;
+
+export interface Inspection {
+  id: string;
+  bookingId?: string | null;
+  vehicleSnapshot?: InspectionVehicleSnapshot;
+  damageEntries: InspectionDamageEntriesItem[];
+  dashboardLights: string[];
+  conditionNotes?: string | null;
+  packageOverride?: string | null;
+  addonsSelected: string[];
+  estimatedPickupAt?: string | null;
+  jobNotes?: string | null;
+  beforePhotoUrls: string[];
+  signatureUrl?: string | null;
+  clientPresent: boolean;
+  status: InspectionStatus;
+  completedAt?: string | null;
+  createdAt?: string | null;
+}
+
+export interface CreateInspectionBody {
+  bookingId: string;
+}
+
+export type UpdateInspectionBodyVehicleSnapshot = {
+  [key: string]: unknown;
+} | null;
+
+export type UpdateInspectionBodyDamageEntriesItem = { [key: string]: unknown };
+
+export interface UpdateInspectionBody {
+  vehicleSnapshot?: UpdateInspectionBodyVehicleSnapshot;
+  damageEntries?: UpdateInspectionBodyDamageEntriesItem[];
+  dashboardLights?: string[];
+  conditionNotes?: string | null;
+  packageOverride?: string | null;
+  addonsSelected?: string[];
+  estimatedPickupAt?: string | null;
+  jobNotes?: string | null;
+  beforePhotoUrls?: string[];
+  signatureUrl?: string | null;
+  clientPresent?: boolean;
 }
 
 export type GetCalendarAvailabilityParams = {

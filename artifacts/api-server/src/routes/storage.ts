@@ -13,7 +13,7 @@ const RequestUploadUrlBody = z.object({
   size: z.number().optional(),
   contentType: z.string().optional(),
   bookingId: z.string().uuid().optional(),
-  photoType: z.enum(["before", "after"]).optional(),
+  photoType: z.enum(["before", "after", "signature", "inspection"]).optional(),
 });
 
 const router: IRouter = Router();

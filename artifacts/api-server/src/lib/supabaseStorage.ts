@@ -36,16 +36,18 @@ export interface UploadUrlResult {
 /**
  * Create a signed upload URL.
  * Path: {customerId}/{bookingId}/{photoType}/{uuid}-{sanitisedName}
+ * Signature path: {customerId}/{bookingId}/signature/signature.png (no UUID)
  */
 export async function createSignedUploadUrl(
   customerId: string,
   bookingId: string,
-  photoType: "before" | "after",
+  photoType: "before" | "after" | "signature" | "inspection",
   originalName: string
 ): Promise<UploadUrlResult> {
   const supabase = getClient();
-  const safeName = sanitiseName(originalName);
-  const storagePath = `${customerId}/${bookingId}/${photoType}/${randomUUID()}-${safeName}`;
+  const storagePath = photoType === "signature"
+    ? `${customerId}/${bookingId}/signature/signature.png`
+    : `${customerId}/${bookingId}/${photoType}/${randomUUID()}-${sanitiseName(originalName)}`;
 
   const { data, error } = await supabase.storage
     .from(BUCKET)

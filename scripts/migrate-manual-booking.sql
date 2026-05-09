@@ -64,3 +64,28 @@ CREATE TABLE IF NOT EXISTS supplies (
   sort_order INT NOT NULL DEFAULT 0,
   last_updated TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- 11. Update booking status check constraint to allow 'in_progress'
+ALTER TABLE bookings DROP CONSTRAINT IF EXISTS booking_status_check;
+ALTER TABLE bookings ADD CONSTRAINT booking_status_check
+  CHECK (status IN ('pending','confirmed','completed','cancelled','in_progress'));
+
+-- 12. Create inspections table for vehicle intake inspection flow
+CREATE TABLE IF NOT EXISTS inspections (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  booking_id UUID REFERENCES bookings(id) ON DELETE CASCADE,
+  vehicle_snapshot JSONB,
+  damage_entries JSONB NOT NULL DEFAULT '[]',
+  dashboard_lights JSONB NOT NULL DEFAULT '[]',
+  condition_notes TEXT,
+  package_override TEXT,
+  addons_selected JSONB NOT NULL DEFAULT '[]',
+  estimated_pickup_at TIMESTAMPTZ,
+  job_notes TEXT,
+  before_photo_urls TEXT[] DEFAULT '{}',
+  signature_url TEXT,
+  client_present BOOLEAN NOT NULL DEFAULT true,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','completed')),
+  completed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

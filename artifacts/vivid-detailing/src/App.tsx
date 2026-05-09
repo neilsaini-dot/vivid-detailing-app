@@ -15,27 +15,36 @@ import Dashboard from "@/pages/dashboard";
 import AdminPanel from "@/pages/admin";
 import QuoteRequest from "@/pages/quote";
 import ReviewPage from "@/pages/review";
+import InspectionPage from "@/pages/inspection";
 
 const queryClient = new QueryClient();
 
 function Router() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <Navbar />
-      <main className="flex-1">
-        <Switch>
-          <Route path="/">{() => { window.location.replace((import.meta.env.BASE_URL + "book").replace(/\/\//g, "/")); return null; }}</Route>
-          <Route path="/book" component={BookingFlow} />
-          <Route path="/tint-visualizer" component={TintVisualizer} />
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/admin" component={AdminPanel} />
-          <Route path="/quote" component={QuoteRequest} />
-          <Route path="/review" component={ReviewPage} />
-          <Route component={NotFound} />
-        </Switch>
-      </main>
-      <Footer />
-    </div>
+    <Switch>
+      {/* Standalone full-screen pages — no Navbar/Footer */}
+      <Route path="/admin/inspection/:bookingId" component={InspectionPage} />
+
+      {/* Standard shell with Navbar + Footer */}
+      <Route>
+        <div className="flex min-h-screen flex-col">
+          <Navbar />
+          <main className="flex-1">
+            <Switch>
+              <Route path="/">{() => { window.location.replace((import.meta.env.BASE_URL + "book").replace(/\/\//g, "/")); return null; }}</Route>
+              <Route path="/book" component={BookingFlow} />
+              <Route path="/tint-visualizer" component={TintVisualizer} />
+              <Route path="/dashboard" component={Dashboard} />
+              <Route path="/admin" component={AdminPanel} />
+              <Route path="/quote" component={QuoteRequest} />
+              <Route path="/review" component={ReviewPage} />
+              <Route component={NotFound} />
+            </Switch>
+          </main>
+          <Footer />
+        </div>
+      </Route>
+    </Switch>
   );
 }
 

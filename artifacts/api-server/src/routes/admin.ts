@@ -321,6 +321,26 @@ router.get("/admin/bookings", async (req, res) => {
   }
 });
 
+// GET /api/admin/bookings/:id — single booking with customer, vehicle, items
+router.get("/admin/bookings/:id", async (req, res) => {
+  try {
+    const { id } = AdminUpdateBookingParams.parse(req.params);
+    const [b] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
+    if (!b) return res.status(404).json({ error: "Not found" });
+    const items = await db.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, b.id));
+    const customer = b.customerId
+      ? (await db.select().from(customersTable).where(eq(customersTable.id, b.customerId)))[0] ?? null
+      : null;
+    const vehicle = b.vehicleId
+      ? (await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, b.vehicleId)))[0] ?? null
+      : null;
+    res.json(formatBooking({ ...b, items, customer, vehicle }));
+  } catch (err) {
+    req.log.error({ err }, "Failed to get booking");
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 // GET /api/admin/bookings/:id/service-history
 router.get("/admin/bookings/:id/service-history", async (req, res) => {
   try {

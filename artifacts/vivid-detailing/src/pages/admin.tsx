@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { InspectionFlow } from "@/components/InspectionFlow";
+import { useLocation } from "wouter";
 import {
   useAdminListBookings, useAdminListServices, useGetAnalytics,
   useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
@@ -2271,8 +2271,8 @@ function AdminDashboard() {
   const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showManualBooking, setShowManualBooking] = useState(false);
+  const [, navigate] = useLocation();
   const [inspection, setInspection] = useState<any | null>(null);
-  const [showInspection, setShowInspection] = useState(false);
   const [activeTab, setActiveTab] = useState<string>(
     () => (typeof history !== "undefined" && history.state?.adminTab) ? history.state.adminTab : "bookings"
   );
@@ -3198,28 +3198,12 @@ function AdminDashboard() {
         open={!!selectedBookingId}
         onClose={() => setSelectedBookingId(null)}
         inspection={inspection}
-        onStartInspection={() => setShowInspection(true)}
+        onStartInspection={() => selectedBookingId && navigate(`/admin/inspection/${selectedBookingId}`)}
       />
       <ManualBookingSheet
         open={showManualBooking}
         onClose={() => setShowManualBooking(false)}
       />
-      {showInspection && selectedBooking && (
-        <InspectionFlow
-          booking={selectedBooking}
-          inspection={inspection}
-          onClose={() => setShowInspection(false)}
-          onComplete={() => {
-            setShowInspection(false);
-            setInspection(null);
-            fetch(`/api/admin/inspections/booking/${selectedBooking.id}`)
-              .then((r) => (r.ok ? r.json() : null))
-              .then(setInspection)
-              .catch(() => {});
-            queryClient.invalidateQueries();
-          }}
-        />
-      )}
     </div>
   );
 }

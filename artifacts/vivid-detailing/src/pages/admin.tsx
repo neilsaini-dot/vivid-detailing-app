@@ -132,6 +132,11 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
   const [vehicleEdit, setVehicleEdit] = useState({ type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
   const [vehicleSaving, setVehicleSaving] = useState(false);
 
+  // Appointment reschedule state
+  const [editingAppt, setEditingAppt] = useState(false);
+  const [apptEdit, setApptEdit] = useState("");
+  const [apptSaving, setApptSaving] = useState(false);
+
   // Pickup time state
   const [pickupTime, setPickupTime] = useState("");
   const [pickupTimeSaving, setPickupTimeSaving] = useState(false);
@@ -184,6 +189,12 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
       colour: booking.vehicle?.colour ?? "",
       licensePlate: booking.vehicle?.licensePlate ?? "",
     });
+    setEditingAppt(false);
+    setApptEdit(
+      booking.appointmentAt
+        ? format(new Date(booking.appointmentAt), "yyyy-MM-dd'T'HH:mm")
+        : ""
+    );
   }, [open, booking?.id]);
 
 
@@ -303,6 +314,24 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
       toast({ variant: "destructive", title: "Failed to save internal notes" });
     } finally {
       setInternalNotesSaving(false);
+    }
+  };
+
+  const handleApptSave = async () => {
+    if (!apptEdit) return;
+    setApptSaving(true);
+    try {
+      await updateBooking.mutateAsync({
+        id: booking.id,
+        data: { appointmentAt: apptEdit },
+      });
+      queryClient.invalidateQueries();
+      setEditingAppt(false);
+      toast({ title: "Appointment rescheduled — GHL notified" });
+    } catch {
+      toast({ variant: "destructive", title: "Failed to reschedule appointment" });
+    } finally {
+      setApptSaving(false);
     }
   };
 
@@ -598,16 +627,57 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
               <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Appointment & Status</h3>
             </div>
             <div className="bg-card border border-border rounded-lg p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs text-muted-foreground mb-0.5">Appointment</p>
-                  <p className="font-semibold">
-                    {booking.appointmentAt
-                      ? format(new Date(booking.appointmentAt), "EEEE, MMMM d, yyyy 'at' h:mm a")
-                      : "Not scheduled"}
-                  </p>
+              {editingAppt ? (
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground mb-1.5">Reschedule Appointment</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="datetime-local"
+                      value={apptEdit}
+                      onChange={e => setApptEdit(e.target.value)}
+                      className="flex-1 bg-background border-border text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={handleApptSave}
+                      disabled={apptSaving || !apptEdit}
+                      className="bg-primary text-primary-foreground hover:bg-primary/90 shrink-0"
+                    >
+                      {apptSaving ? "Saving…" : "Save"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setEditingAppt(false);
+                        setApptEdit(booking.appointmentAt ? format(new Date(booking.appointmentAt), "yyyy-MM-dd'T'HH:mm") : "");
+                      }}
+                      className="shrink-0 text-muted-foreground"
+                    >
+                      Cancel
+                    </Button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-0.5">Appointment</p>
+                    <p className="font-semibold">
+                      {booking.appointmentAt
+                        ? format(new Date(booking.appointmentAt), "EEEE, MMMM d, yyyy 'at' h:mm a")
+                        : "Not scheduled"}
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 text-xs px-2 text-muted-foreground shrink-0"
+                    onClick={() => setEditingAppt(true)}
+                  >
+                    <Pencil className="h-3 w-3 mr-1" /> Reschedule
+                  </Button>
+                </div>
+              )}
               <div className="flex items-end gap-3">
                 <div className="flex-1">
                   <p className="text-xs text-muted-foreground mb-1.5">Status</p>

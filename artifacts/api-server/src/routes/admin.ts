@@ -35,7 +35,7 @@ import {
 } from "@workspace/api-zod";
 import { ilike, or } from "drizzle-orm";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
-import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink, sendGhlPickupTimeSet } from "../lib/ghl";
+import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink, sendGhlPickupTimeSet, sendGhlBookingRescheduled } from "../lib/ghl";
 import { createCalendarEvent } from "../lib/googleCalendar";
 import { googleFetch } from "../lib/googleAuth";
 import { downloadFile } from "../lib/supabaseStorage";
@@ -362,12 +362,14 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     const { id } = AdminUpdateBookingParams.parse(req.params);
     const body = AdminUpdateBookingBody.parse(req.body);
 
-    // Fetch existing booking upfront when pickup time is being set (need old value to detect change)
+    // Fetch existing booking upfront when pickup time or appointment date is being updated (need old values to detect changes)
     let existingPickupAt: Date | null = null;
-    if (body.estimatedPickupAt !== undefined) {
+    let existingAppointmentAt: Date | null = null;
+    if (body.estimatedPickupAt !== undefined || body.appointmentAt !== undefined) {
       const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
       if (!existing) return res.status(404).json({ error: "Not found" });
       existingPickupAt = existing.estimatedPickupAt ?? null;
+      existingAppointmentAt = existing.appointmentAt ?? null;
     }
 
     const updates: Partial<typeof bookingsTable.$inferInsert> = {};
@@ -573,6 +575,63 @@ router.patch("/admin/bookings/:id", async (req, res) => {
           appointment_at_formatted: updated.appointmentAt ? formatADT(updated.appointmentAt) : null,
           estimated_pickup_at: updated.estimatedPickupAt.toISOString(),
           estimated_pickup_at_formatted: formatADT(updated.estimatedPickupAt),
+        },
+        source: "vivid-app",
+      }).catch(() => {});
+    }
+
+    // Fire reschedule webhook when appointmentAt changes
+    if (
+      body.appointmentAt &&
+      updated.appointmentAt &&
+      existingAppointmentAt?.getTime() !== updated.appointmentAt.getTime()
+    ) {
+      let rsFirstName = "";
+      let rsLastName = "";
+      let rsEmail = "";
+      let rsPhone = "";
+      let rsVehicle = "";
+
+      if (updated.customerId) {
+        const [cust] = await db.select().from(customersTable).where(eq(customersTable.id, updated.customerId)).limit(1);
+        if (cust) {
+          const parts = (cust.name ?? "").split(" ");
+          rsFirstName = parts[0] ?? "";
+          rsLastName = parts.slice(1).join(" ");
+          rsEmail = cust.email ?? "";
+          rsPhone = cust.phone ?? "";
+        }
+      }
+
+      if (updated.vehicleId) {
+        const [veh] = await db.select().from(vehiclesTable).where(eq(vehiclesTable.id, updated.vehicleId)).limit(1);
+        if (veh) rsVehicle = [veh.year, veh.make, veh.model].filter(Boolean).join(" ");
+      }
+
+      const rsItems = await db.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, id));
+      const rsServices = rsItems.filter(i => i.itemType === "service" || i.itemType === "promo").map(i => i.itemName);
+      const rsAddons = rsItems.filter(i => i.itemType === "addon").map(i => i.itemName);
+
+      const formatRsADT = (date: Date): string =>
+        date.toLocaleString("en-CA", {
+          timeZone: "America/Halifax",
+          month: "long", day: "numeric", year: "numeric",
+          hour: "numeric", minute: "2-digit", hour12: true,
+        }).replace(/(\w+ \d+, \d+),/, "$1 at");
+
+      sendGhlBookingRescheduled({
+        event: "booking_rescheduled",
+        booking_rescheduled: true,
+        contact: { firstName: rsFirstName, lastName: rsLastName, email: rsEmail, phone: rsPhone },
+        booking: {
+          id: updated.id,
+          services: rsServices,
+          addons: rsAddons,
+          vehicle: rsVehicle,
+          appointment_at: updated.appointmentAt.toISOString(),
+          appointment_at_formatted: formatRsADT(updated.appointmentAt),
+          total_estimate: Number(updated.totalEstimate ?? 0),
+          notes: updated.notes ?? null,
         },
         source: "vivid-app",
       }).catch(() => {});

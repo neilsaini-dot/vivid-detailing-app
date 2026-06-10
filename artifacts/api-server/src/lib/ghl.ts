@@ -208,6 +208,42 @@ export async function sendGhlPickupTimeSet(payload: GhlPickupTimePayload): Promi
   }
 }
 
+export interface GhlRescheduledPayload {
+  event: "booking_rescheduled";
+  booking_rescheduled: true;
+  contact: {
+    firstName: string;
+    lastName: string;
+    email: string;
+    phone: string;
+  };
+  booking: {
+    id: string;
+    services: string[];
+    addons: string[];
+    vehicle: string;
+    appointment_at: string | null;
+    appointment_at_formatted: string | null;
+    total_estimate: number;
+    notes: string | null;
+  };
+  source: "vivid-app";
+}
+
+// Booking rescheduled — goes to GHL_BOOKING_CONFIRMED_WEBHOOK_URL (falls back to GHL_WEBHOOK_URL)
+export async function sendGhlBookingRescheduled(payload: GhlRescheduledPayload): Promise<void> {
+  const url = GHL_BOOKING_CONFIRMED_WEBHOOK_URL || GHL_WEBHOOK_URL;
+  if (!url) {
+    logger.warn("No GHL webhook URL configured - skipping reschedule webhook");
+    return;
+  }
+  try {
+    await postTo(url, payload, "booking_rescheduled");
+  } catch (err) {
+    logger.error({ err }, "Failed to send GHL booking-rescheduled webhook");
+  }
+}
+
 // Booking confirmed — goes to dedicated GHL_BOOKING_CONFIRMED_WEBHOOK_URL
 // Falls back to GHL_WEBHOOK_URL if the dedicated URL is not configured
 export async function sendGhlBookingConfirmed(payload: GhlBookingConfirmedPayload): Promise<void> {

@@ -5,6 +5,7 @@ const GHL_BOOKING_CONFIRMED_WEBHOOK_URL = process.env.GHL_BOOKING_CONFIRMED_WEBH
 const GHL_MAGIC_LINK_WEBHOOK_URL = process.env.GHL_MAGIC_LINK_WEBHOOK_URL;
 const GHL_BOOKING_COMPLETED_WEBHOOK_URL = process.env.GHL_BOOKING_COMPLETED_WEBHOOK_URL;
 const GHL_PICKUP_TIME_WEBHOOK_URL = process.env.GHL_PICKUP_TIME_WEBHOOK_URL;
+const GHL_RESCHEDULE_WEBHOOK_URL = process.env.GHL_RESCHEDULE_WEBHOOK_URL;
 
 export type GhlEvent =
   | "lead_captured"
@@ -230,9 +231,9 @@ export interface GhlRescheduledPayload {
   source: "vivid-app";
 }
 
-// Booking rescheduled — goes to GHL_BOOKING_CONFIRMED_WEBHOOK_URL (falls back to GHL_WEBHOOK_URL)
+// Booking rescheduled — goes to GHL_RESCHEDULE_WEBHOOK_URL, falls back to GHL_BOOKING_CONFIRMED_WEBHOOK_URL, then GHL_WEBHOOK_URL
 export async function sendGhlBookingRescheduled(payload: GhlRescheduledPayload): Promise<void> {
-  const url = GHL_BOOKING_CONFIRMED_WEBHOOK_URL || GHL_WEBHOOK_URL;
+  const url = GHL_RESCHEDULE_WEBHOOK_URL || GHL_BOOKING_CONFIRMED_WEBHOOK_URL || GHL_WEBHOOK_URL;
   if (!url) {
     logger.warn("No GHL webhook URL configured - skipping reschedule webhook");
     return;

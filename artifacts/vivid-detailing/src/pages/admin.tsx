@@ -2382,8 +2382,9 @@ function AdminDashboard() {
   const [bulkWorking, setBulkWorking] = useState(false);
 
   // Booking view filter
-  type BookingView = "today" | "scheduled" | "completed" | "all";
+  type BookingView = "today" | "scheduled" | "completed" | "all" | "incomplete";
   const [bookingView, setBookingView] = useState<BookingView>("today");
+  const [dateFilter, setDateFilter] = useState("");
 
   // Column sort state
   type SortCol = "date" | "customer" | "vehicle" | "service" | "source" | "status" | "total" | "booked";
@@ -2613,17 +2614,29 @@ function AdminDashboard() {
           if (!b.appointmentAt) return false;
           return new Date(b.appointmentAt).toLocaleDateString("en-CA") === todayStr;
         });
-      case "scheduled":
-        return sortedBookings.filter((b: any) =>
+      case "scheduled": {
+        const base = sortedBookings.filter((b: any) =>
           b.status === "pending" || b.status === "confirmed" || b.status === "in_progress"
         );
-      case "completed":
-        return sortedBookings.filter((b: any) => b.status === "completed");
+        if (!dateFilter) return base;
+        return base.filter((b: any) =>
+          b.appointmentAt && new Date(b.appointmentAt).toLocaleDateString("en-CA") === dateFilter
+        );
+      }
+      case "completed": {
+        const base = sortedBookings.filter((b: any) => b.status === "completed");
+        if (!dateFilter) return base;
+        return base.filter((b: any) =>
+          b.appointmentAt && new Date(b.appointmentAt).toLocaleDateString("en-CA") === dateFilter
+        );
+      }
+      case "incomplete":
+        return [];
       case "all":
       default:
         return sortedBookings;
     }
-  }, [sortedBookings, bookingView]);
+  }, [sortedBookings, bookingView, dateFilter]);
 
   const chartData = analytics?.revenueByCategory || [
     { category: "Protection", revenue: 4500, bookingCount: 15 },
@@ -2687,18 +2700,19 @@ function AdminDashboard() {
           <div className="flex flex-wrap items-center gap-3 mb-4">
             {/* View pills */}
             <div className="flex items-center gap-1 p-1 bg-surface border border-border rounded-lg flex-1">
-              {(["today","scheduled","completed","all"] as const).map(v => {
-                const labels: Record<string, string> = { today: "Today", scheduled: "Scheduled", completed: "Completed", all: "All" };
+              {(["today","scheduled","completed","all","incomplete"] as const).map(v => {
+                const labels: Record<string, string> = { today: "Today", scheduled: "Scheduled", completed: "Completed", all: "All", incomplete: "Incomplete" };
                 const counts: Record<string, number> = {
                   today: sortedBookings.filter((b: any) => b.appointmentAt && new Date(b.appointmentAt).toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA")).length,
                   scheduled: sortedBookings.filter((b: any) => b.status === "pending" || b.status === "confirmed").length,
                   completed: sortedBookings.filter((b: any) => b.status === "completed").length,
                   all: sortedBookings.length,
+                  incomplete: (bookingDrafts as any[]).length,
                 };
                 return (
                   <button
                     key={v}
-                    onClick={() => { setBookingView(v); setSelectedIds(new Set()); }}
+                    onClick={() => { setBookingView(v); setSelectedIds(new Set()); if (v !== "scheduled" && v !== "completed") setDateFilter(""); }}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex-1 justify-center ${
                       bookingView === v
                         ? "bg-primary text-primary-foreground shadow-sm"
@@ -2725,51 +2739,24 @@ function AdminDashboard() {
             </Button>
           </div>
 
-          {/* Incomplete bookings panel */}
-          {bookingDrafts.length > 0 && (
-            <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-4">
-              <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
-                  <span className="text-sm font-semibold text-yellow-400">
-                    {bookingDrafts.length} incomplete booking{bookingDrafts.length !== 1 ? "s" : ""}
-                  </span>
-                  <span className="text-xs text-muted-foreground">— started the form but didn't finish</span>
-                </div>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2 text-xs text-muted-foreground"
-                  onClick={() => refetchDrafts()}
+          {/* Date filter — visible for Scheduled and Completed views */}
+          {(bookingView === "scheduled" || bookingView === "completed") && (
+            <div className="flex items-center gap-2 mb-4">
+              <span className="text-xs text-muted-foreground">Filter by date:</span>
+              <input
+                type="date"
+                value={dateFilter}
+                onChange={e => setDateFilter(e.target.value)}
+                className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+              {dateFilter && (
+                <button
+                  onClick={() => setDateFilter("")}
+                  className="flex items-center gap-1 h-8 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
                 >
-                  <RefreshCw className="h-3 w-3 mr-1" /> Refresh
-                </Button>
-              </div>
-              <div className="space-y-2">
-                {(bookingDrafts as any[]).map((d: any) => (
-                  <div key={d.id} className="flex items-center gap-3 rounded-md bg-background/60 border border-border px-3 py-2">
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium mr-2">{d.name}</span>
-                      <span className="text-xs text-muted-foreground mr-3">{d.phone}</span>
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize mr-2">{d.vehicleType}</Badge>
-                      <span className="text-xs text-muted-foreground">
-                        started {format(new Date(d.startedAt), "MMM d 'at' h:mm a")}
-                      </span>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
-                      onClick={async () => {
-                        await deleteDraft.mutateAsync({ id: d.id });
-                        refetchDrafts();
-                      }}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                ))}
-              </div>
+                  <X className="h-3 w-3" /> Clear
+                </button>
+              )}
             </div>
           )}
 
@@ -2824,93 +2811,142 @@ function AdminDashboard() {
             </div>
           )}
 
-          <Card className="bg-surface border-border">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border hover:bg-transparent">
-                  <TableHead className="w-10">
-                    <Checkbox
-                      checked={viewedBookings.length > 0 && viewedBookings.every((b: any) => selectedIds.has(b.id))}
-                      onCheckedChange={toggleSelectAll}
-                      aria-label="Select all"
-                      className="border-border"
-                    />
-                  </TableHead>
-                  {(["date","customer","vehicle","service","source","status","total","booked"] as const).map(col => (
-                    <TableHead key={col}>
-                      <button
-                        onClick={() => handleSort(col)}
-                        className="flex items-center gap-1 hover:text-foreground capitalize transition-colors"
-                      >
-                        {col === "booked" ? "Booked On" : col}
-                        <span className="text-[10px] leading-none">
-                          {sortCol === col ? (sortDir === "asc" ? "▲" : "▼") : <span className="opacity-30">⇅</span>}
+          {bookingView === "incomplete" ? (
+            <Card className="bg-surface border-border">
+              <div className="flex items-center justify-between px-4 pt-4 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-yellow-400 animate-pulse" />
+                  <span className="text-sm font-semibold text-yellow-400">
+                    {(bookingDrafts as any[]).length} incomplete booking{(bookingDrafts as any[]).length !== 1 ? "s" : ""}
+                  </span>
+                  <span className="text-xs text-muted-foreground">— started the form but didn't finish</span>
+                </div>
+                <button
+                  onClick={() => refetchDrafts()}
+                  className="flex items-center gap-1 h-7 px-2 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-background/60 transition-colors"
+                >
+                  <RefreshCw className="h-3 w-3" /> Refresh
+                </button>
+              </div>
+              <div className="p-4 pt-2 space-y-2">
+                {(bookingDrafts as any[]).length === 0 ? (
+                  <div className="text-center text-muted-foreground py-8 text-sm">No incomplete bookings.</div>
+                ) : (
+                  (bookingDrafts as any[]).map((d: any) => (
+                    <div key={d.id} className="flex items-center gap-3 rounded-md bg-background/60 border border-border px-3 py-2.5">
+                      <div className="flex-1 min-w-0">
+                        <span className="text-sm font-medium mr-2">{d.name}</span>
+                        <span className="text-xs text-muted-foreground mr-3">{d.phone}</span>
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 capitalize mr-2">{d.vehicleType}</Badge>
+                        <span className="text-xs text-muted-foreground">
+                          started {format(new Date(d.startedAt), "MMM d 'at' h:mm a")}
                         </span>
-                      </button>
-                    </TableHead>
-                  ))}
-                  <TableHead></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {viewedBookings.map((b: any) => (
-                  <TableRow
-                    key={b.id}
-                    className={`border-border ${selectedIds.has(b.id) ? "bg-primary/5" : ""}`}
-                  >
-                    <TableCell>
-                      <Checkbox
-                        checked={selectedIds.has(b.id)}
-                        onCheckedChange={() => toggleSelect(b.id)}
-                        aria-label="Select booking"
-                        className="border-border"
-                      />
-                    </TableCell>
-                    <TableCell className="text-sm">
-                      {b.appointmentAt ? format(new Date(b.appointmentAt), "MMM d, yyyy") : "TBD"}
-                    </TableCell>
-                    <TableCell className="text-sm">{b.customer?.name}</TableCell>
-                    <TableCell className="text-sm">{b.vehicle?.year} {b.vehicle?.model}</TableCell>
-                    <TableCell className="text-sm max-w-[160px] truncate">{b.items?.[0]?.itemName || "Custom"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={`text-xs ${SOURCE_BADGE_CLASS[b.source ?? "online"] ?? SOURCE_BADGE_CLASS.other}`}>
-                        {SOURCE_LABELS[b.source ?? "online"] ?? b.source}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className={statusBadgeClass(b.status)}>
-                        {b.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm font-semibold">${b.totalEstimate}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {b.createdAt ? format(new Date(b.createdAt), "MMM d, yyyy") : "—"}
-                    </TableCell>
-                    <TableCell>
+                      </div>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-primary hover:text-primary hover:bg-primary/10"
-                        onClick={() => setSelectedBookingId(b.id)}
+                        className="h-6 w-6 p-0 text-muted-foreground hover:text-red-400"
+                        onClick={async () => {
+                          await deleteDraft.mutateAsync({ id: d.id });
+                          refetchDrafts();
+                        }}
                       >
-                        View
+                        <X className="h-3.5 w-3.5" />
                       </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {viewedBookings.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
-                      {bookingView === "today" && "No appointments today."}
-                      {bookingView === "scheduled" && "No scheduled appointments."}
-                      {bookingView === "completed" && "No completed appointments."}
-                      {bookingView === "all" && "No bookings yet."}
-                    </TableCell>
-                  </TableRow>
+                    </div>
+                  ))
                 )}
-              </TableBody>
-            </Table>
-          </Card>
+              </div>
+            </Card>
+          ) : (
+            <Card className="bg-surface border-border">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border hover:bg-transparent">
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={viewedBookings.length > 0 && viewedBookings.every((b: any) => selectedIds.has(b.id))}
+                        onCheckedChange={toggleSelectAll}
+                        aria-label="Select all"
+                        className="border-border"
+                      />
+                    </TableHead>
+                    {(["date","customer","vehicle","service","source","status","total","booked"] as const).map(col => (
+                      <TableHead key={col}>
+                        <button
+                          onClick={() => handleSort(col)}
+                          className="flex items-center gap-1 hover:text-foreground capitalize transition-colors"
+                        >
+                          {col === "booked" ? "Booked On" : col}
+                          <span className="text-[10px] leading-none">
+                            {sortCol === col ? (sortDir === "asc" ? "▲" : "▼") : <span className="opacity-30">⇅</span>}
+                          </span>
+                        </button>
+                      </TableHead>
+                    ))}
+                    <TableHead></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {viewedBookings.map((b: any) => (
+                    <TableRow
+                      key={b.id}
+                      className={`border-border ${selectedIds.has(b.id) ? "bg-primary/5" : ""}`}
+                    >
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(b.id)}
+                          onCheckedChange={() => toggleSelect(b.id)}
+                          aria-label="Select booking"
+                          className="border-border"
+                        />
+                      </TableCell>
+                      <TableCell className="text-sm">
+                        {b.appointmentAt ? format(new Date(b.appointmentAt), "MMM d, yyyy") : "TBD"}
+                      </TableCell>
+                      <TableCell className="text-sm">{b.customer?.name}</TableCell>
+                      <TableCell className="text-sm">{b.vehicle?.year} {b.vehicle?.model}</TableCell>
+                      <TableCell className="text-sm max-w-[160px] truncate">{b.items?.[0]?.itemName || "Custom"}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={`text-xs ${SOURCE_BADGE_CLASS[b.source ?? "online"] ?? SOURCE_BADGE_CLASS.other}`}>
+                          {SOURCE_LABELS[b.source ?? "online"] ?? b.source}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={statusBadgeClass(b.status)}>
+                          {b.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm font-semibold">${b.totalEstimate}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {b.createdAt ? format(new Date(b.createdAt), "MMM d, yyyy") : "—"}
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={() => setSelectedBookingId(b.id)}
+                        >
+                          View
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {viewedBookings.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
+                        {bookingView === "today" && "No appointments today."}
+                        {bookingView === "scheduled" && (dateFilter ? `No scheduled bookings on ${format(new Date(dateFilter + "T12:00:00"), "MMM d, yyyy")}.` : "No scheduled appointments.")}
+                        {bookingView === "completed" && (dateFilter ? `No completed bookings on ${format(new Date(dateFilter + "T12:00:00"), "MMM d, yyyy")}.` : "No completed appointments.")}
+                        {bookingView === "all" && "No bookings yet."}
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="calendar">

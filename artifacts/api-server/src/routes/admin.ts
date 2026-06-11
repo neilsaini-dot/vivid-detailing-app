@@ -374,7 +374,7 @@ router.patch("/admin/bookings/:id", async (req, res) => {
 
     const updates: Partial<typeof bookingsTable.$inferInsert> = {};
     if (body.status) updates.status = body.status;
-    if (body.appointmentAt) updates.appointmentAt = new Date(body.appointmentAt);
+    if (body.appointmentAt) updates.appointmentAt = parseHalifaxDatetime(body.appointmentAt);
     if (body.notes !== undefined) updates.notes = body.notes;
     if (body.internalNotes !== undefined) updates.internalNotes = body.internalNotes ?? null;
     if (body.estimatedPickupAt !== undefined) {

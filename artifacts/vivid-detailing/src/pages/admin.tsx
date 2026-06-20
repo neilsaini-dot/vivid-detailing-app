@@ -1810,6 +1810,7 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
   const [events, setEvents] = useState<{ id: string; title: string; description: string | null; location: string | null; start: string | null; end: string | null; allDay: boolean }[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<{ id: string; title: string; description: string | null; location: string | null; start: string | null; end: string | null; allDay: boolean } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1958,7 +1959,8 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
                         {dayBookings.length === 0 && dayEvents.slice(0, 2).map((ev, j) => (
                           <div
                             key={j}
-                            className="text-[10px] leading-tight px-1 py-0.5 rounded bg-muted/40 text-muted-foreground truncate"
+                            onClick={(e) => { e.stopPropagation(); setSelectedDay(day); setSelectedEvent(ev); }}
+                            className="text-[10px] leading-tight px-1 py-0.5 rounded bg-muted/40 text-muted-foreground truncate hover:bg-muted/70 cursor-pointer"
                             title={ev.title + (ev.start ? ` @ ${format(new Date(ev.start), "h:mm a")}` : "")}
                           >
                             {ev.allDay ? ev.title : (ev.start ? format(new Date(ev.start), "h:mm a") + " " : "") + ev.title}
@@ -2047,7 +2049,11 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
                       .slice()
                       .sort((a, b) => (a.start && b.start ? new Date(a.start).getTime() - new Date(b.start).getTime() : 0))
                       .map((ev) => (
-                        <div key={ev.id} className="rounded-lg border border-border bg-background/60 px-4 py-3">
+                        <div
+                          key={ev.id}
+                          onClick={() => setSelectedEvent(ev)}
+                          className="rounded-lg border border-border bg-background/60 px-4 py-3 cursor-pointer hover:bg-blue-500/5 transition-colors"
+                        >
                           <div className="flex items-start gap-3">
                             <div className="text-sm font-semibold text-muted-foreground w-16 shrink-0 tabular-nums pt-0.5">
                               {ev.allDay
@@ -2070,10 +2076,11 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
                                 <p className="text-xs text-muted-foreground truncate">📍 {ev.location}</p>
                               )}
                               {ev.description && (
-                                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line line-clamp-4">
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
                                   {ev.description}
                                 </p>
                               )}
+                              <p className="text-[10px] text-blue-400/70 mt-1">Click for full details →</p>
                             </div>
                           </div>
                         </div>
@@ -2085,6 +2092,69 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
           </CardContent>
         </Card>
       )}
+
+      {/* Event detail popup */}
+      <Dialog open={!!selectedEvent} onOpenChange={(open) => { if (!open) setSelectedEvent(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base leading-snug pr-4">{selectedEvent?.title}</DialogTitle>
+          </DialogHeader>
+          {selectedEvent && (
+            <div className="space-y-4 pt-1">
+              {/* Date & time */}
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 text-muted-foreground">🗓️</div>
+                <div>
+                  {selectedEvent.start && (
+                    <p className="text-sm font-medium">
+                      {format(new Date(selectedEvent.start), "EEEE, MMMM d, yyyy")}
+                    </p>
+                  )}
+                  {selectedEvent.allDay ? (
+                    <p className="text-sm text-muted-foreground">All day</p>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {selectedEvent.start ? format(new Date(selectedEvent.start), "h:mm a") : ""}
+                      {selectedEvent.end ? ` – ${format(new Date(selectedEvent.end), "h:mm a")}` : ""}
+                      {selectedEvent.start && selectedEvent.end && (() => {
+                        const mins = Math.round((new Date(selectedEvent.end).getTime() - new Date(selectedEvent.start).getTime()) / 60000);
+                        const h = Math.floor(mins / 60);
+                        const m = mins % 60;
+                        return ` (${h > 0 ? `${h}h ` : ""}${m > 0 ? `${m}m` : ""})`;
+                      })()}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Location */}
+              {selectedEvent.location && (
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">📍</div>
+                  <p className="text-sm">{selectedEvent.location}</p>
+                </div>
+              )}
+
+              {/* Description */}
+              {selectedEvent.description && (
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 text-muted-foreground">📝</div>
+                  <p className="text-sm whitespace-pre-line text-muted-foreground leading-relaxed">
+                    {selectedEvent.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Badge */}
+              <div className="pt-1 border-t border-border">
+                <Badge variant="outline" className="text-[10px] border-blue-500/30 text-blue-400 bg-blue-500/10">
+                  Google Calendar
+                </Badge>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

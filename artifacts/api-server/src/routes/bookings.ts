@@ -340,13 +340,17 @@ router.post("/bookings", async (req, res) => {
       source: "vivid-app",
     }).catch(() => {});
 
-    // Create Google Calendar event (non-blocking)
+    // Create Google Calendar event (non-blocking) and save the event ID
     if (body.appointmentAt) {
       createCalendarEvent({
         summary: `Vivid Detailing - ${customer.name ?? "Customer"} - ${serviceNames.join(", ") || "Appointment"}`,
         description: calendarDescription,
         startIso: body.appointmentAt,
         durationHours,
+      }).then(calEventId => {
+        if (calEventId) {
+          db.update(bookingsTable).set({ calendarEventId: calEventId }).where(eq(bookingsTable.id, booking.id)).catch(() => {});
+        }
       }).catch(() => {});
     }
 

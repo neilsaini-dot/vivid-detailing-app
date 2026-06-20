@@ -24,6 +24,7 @@ export const bookingsTable = pgTable("bookings", {
   createdByAdmin: boolean("created_by_admin").notNull().default(false),
   estimatedPickupAt: timestamp("estimated_pickup_at", { withTimezone: true }),
   internalNotes: text("internal_notes"),
+  calendarEventId: text("calendar_event_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   check("booking_status_check", sql`${t.status} IN ('pending','confirmed','completed','cancelled','in_progress')`),

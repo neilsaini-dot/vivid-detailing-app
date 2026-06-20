@@ -36,7 +36,7 @@ import {
 import { ilike, or } from "drizzle-orm";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink, sendGhlPickupTimeSet, sendGhlBookingRescheduled } from "../lib/ghl";
-import { createCalendarEvent } from "../lib/googleCalendar";
+import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, findCalendarEventNear } from "../lib/googleCalendar";
 import { googleFetch } from "../lib/googleAuth";
 import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
@@ -362,14 +362,16 @@ router.patch("/admin/bookings/:id", async (req, res) => {
     const { id } = AdminUpdateBookingParams.parse(req.params);
     const body = AdminUpdateBookingBody.parse(req.body);
 
-    // Fetch existing booking upfront when pickup time or appointment date is being updated (need old values to detect changes)
+    // Fetch existing booking upfront when pickup time, appointment date, or cancel status is being updated
     let existingPickupAt: Date | null = null;
     let existingAppointmentAt: Date | null = null;
-    if (body.estimatedPickupAt !== undefined || body.appointmentAt !== undefined) {
+    let existingCalendarEventId: string | null = null;
+    if (body.estimatedPickupAt !== undefined || body.appointmentAt !== undefined || body.status === "cancelled") {
       const [existing] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
       if (!existing) return res.status(404).json({ error: "Not found" });
       existingPickupAt = existing.estimatedPickupAt ?? null;
       existingAppointmentAt = existing.appointmentAt ?? null;
+      existingCalendarEventId = existing.calendarEventId ?? null;
     }
 
     const updates: Partial<typeof bookingsTable.$inferInsert> = {};
@@ -635,6 +637,32 @@ router.patch("/admin/bookings/:id", async (req, res) => {
         },
         source: "vivid-app",
       }).catch(() => {});
+
+      // Update (or create) the Google Calendar event to reflect the new time
+      const calEventId = existingCalendarEventId
+        ?? await findCalendarEventNear(existingAppointmentAt!).catch(() => null);
+      const calSummary = `Vivid Detailing — ${rsFirstName} ${rsLastName} (${rsServices.join(", ") || "Appointment"})`;
+      const calDesc = [rsVehicle ? `Vehicle: ${rsVehicle}` : null, updated.notes ? `Notes: ${updated.notes}` : null].filter(Boolean).join("\n");
+      if (calEventId) {
+        updateCalendarEvent(calEventId, { summary: calSummary, description: calDesc, startIso: updated.appointmentAt.toISOString(), durationHours: 3 }).catch(() => {});
+        if (!existingCalendarEventId) {
+          db.update(bookingsTable).set({ calendarEventId: calEventId }).where(eq(bookingsTable.id, id)).catch(() => {});
+        }
+      } else {
+        createCalendarEvent({ summary: calSummary, description: calDesc, startIso: updated.appointmentAt.toISOString(), durationHours: 3 })
+          .then(newId => { if (newId) db.update(bookingsTable).set({ calendarEventId: newId }).where(eq(bookingsTable.id, id)).catch(() => {}); })
+          .catch(() => {});
+      }
+    }
+
+    // Delete Google Calendar event when booking is cancelled
+    if (body.status === "cancelled" && updated.appointmentAt) {
+      const calEventId = existingCalendarEventId
+        ?? await findCalendarEventNear(updated.appointmentAt).catch(() => null);
+      if (calEventId) {
+        deleteCalendarEvent(calEventId).catch(() => {});
+        db.update(bookingsTable).set({ calendarEventId: null }).where(eq(bookingsTable.id, id)).catch(() => {});
+      }
     }
 
     const items = await db
@@ -879,12 +907,15 @@ router.post("/admin/bookings/:id/resync", async (req, res) => {
     });
 
     if (booking.appointmentAt) {
-      await createCalendarEvent({
+      const calEventId = await createCalendarEvent({
         summary: `Vivid Detailing - ${customer?.name ?? "Customer"} - ${serviceNames.join(", ") || "Appointment"}`,
         description: calendarDescription,
         startIso: booking.appointmentAt.toISOString(),
         durationHours,
       });
+      if (calEventId) {
+        await db.update(bookingsTable).set({ calendarEventId: calEventId }).where(eq(bookingsTable.id, booking.id));
+      }
     }
 
     res.json({ success: true, resynced: { ghl: true, calendar: !!booking.appointmentAt } });
@@ -1406,7 +1437,7 @@ router.post("/admin/bookings", async (req, res) => {
 
       if (booking.appointmentAt) {
         try {
-          await createCalendarEvent({
+          const calEventId = await createCalendarEvent({
             summary: `Vivid Detailing — ${customerRecord.name ?? "Client"} (${primaryService})`,
             description: [
               vehicleLabel ? `Vehicle: ${vehicleLabel}` : null,
@@ -1416,6 +1447,9 @@ router.post("/admin/bookings", async (req, res) => {
             startIso: booking.appointmentAt.toISOString(),
             durationHours: 3,
           });
+          if (calEventId) {
+            await db.update(bookingsTable).set({ calendarEventId: calEventId }).where(eq(bookingsTable.id, booking.id));
+          }
         } catch (err) {
           req.log.warn({ err }, "Calendar event creation failed for manual booking");
         }

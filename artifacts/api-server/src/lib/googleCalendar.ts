@@ -16,7 +16,8 @@ export interface CalendarEventInput {
   durationHours: number;
 }
 
-export async function createCalendarEvent(input: CalendarEventInput): Promise<void> {
+/** Creates a Google Calendar event and returns the event ID (or null on failure). */
+export async function createCalendarEvent(input: CalendarEventInput): Promise<string | null> {
   const startDate = new Date(input.startIso);
   const endDate = new Date(startDate.getTime() + input.durationHours * 60 * 60 * 1000);
 
@@ -38,11 +39,81 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<vo
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       logger.warn({ status: res.status, text }, "Google Calendar event creation failed");
-    } else {
-      logger.info({ summary: input.summary }, "Google Calendar event created");
+      return null;
     }
+    const data = await res.json() as { id?: string };
+    logger.info({ summary: input.summary, eventId: data.id }, "Google Calendar event created");
+    return data.id ?? null;
   } catch (err) {
     logger.error({ err }, "Failed to create Google Calendar event");
+    return null;
+  }
+}
+
+/** Updates an existing Google Calendar event's time, summary and description. */
+export async function updateCalendarEvent(eventId: string, input: CalendarEventInput): Promise<void> {
+  const startDate = new Date(input.startIso);
+  const endDate = new Date(startDate.getTime() + input.durationHours * 60 * 60 * 1000);
+
+  const body = JSON.stringify({
+    summary: input.summary,
+    description: input.description,
+    start: { dateTime: startDate.toISOString(), timeZone: "America/Halifax" },
+    end: { dateTime: endDate.toISOString(), timeZone: "America/Halifax" },
+  });
+
+  try {
+    const res = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(eventId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body,
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      logger.warn({ status: res.status, text, eventId }, "Google Calendar event update failed");
+    } else {
+      logger.info({ eventId, summary: input.summary }, "Google Calendar event updated");
+    }
+  } catch (err) {
+    logger.error({ err, eventId }, "Failed to update Google Calendar event");
+  }
+}
+
+/** Deletes a Google Calendar event by ID. */
+export async function deleteCalendarEvent(eventId: string): Promise<void> {
+  try {
+    const res = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(eventId)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok && res.status !== 410) {
+      const text = await res.text().catch(() => "");
+      logger.warn({ status: res.status, text, eventId }, "Google Calendar event delete failed");
+    } else {
+      logger.info({ eventId }, "Google Calendar event deleted");
+    }
+  } catch (err) {
+    logger.error({ err, eventId }, "Failed to delete Google Calendar event");
+  }
+}
+
+/**
+ * Searches for a "Vivid Detailing" calendar event within ±10 minutes of the
+ * given datetime. Returns the event ID if found, null otherwise.
+ * Used as a fallback for bookings that predate calendarEventId storage.
+ */
+export async function findCalendarEventNear(dt: Date): Promise<string | null> {
+  const windowMs = 10 * 60 * 1000;
+  const timeMin = new Date(dt.getTime() - windowMs).toISOString();
+  const timeMax = new Date(dt.getTime() + windowMs).toISOString();
+  const url = `${CAL_BASE}/events?timeMin=${encodeURIComponent(timeMin)}&timeMax=${encodeURIComponent(timeMax)}&singleEvents=true&orderBy=startTime`;
+  try {
+    const res = await googleFetch(url);
+    if (!res.ok) return null;
+    const data = await res.json() as { items?: { id?: string; summary?: string }[] };
+    const match = (data.items ?? []).find(e => e.summary?.includes("Vivid Detailing"));
+    return match?.id ?? null;
+  } catch {
+    return null;
   }
 }
 

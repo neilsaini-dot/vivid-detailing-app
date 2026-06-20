@@ -1807,7 +1807,7 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
-  const [events, setEvents] = useState<{ id: string; title: string; start: string | null; end: string | null; allDay: boolean }[]>([]);
+  const [events, setEvents] = useState<{ id: string; title: string; description: string | null; location: string | null; start: string | null; end: string | null; allDay: boolean }[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
@@ -1852,6 +1852,17 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
   }
 
   const selectedDayBookings = selectedDay ? (bookingsByDay[selectedDay] ?? []) : [];
+
+  // GCal events on the selected day that aren't already covered by a DB booking (matched by time within 5 min)
+  const selectedDayGCalOnly = selectedDay
+    ? (eventsByDay[selectedDay] ?? []).filter(ev => {
+        if (!ev.start) return false;
+        const evTime = new Date(ev.start).getTime();
+        return !selectedDayBookings.some((b: any) =>
+          b.appointmentAt && Math.abs(new Date(b.appointmentAt).getTime() - evTime) < 5 * 60 * 1000
+        );
+      })
+    : [];
 
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }
@@ -1987,10 +1998,11 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
             </div>
           </CardHeader>
           <CardContent>
-            {selectedDayBookings.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">No bookings on this day.</p>
+            {selectedDayBookings.length === 0 && selectedDayGCalOnly.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No bookings or events on this day.</p>
             ) : (
               <div className="space-y-2">
+                {/* DB bookings */}
                 {selectedDayBookings
                   .slice()
                   .sort((a: any, b: any) => new Date(a.appointmentAt).getTime() - new Date(b.appointmentAt).getTime())
@@ -2020,6 +2032,54 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
                       </div>
                     </div>
                   ))}
+
+                {/* GCal-only events (not linked to a DB booking) */}
+                {selectedDayGCalOnly.length > 0 && (
+                  <>
+                    {selectedDayBookings.length > 0 && (
+                      <div className="flex items-center gap-2 pt-1 pb-0.5">
+                        <div className="flex-1 h-px bg-border" />
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-wide">Other calendar events</span>
+                        <div className="flex-1 h-px bg-border" />
+                      </div>
+                    )}
+                    {selectedDayGCalOnly
+                      .slice()
+                      .sort((a, b) => (a.start && b.start ? new Date(a.start).getTime() - new Date(b.start).getTime() : 0))
+                      .map((ev) => (
+                        <div key={ev.id} className="rounded-lg border border-border bg-background/60 px-4 py-3">
+                          <div className="flex items-start gap-3">
+                            <div className="text-sm font-semibold text-muted-foreground w-16 shrink-0 tabular-nums pt-0.5">
+                              {ev.allDay
+                                ? "All day"
+                                : ev.start ? format(new Date(ev.start), "h:mm a") : ""}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-sm font-medium truncate">{ev.title}</span>
+                                <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0 border-blue-500/30 text-blue-400 bg-blue-500/10">
+                                  Google Cal
+                                </Badge>
+                              </div>
+                              {ev.end && !ev.allDay && (
+                                <p className="text-xs text-muted-foreground mb-0.5">
+                                  Until {format(new Date(ev.end), "h:mm a")}
+                                </p>
+                              )}
+                              {ev.location && (
+                                <p className="text-xs text-muted-foreground truncate">📍 {ev.location}</p>
+                              )}
+                              {ev.description && (
+                                <p className="text-xs text-muted-foreground mt-1 whitespace-pre-line line-clamp-4">
+                                  {ev.description}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                  </>
+                )}
               </div>
             )}
           </CardContent>

@@ -698,7 +698,7 @@ router.get("/admin/calendar/events", async (req, res) => {
     const monthEnd = new Date(Date.UTC(year, month, 0, 23, 59, 59));
     const url = `https://www.googleapis.com/calendar/v3/calendars/primary/events?timeMin=${encodeURIComponent(monthStart.toISOString())}&timeMax=${encodeURIComponent(monthEnd.toISOString())}&singleEvents=true&orderBy=startTime&maxResults=200`;
 
-    let events: { id?: string; summary?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string } }[] = [];
+    let events: { id?: string; summary?: string; description?: string; location?: string; start?: { dateTime?: string; date?: string }; end?: { dateTime?: string; date?: string } }[] = [];
     try {
       const gcalRes = await googleFetch(url);
       if (gcalRes.ok) {
@@ -712,8 +712,10 @@ router.get("/admin/calendar/events", async (req, res) => {
     res.json(events.map(e => ({
       id: e.id ?? "",
       title: e.summary ?? "Appointment",
+      description: e.description ?? null,
+      location: e.location ?? null,
       start: e.start?.dateTime ?? e.start?.date ?? null,
-      end: e.end?.dateTime ?? null,
+      end: e.end?.dateTime ?? e.end?.date ?? null,
       allDay: !e.start?.dateTime,
     })));
   } catch (err) {

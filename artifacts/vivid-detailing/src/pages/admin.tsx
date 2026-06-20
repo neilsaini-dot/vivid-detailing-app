@@ -1803,12 +1803,13 @@ function ManualBookingSheet({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
-function CalendarTab() {
+function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooking: (id: string) => void }) {
   const today = new Date();
   const [year, setYear] = useState(today.getFullYear());
   const [month, setMonth] = useState(today.getMonth() + 1);
   const [events, setEvents] = useState<{ id: string; title: string; start: string | null; end: string | null; allDay: boolean }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1819,6 +1820,8 @@ function CalendarTab() {
       .catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, [year, month]);
+
+  useEffect(() => { setSelectedDay(null); }, [year, month]);
 
   const monthName = new Date(year, month - 1, 1).toLocaleString("en-CA", { month: "long" });
   const firstDow = new Date(year, month - 1, 1).getDay();
@@ -1836,6 +1839,19 @@ function CalendarTab() {
       eventsByDay[day].push(ev);
     }
   }
+
+  const bookingsByDay: Record<number, any[]> = {};
+  for (const b of bookings) {
+    if (!b.appointmentAt) continue;
+    const ds = new Date(b.appointmentAt).toLocaleDateString("en-CA", { timeZone: "America/Halifax" });
+    const [byear, bmonth, bday] = ds.split("-").map(Number);
+    if (byear === year && bmonth === month) {
+      if (!bookingsByDay[bday]) bookingsByDay[bday] = [];
+      bookingsByDay[bday].push(b);
+    }
+  }
+
+  const selectedDayBookings = selectedDay ? (bookingsByDay[selectedDay] ?? []) : [];
 
   const prevMonth = () => {
     if (month === 1) { setYear(y => y - 1); setMonth(12); }
@@ -1855,76 +1871,161 @@ function CalendarTab() {
   const todayDay = today.getFullYear() === year && today.getMonth() + 1 === month ? today.getDate() : -1;
 
   return (
-    <Card className="bg-surface border-border">
-      <CardHeader className="pb-4">
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-bold">{monthName} {year}</CardTitle>
-          <div className="flex items-center gap-2">
-            {loading && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border" onClick={prevMonth}>
-              <ChevronDown className="h-4 w-4 rotate-90" />
-            </Button>
-            <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border" onClick={nextMonth}>
-              <ChevronDown className="h-4 w-4 -rotate-90" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="h-8 px-3 text-xs border border-border"
-              onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}
-            >
-              Today
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="pb-6">
-        <div className="grid grid-cols-7 mb-1">
-          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
-            <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 border-l border-t border-border">
-          {cells.map((day, i) => {
-            const dayEvents = day ? (eventsByDay[day] ?? []) : [];
-            const isToday = day === todayDay;
-            return (
-              <div
-                key={i}
-                className={`border-r border-b border-border min-h-[80px] p-1.5 ${!day ? "bg-surface/30" : ""}`}
+    <div className="space-y-4">
+      <Card className="bg-surface border-border">
+        <CardHeader className="pb-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg font-bold">{monthName} {year}</CardTitle>
+            <div className="flex items-center gap-2">
+              {loading && <RefreshCw className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border" onClick={prevMonth}>
+                <ChevronDown className="h-4 w-4 rotate-90" />
+              </Button>
+              <Button variant="ghost" size="sm" className="h-8 w-8 p-0 border border-border" onClick={nextMonth}>
+                <ChevronDown className="h-4 w-4 -rotate-90" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 px-3 text-xs border border-border"
+                onClick={() => { setYear(today.getFullYear()); setMonth(today.getMonth() + 1); }}
               >
-                {day && (
-                  <>
-                    <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
-                      isToday ? "bg-primary text-primary-foreground" : "text-foreground"
-                    }`}>
-                      {day}
-                    </div>
-                    <div className="space-y-0.5">
-                      {dayEvents.slice(0, 3).map((ev, j) => (
-                        <div
-                          key={j}
-                          className="text-[10px] leading-tight px-1 py-0.5 rounded bg-primary/15 text-primary truncate"
-                          title={ev.title + (ev.start ? ` @ ${format(new Date(ev.start), "h:mm a")}` : "")}
-                        >
-                          {ev.allDay ? ev.title : (ev.start ? format(new Date(ev.start), "h:mm a") + " " : "") + ev.title}
+                Today
+              </Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent className="pb-6">
+          <div className="grid grid-cols-7 mb-1">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (
+              <div key={d} className="text-center text-xs font-medium text-muted-foreground py-1">{d}</div>
+            ))}
+          </div>
+          <div className="grid grid-cols-7 border-l border-t border-border">
+            {cells.map((day, i) => {
+              const dayBookings = day ? (bookingsByDay[day] ?? []) : [];
+              const dayEvents = day ? (eventsByDay[day] ?? []) : [];
+              const isToday = day === todayDay;
+              const isSelected = day === selectedDay;
+              return (
+                <div
+                  key={i}
+                  onClick={() => day && setSelectedDay(isSelected ? null : day)}
+                  className={`border-r border-b border-border min-h-[80px] p-1.5 transition-colors ${
+                    !day
+                      ? "bg-surface/30"
+                      : isSelected
+                        ? "bg-primary/10 cursor-pointer"
+                        : "hover:bg-surface/60 cursor-pointer"
+                  }`}
+                >
+                  {day && (
+                    <>
+                      <div className={`text-xs font-medium mb-1 w-6 h-6 flex items-center justify-center rounded-full ${
+                        isToday
+                          ? "bg-primary text-primary-foreground"
+                          : isSelected
+                            ? "ring-2 ring-primary text-foreground"
+                            : "text-foreground"
+                      }`}>
+                        {day}
+                      </div>
+                      <div className="space-y-0.5">
+                        {dayBookings.slice(0, 3).map((b: any, j: number) => (
+                          <div
+                            key={j}
+                            className="text-[10px] leading-tight px-1 py-0.5 rounded bg-primary/20 text-primary truncate"
+                            title={`${b.customer?.name} — ${b.items?.[0]?.itemName ?? "Custom"}`}
+                          >
+                            {b.appointmentAt ? format(new Date(b.appointmentAt), "h:mm a") + " " : ""}
+                            {b.customer?.name?.split(" ")[0] ?? "Booking"}
+                          </div>
+                        ))}
+                        {dayBookings.length > 3 && (
+                          <div className="text-[10px] text-muted-foreground px-1">+{dayBookings.length - 3} more</div>
+                        )}
+                        {dayBookings.length === 0 && dayEvents.slice(0, 2).map((ev, j) => (
+                          <div
+                            key={j}
+                            className="text-[10px] leading-tight px-1 py-0.5 rounded bg-muted/40 text-muted-foreground truncate"
+                            title={ev.title + (ev.start ? ` @ ${format(new Date(ev.start), "h:mm a")}` : "")}
+                          >
+                            {ev.allDay ? ev.title : (ev.start ? format(new Date(ev.start), "h:mm a") + " " : "") + ev.title}
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {!loading && (
+            <p className="text-center text-xs text-muted-foreground mt-3">
+              Click any day to see appointments
+            </p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Day detail panel */}
+      {selectedDay !== null && (
+        <Card className="bg-surface border-border">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <CardTitle className="text-sm font-semibold">
+                {new Date(year, month - 1, selectedDay).toLocaleDateString("en-CA", {
+                  weekday: "long", month: "long", day: "numeric", year: "numeric",
+                })}
+              </CardTitle>
+              <button
+                onClick={() => setSelectedDay(null)}
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {selectedDayBookings.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No bookings on this day.</p>
+            ) : (
+              <div className="space-y-2">
+                {selectedDayBookings
+                  .slice()
+                  .sort((a: any, b: any) => new Date(a.appointmentAt).getTime() - new Date(b.appointmentAt).getTime())
+                  .map((b: any) => (
+                    <div
+                      key={b.id}
+                      onClick={() => onOpenBooking(b.id)}
+                      className="flex items-center gap-4 rounded-lg border border-border bg-background/60 px-4 py-3 cursor-pointer hover:bg-primary/5 transition-colors"
+                    >
+                      <div className="text-sm font-semibold text-primary w-16 shrink-0 tabular-nums">
+                        {b.appointmentAt ? format(new Date(b.appointmentAt), "h:mm a") : "TBD"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <span className="text-sm font-medium truncate">{b.customer?.name}</span>
+                          <Badge variant="outline" className={`text-[10px] px-1.5 py-0 shrink-0 ${statusBadgeClass(b.status)}`}>
+                            {b.status}
+                          </Badge>
                         </div>
-                      ))}
-                      {dayEvents.length > 3 && (
-                        <div className="text-[10px] text-muted-foreground px-1">+{dayEvents.length - 3} more</div>
-                      )}
+                        <p className="text-xs text-muted-foreground truncate">
+                          {[b.vehicle?.year, b.vehicle?.make, b.vehicle?.model].filter(Boolean).join(" ") || "Vehicle TBD"}
+                          {b.items?.[0]?.itemName ? ` · ${b.items[0].itemName}` : ""}
+                        </p>
+                      </div>
+                      <div className="text-sm font-semibold shrink-0">
+                        ${Number(b.totalEstimate ?? 0).toFixed(2)}
+                      </div>
                     </div>
-                  </>
-                )}
+                  ))}
               </div>
-            );
-          })}
-        </div>
-        {events.length === 0 && !loading && (
-          <p className="text-center text-sm text-muted-foreground mt-6">No calendar events found for this month.</p>
-        )}
-      </CardContent>
-    </Card>
+            )}
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }
 
@@ -2950,7 +3051,7 @@ function AdminDashboard() {
         </TabsContent>
 
         <TabsContent value="calendar">
-          <CalendarTab />
+          <CalendarTab bookings={bookings ?? []} onOpenBooking={(id) => setSelectedBookingId(id)} />
         </TabsContent>
 
         <TabsContent value="services">

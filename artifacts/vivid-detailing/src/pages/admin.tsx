@@ -2635,6 +2635,7 @@ function AdminDashboard() {
   const [editPromo, setEditPromo] = useState<any>({});
 
   const [reviewRatingFilter, setReviewRatingFilter] = useState<number | null>(null);
+  const [selectedReview, setSelectedReview] = useState<any>(null);
 
   const { data: bookings = [] } = useAdminListBookings({});
   const selectedBooking = bookings.find((b: any) => b.id === selectedBookingId) ?? null;
@@ -3479,7 +3480,11 @@ function AdminDashboard() {
               </TableHeader>
               <TableBody>
                 {(reviews as any[]).map((r: any) => (
-                  <TableRow key={r.id} className="border-border">
+                  <TableRow
+                    key={r.id}
+                    className="border-border cursor-pointer hover:bg-surface/60 transition-colors"
+                    onClick={() => setSelectedReview(r)}
+                  >
                     <TableCell className="text-sm font-medium">{r.customerName ?? "—"}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{r.vehicle ?? "—"}</TableCell>
                     <TableCell>
@@ -3523,6 +3528,54 @@ function AdminDashboard() {
               </TableBody>
             </Table>
           </Card>
+
+          {/* Full review popup */}
+          <Dialog open={!!selectedReview} onOpenChange={(open) => { if (!open) setSelectedReview(null); }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="text-base">Review from {selectedReview?.customerName ?? "Customer"}</DialogTitle>
+              </DialogHeader>
+              {selectedReview && (
+                <div className="space-y-4 pt-1">
+                  <div className="flex items-center gap-3">
+                    <div className="flex gap-0.5">
+                      {[1, 2, 3, 4, 5].map(s => (
+                        <Star
+                          key={s}
+                          className={`h-5 w-5 ${s <= selectedReview.rating ? "fill-yellow-400 text-yellow-400" : "text-muted-foreground/20"}`}
+                        />
+                      ))}
+                    </div>
+                    <span className="text-sm text-muted-foreground">
+                      {format(new Date(selectedReview.submittedAt), "MMMM d, yyyy")}
+                    </span>
+                  </div>
+
+                  {selectedReview.vehicle && (
+                    <p className="text-xs text-muted-foreground">🚗 {selectedReview.vehicle}</p>
+                  )}
+
+                  {selectedReview.feedback ? (
+                    <div className="rounded-lg bg-muted/30 border border-border p-4">
+                      <p className="text-sm leading-relaxed whitespace-pre-line">{selectedReview.feedback}</p>
+                    </div>
+                  ) : (
+                    <p className="text-sm italic text-muted-foreground">No written feedback left.</p>
+                  )}
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-border">
+                    <span className="text-xs text-muted-foreground">Sent to Google:</span>
+                    <Badge
+                      variant="outline"
+                      className={`text-xs ${selectedReview.redirectedToGoogle ? "border-green-500/30 text-green-400 bg-green-500/5" : "border-border text-muted-foreground"}`}
+                    >
+                      {selectedReview.redirectedToGoogle ? "Yes" : "No"}
+                    </Badge>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
         </TabsContent>
 
         <TabsContent value="supplies">

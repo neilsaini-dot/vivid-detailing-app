@@ -129,7 +129,7 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
 
   // Vehicle edit state
   const [editingVehicle, setEditingVehicle] = useState(false);
-  const [vehicleEdit, setVehicleEdit] = useState({ type: "car", year: "", make: "", model: "", colour: "", licensePlate: "" });
+  const [vehicleEdit, setVehicleEdit] = useState({ type: "", year: "", make: "", model: "", colour: "", licensePlate: "" });
   const [vehicleSaving, setVehicleSaving] = useState(false);
 
   // Appointment reschedule state
@@ -181,12 +181,20 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
     );
     setInternalNotes(booking.internalNotes ?? "");
     setEditingVehicle(false);
+    let pendingVehicle: Record<string, unknown> = {};
+    const pendingLine = booking.internalNotes?.split("\n").find((line: string) => line.startsWith("Pending GHL vehicle details: "));
+    if (!booking.vehicle && pendingLine) {
+      try {
+        const parsed = JSON.parse(pendingLine.slice("Pending GHL vehicle details: ".length));
+        if (parsed && typeof parsed === "object") pendingVehicle = parsed;
+      } catch { /* Staff can still enter details if the internal note was edited. */ }
+    }
     setVehicleEdit({
-      type: booking.vehicle?.type ?? "car",
-      year: booking.vehicle?.year ? String(booking.vehicle.year) : "",
-      make: booking.vehicle?.make ?? "",
-      model: booking.vehicle?.model ?? "",
-      colour: booking.vehicle?.colour ?? "",
+      type: booking.vehicle?.type ?? "",
+      year: booking.vehicle?.year ? String(booking.vehicle.year) : pendingVehicle.year ? String(pendingVehicle.year) : "",
+      make: booking.vehicle?.make ?? (typeof pendingVehicle.make === "string" ? pendingVehicle.make : ""),
+      model: booking.vehicle?.model ?? (typeof pendingVehicle.model === "string" ? pendingVehicle.model : ""),
+      colour: booking.vehicle?.colour ?? (typeof pendingVehicle.colour === "string" ? pendingVehicle.colour : ""),
       licensePlate: booking.vehicle?.licensePlate ?? "",
     });
     setEditingAppt(false);
@@ -354,18 +362,23 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
   if (!booking) return null;
 
   const allLineItems = booking.items ?? [];
+  const pricePending = booking.totalEstimate == null;
   const total = Number(booking.totalEstimate ?? 0);
   const hstAmount = Math.round(total / 1.15 * 0.15 * 100) / 100;
   const subtotal = Math.round((total - hstAmount) * 100) / 100;
 
   const vehicleLabel = [booking.vehicle?.year, booking.vehicle?.make, booking.vehicle?.model]
-    .filter(Boolean).join(" ") || booking.vehicle?.type || "Vehicle";
+    .filter(Boolean).join(" ") || booking.vehicle?.type || "Not provided";
 
   const calendarSearchUrl = booking.appointmentAt
     ? `https://calendar.google.com/calendar/r/search?q=${encodeURIComponent("Vivid Detailing " + (booking.customer?.name ?? ""))}&date=${format(new Date(booking.appointmentAt), "yyyyMMdd")}`
     : "https://calendar.google.com/calendar/r";
 
   const handleVehicleSave = async () => {
+    if (!vehicleEdit.type) {
+      toast({ variant: "destructive", title: "Select a vehicle type to confirm the price" });
+      return;
+    }
     setVehicleSaving(true);
     try {
       const payload = {
@@ -521,7 +534,10 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
               <h3 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Customer</h3>
             </div>
             <div className="bg-card border border-border rounded-lg p-4 space-y-2">
-              <p className="font-semibold text-base">{booking.customer?.name ?? "Unknown"}</p>
+              <p className="font-semibold text-base">{booking.customer?.name || "Not provided"}</p>
+              {!booking.customer?.email && !booking.customer?.phone && (
+                <p className="text-sm text-muted-foreground">Contact details not provided</p>
+              )}
               {booking.customer?.email && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Mail className="h-3.5 w-3.5" />
@@ -561,7 +577,7 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
                     <label className="text-xs text-muted-foreground mb-1 block">Type</label>
                     <Select value={vehicleEdit.type} onValueChange={v => setVehicleEdit(p => ({ ...p, type: v }))}>
                       <SelectTrigger className="bg-surface-2 border-border h-9 text-sm">
-                        <SelectValue />
+                        <SelectValue placeholder="Select vehicle type" />
                       </SelectTrigger>
                       <SelectContent>
                         {["car", "suv", "truck", "van"].map(t => (
@@ -592,7 +608,7 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
                   </div>
                 </div>
                 <div className="flex gap-2 pt-1">
-                  <Button size="sm" onClick={handleVehicleSave} disabled={vehicleSaving} className="h-8 text-xs">
+                  <Button size="sm" onClick={handleVehicleSave} disabled={vehicleSaving || !vehicleEdit.type} className="h-8 text-xs">
                     {vehicleSaving ? <><RefreshCw className="h-3 w-3 mr-1 animate-spin" /> Saving…</> : "Save"}
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => setEditingVehicle(false)} className="h-8 text-xs text-muted-foreground">
@@ -603,7 +619,7 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
             ) : (
               <div className="bg-card border border-border rounded-lg p-4 grid grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
                 <div className="text-muted-foreground">Type</div>
-                <div className="capitalize">{booking.vehicle?.type ?? "—"}</div>
+                <div className="capitalize">{booking.vehicle?.type ?? "Not provided"}</div>
                 <div className="text-muted-foreground">Year</div>
                 <div>{booking.vehicle?.year ?? "—"}</div>
                 <div className="text-muted-foreground">Make / Model</div>
@@ -784,7 +800,7 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
                         </td>
                         <td className="px-4 py-3 text-right font-semibold">
                           {item.isQuoteBased ? (
-                            <span className="text-primary">Quote</span>
+                            <span className="text-primary">Price pending</span>
                           ) : item.unitPrice ? (
                             `$${Number(item.unitPrice).toFixed(2)}`
                           ) : "—"}
@@ -799,15 +815,15 @@ function BookingDetailSheet({ booking, open, onClose, inspection, onStartInspect
                 <div className="border-t border-border px-4 py-3 space-y-1.5 bg-card/50">
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span>{pricePending ? "Pending" : `$${subtotal.toFixed(2)}`}</span>
                   </div>
                   <div className="flex justify-between text-sm text-muted-foreground">
                     <span>HST (15%)</span>
-                    <span>${hstAmount.toFixed(2)}</span>
+                    <span>{pricePending ? "Pending" : `$${hstAmount.toFixed(2)}`}</span>
                   </div>
                   <div className="flex justify-between font-bold text-base pt-1 border-t border-border">
                     <span>Total</span>
-                    <span className="text-primary">${total.toFixed(2)}</span>
+                    <span className="text-primary">{pricePending ? "Price pending" : `$${total.toFixed(2)}`}</span>
                   </div>
                 </div>
               </div>
@@ -2030,7 +2046,7 @@ function CalendarTab({ bookings, onOpenBooking }: { bookings: any[]; onOpenBooki
                         </p>
                       </div>
                       <div className="text-sm font-semibold shrink-0">
-                        ${Number(b.totalEstimate ?? 0).toFixed(2)}
+                        {b.totalEstimate == null ? "Price pending" : `$${Number(b.totalEstimate).toFixed(2)}`}
                       </div>
                     </div>
                   ))}
@@ -3138,8 +3154,8 @@ function AdminDashboard() {
                       <TableCell className="text-sm">
                         {b.appointmentAt ? format(new Date(b.appointmentAt), "MMM d, yyyy") : "TBD"}
                       </TableCell>
-                      <TableCell className="text-sm">{b.customer?.name}</TableCell>
-                      <TableCell className="text-sm">{b.vehicle?.year} {b.vehicle?.model}</TableCell>
+                      <TableCell className="text-sm">{b.customer?.name || "Not provided"}</TableCell>
+                      <TableCell className="text-sm">{b.vehicle ? [b.vehicle.year, b.vehicle.make, b.vehicle.model].filter(Boolean).join(" ") || b.vehicle.type : "Not provided"}</TableCell>
                       <TableCell className="text-sm max-w-[160px] truncate">{b.items?.[0]?.itemName || "Custom"}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`text-xs ${SOURCE_BADGE_CLASS[b.source ?? "online"] ?? SOURCE_BADGE_CLASS.other}`}>
@@ -3151,7 +3167,7 @@ function AdminDashboard() {
                           {b.status}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-sm font-semibold">${b.totalEstimate}</TableCell>
+                      <TableCell className="text-sm font-semibold">{b.totalEstimate == null ? "Price pending" : `$${Number(b.totalEstimate).toFixed(2)}`}</TableCell>
                       <TableCell className="text-xs text-muted-foreground">
                         {b.createdAt ? format(new Date(b.createdAt), "MMM d, yyyy") : "—"}
                       </TableCell>

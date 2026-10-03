@@ -15,6 +15,7 @@ import {
   syncSpecialAppointment, parseSpecialDate, normaliseSpecialInput, SpecialSyncError,
 } from "../src/lib/ghlSpecialBookings";
 import { createGhlSpecialBookingHandler } from "../src/routes/ghl-specials";
+import { finishPendingSpecialPrice, pendingSpecialVehicle } from "../src/lib/ghlSpecialIntake";
 
 after(async () => { await pool.end(); });
 
@@ -112,11 +113,11 @@ test("cancel-before-create tombstones and stale events prevent resurrection", as
   });
 });
 
-test("missing vehicle and invalid date requests roll back without a customer", async () => {
+test("missing identifiers and invalid provided data still roll back", async () => {
   await rollbackTest(async tx => {
     for (const overrides of [
-      { vehicle: undefined }, { contact: undefined }, { startTime: undefined },
-      { vehicle: { type: "" } }, { vehicle: { type: "car", year: "abc" } },
+      { contact: undefined }, { contact: { id: "" } }, { startTime: undefined },
+      { vehicle: { type: "car", year: "abc" } },
       { startTime: "2027-01-12T09:00:00" }, { endTime: "2027-01-11T09:00:00Z" },
       { startTime: "2027-02-30T09:00:00Z" },
     ]) {
@@ -126,6 +127,106 @@ test("missing vehicle and invalid date requests roll back without a customer", a
         assert.equal((await tx.select().from(customersTable).where(eq(customersTable.ghlContactId, input.contact.id))).length, 0);
       }
     }
+  });
+});
+
+test("incomplete intake creates one pending-price appointment and later fills the same booking", async () => {
+  await rollbackTest(async tx => {
+    const contactId = randomUUID();
+    const input = fixture({
+      contact: { id: contactId },
+      vehicle: { year: "2022", make: "Toyota", model: "Corolla" },
+    });
+    const created = await syncSpecialAppointment(input, tx);
+    assert.equal(created.action, "created");
+    assert.equal(created.totalEstimate, null);
+    assert.equal((await syncSpecialAppointment(input, tx)).action, "duplicate");
+    const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
+    assert.equal(booking.vehicleId, null);
+    assert.equal(pendingSpecialVehicle(booking.internalNotes).model, "Corolla");
+    const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, booking.customerId!));
+    assert.equal(customer.name, null);
+    assert.equal(customer.email, null);
+    assert.equal(customer.phone, null);
+    const [item] = await tx.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, booking.id));
+    assert.equal(item.unitPrice, null);
+    assert.equal(item.isQuoteBased, true);
+    assert.equal((await tx.select().from(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, booking.id))).length, 0);
+    const rescheduled = await syncSpecialAppointment({
+      ...input, vehicle: undefined, contact: undefined,
+      startTime: "2027-01-13T09:00:00-04:00", endTime: "2027-01-13T15:00:00-04:00",
+    }, tx);
+    assert.equal(rescheduled.bookingId, created.bookingId);
+    assert.equal(rescheduled.totalEstimate, null);
+    const enriched = await syncSpecialAppointment({
+      ...input, vehicle: { type: "suv" },
+      contact: { id: contactId, name: "Provided Later", phone: "+19025550123" },
+    }, tx);
+    assert.equal(enriched.bookingId, created.bookingId);
+    assert.equal(enriched.totalEstimate, 251.85);
+    const [updated] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, booking.id));
+    const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, updated.vehicleId!));
+    assert.equal(vehicle.year, 2022);
+    assert.equal(vehicle.model, "Corolla");
+    assert.doesNotMatch(updated.internalNotes!, /Pending GHL vehicle details/);
+    const [enrichedCustomer] = await tx.select().from(customersTable).where(eq(customersTable.id, booking.customerId!));
+    assert.equal(enrichedCustomer.name, "Provided Later");
+    await syncSpecialAppointment({ ...input, contact: { id: contactId, name: "", email: "", phone: "" }, vehicle: { type: "" } }, tx);
+    const [preserved] = await tx.select().from(customersTable).where(eq(customersTable.id, booking.customerId!));
+    assert.equal(preserved.name, "Provided Later");
+    assert.equal(preserved.phone, "+19025550123");
+    assert.equal((await tx.select().from(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, booking.id))).length, 1);
+    const blankUpdate = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+      ...input, contact: { id: contactId, name: null, email: null, phone: null }, vehicle: null, notes: "",
+    }));
+    assert.equal(blankUpdate.notes, undefined);
+    assert.equal((await syncSpecialAppointment(blankUpdate, tx)).totalEstimate, 251.85);
+  });
+});
+
+test("missing vehicle details keep ceramic fixed pricing and detailing pending", async () => {
+  await rollbackTest(async tx => {
+    for (const vehicle of [undefined, { type: "" }]) {
+      const ceramic = await syncSpecialAppointment(fixture({ vehicle, calendarId: SPECIAL_CALENDARS.ceramic, contact: { id: randomUUID() } }), tx);
+      assert.equal(ceramic.totalEstimate, 1144.25);
+      const detailing = await syncSpecialAppointment(fixture({ vehicle, contact: { id: randomUUID(), name: "" } }), tx);
+      assert.equal(detailing.totalEstimate, null);
+    }
+    const normalized = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+      ...fixture(), contact: { id: randomUUID(), name: null, email: null, phone: null },
+      vehicle: { type: null, year: null, make: null, model: null, colour: null },
+    }));
+    const created = await syncSpecialAppointment(normalized, tx);
+    assert.equal(created.action, "created");
+    const cancelled = await syncSpecialAppointment({
+      locationId: normalized.locationId, appointmentId: normalized.appointmentId,
+      calendarId: normalized.calendarId, appointmentStatus: "cancelled",
+    }, tx);
+    assert.equal(cancelled.bookingId, created.bookingId);
+    assert.equal(cancelled.status, "cancelled");
+    assert.equal((await syncSpecialAppointment(normalized, tx)).action, "ignored");
+  });
+});
+
+test("staff vehicle completion resolves pending price while preserving extras and overrides", async () => {
+  await rollbackTest(async tx => {
+    const created = await syncSpecialAppointment(fixture({ vehicle: undefined }), tx);
+    const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
+    const [vehicle] = await tx.insert(vehiclesTable).values({ customerId: booking.customerId, type: "truck" }).returning();
+    await tx.insert(bookingItemsTable).values({
+      bookingId: booking.id, itemType: "addon", itemName: "Keep extra", unitPrice: "10", quantity: 2,
+    });
+    const [linked] = await tx.update(bookingsTable).set({ vehicleId: vehicle.id }).where(eq(bookingsTable.id, booking.id)).returning();
+    await finishPendingSpecialPrice(tx, linked);
+    const [priced] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, booking.id));
+    assert.equal(Number(priced.totalEstimate), 297.85);
+    assert.equal(priced.appointmentAt?.getTime(), booking.appointmentAt?.getTime());
+    assert.equal(priced.calendarEventId, null);
+    const [overridden] = await tx.update(bookingsTable).set({ totalEstimate: "77.77", isManualPriceOverride: true })
+      .where(eq(bookingsTable.id, booking.id)).returning();
+    await finishPendingSpecialPrice(tx, overridden);
+    const [preserved] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, booking.id));
+    assert.equal(Number(preserved.totalEstimate), 77.77);
   });
 });
 
@@ -269,8 +370,10 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.match(String(warnings.at(-1)?.[1]), /vehicle.type: expected one of "car", "suv", "truck", "van", ""/);
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(privateValue));
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(secret));
-      assert.equal((await send(fixture({ vehicle: undefined }))).status, 422);
-      assert.match(JSON.stringify(warnings), /A new booking requires vehicle.type/);
+      assert.equal((await send(fixture({ vehicle: undefined, contact: { id: randomUUID() } }))).status, 201);
+      assert.equal((await send({ ...fixture(), contact: { id: randomUUID(), name: null, email: null, phone: null }, vehicle: null })).status, 201);
+      assert.equal((await send(fixture({ contact: { id: "" } }))).status, 422);
+      assert.match(JSON.stringify(warnings), /requires contact.id/);
       assert.equal((await send(fixture(), secret, "/unconfigured")).status, 503);
       assert.equal((await send({ padding: "x".repeat(70_000) })).status, 413);
       const input = fixture();

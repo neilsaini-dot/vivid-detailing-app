@@ -589,7 +589,7 @@ function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook:
                     <div>
                       <h4 className="font-medium">{b.items?.[0]?.itemName ?? "Service"}</h4>
                       <p className="text-sm text-muted-foreground">
-                        {b.appointmentAt ? format(new Date(b.appointmentAt), "MMMM d, yyyy") : "—"} • ${Number(b.totalEstimate ?? 0).toFixed(2)}
+                        {b.appointmentAt ? format(new Date(b.appointmentAt), "MMMM d, yyyy") : "—"} • {b.totalEstimate == null ? "Price pending" : `$${Number(b.totalEstimate).toFixed(2)}`}
                         {hasPhotos && <span className="ml-2 text-primary text-xs">• Photos</span>}
                       </p>
                     </div>
@@ -624,7 +624,7 @@ function ServiceHistoryList({ bookings, onRebook }: { bookings: any[]; onRebook:
                           ))}
                           <div className="flex justify-between text-sm font-semibold pt-1 border-t border-border">
                             <span>Total</span>
-                            <span>${Number(b.totalEstimate ?? 0).toFixed(2)}</span>
+                            <span>{b.totalEstimate == null ? "Price pending" : `$${Number(b.totalEstimate).toFixed(2)}`}</span>
                           </div>
                         </div>
                       </div>

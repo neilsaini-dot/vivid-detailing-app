@@ -35,6 +35,7 @@ import {
 } from "@workspace/api-zod";
 import { ilike, or } from "drizzle-orm";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
+import { finishPendingSpecialPrice, pendingSpecialVehicle } from "../lib/ghlSpecialIntake";
 import { sendGhlBookingConfirmed, sendGhlBookingCompleted, sendGhlMagicLink, sendGhlPickupTimeSet, sendGhlBookingRescheduled } from "../lib/ghl";
 import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, findCalendarEventNear } from "../lib/googleCalendar";
 import { googleFetch } from "../lib/googleAuth";
@@ -1692,22 +1693,26 @@ router.post("/admin/bookings/:id/vehicle", async (req, res) => {
       licensePlate: z.string().nullable().optional(),
     }).parse(req.body);
 
-    const [booking] = await db.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1);
-    if (!booking) return res.status(404).json({ error: "Booking not found" });
-
-    const [vehicle] = await db.insert(vehiclesTable).values({
-      customerId: booking.customerId ?? undefined,
-      type: body.type,
-      year: body.year ?? null,
-      make: body.make ?? null,
-      model: body.model ?? null,
-      colour: body.colour ?? null,
-      licensePlate: body.licensePlate ?? null,
-    }).returning();
-
-    await db.update(bookingsTable).set({ vehicleId: vehicle.id }).where(eq(bookingsTable.id, id));
-
-    res.status(201).json(formatVehicle(vehicle));
+    const result = await db.transaction(async tx => {
+      const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)).limit(1).for("update");
+      if (!booking) return { status: 404, error: "Booking not found" } as const;
+      if (booking.vehicleId) return { status: 409, error: "This booking already has a vehicle. Refresh and edit it instead." } as const;
+      const pending = pendingSpecialVehicle(booking.internalNotes);
+      const [vehicle] = await tx.insert(vehiclesTable).values({
+        customerId: booking.customerId,
+        type: body.type,
+        year: body.year ?? pending.year ?? null,
+        make: body.make || pending.make || null,
+        model: body.model || pending.model || null,
+        colour: body.colour || pending.colour || null,
+        licensePlate: body.licensePlate ?? null,
+      }).returning();
+      const [linked] = await tx.update(bookingsTable).set({ vehicleId: vehicle.id }).where(eq(bookingsTable.id, id)).returning();
+      await finishPendingSpecialPrice(tx, linked);
+      return { status: 201, vehicle } as const;
+    });
+    if ("error" in result) return res.status(result.status).json({ error: result.error });
+    res.status(201).json(formatVehicle(result.vehicle));
   } catch (err) {
     req.log.error({ err }, "Failed to create and link vehicle");
     res.status(500).json({ error: "Internal server error" });
@@ -1737,11 +1742,14 @@ router.patch("/admin/vehicles/:id", async (req, res) => {
 
     if (Object.keys(updates).length === 0) return res.status(400).json({ error: "No fields to update" });
 
-    const [updated] = await db
-      .update(vehiclesTable)
-      .set(updates)
-      .where(eq(vehiclesTable.id, id))
-      .returning();
+    const updated = await db.transaction(async tx => {
+      const bookings = await tx.select().from(bookingsTable).where(eq(bookingsTable.vehicleId, id)).for("update");
+      const [vehicle] = await tx.update(vehiclesTable).set(updates).where(eq(vehiclesTable.id, id)).returning();
+      if (vehicle && body.type !== undefined) {
+        for (const booking of bookings) await finishPendingSpecialPrice(tx, booking);
+      }
+      return vehicle;
+    });
     if (!updated) return res.status(404).json({ error: "Vehicle not found" });
     res.json(formatVehicle(updated));
   } catch (err) {

@@ -5,7 +5,9 @@ import {
   serviceHistoryTable, loyaltyActivityTable, ghlSpecialAppointmentsTable,
 } from "@workspace/db";
 import { SyncGhlSpecialBookingBody } from "@workspace/api-zod";
-import { getLoyaltyTier } from "./pricing";
+import {
+  pendingSpecialVehicle, specialVehicleNotes, repriceSpecialBooking, syncSpecialLoyalty,
+} from "./ghlSpecialIntake";
 import {
   specialForCalendar, specialPriceCents, SPECIAL_NAMES,
   type SpecialKey, type SpecialVehicleType,
@@ -33,8 +35,26 @@ export function normaliseSpecialInput(raw: unknown): unknown {
   if (typeof body.appointmentStatus === "string") {
     body.appointmentStatus = body.appointmentStatus.trim().toLowerCase();
   }
+  // GHL sends missing merge fields as blank strings or null. Treat optional
+  // null intake values as omitted, not as an instruction to erase known data.
+  for (const key of ["contact", "vehicle", "startTime", "endTime", "eventUpdatedAt"]) {
+    if (body[key] === null) delete body[key];
+  }
+  if (body.notes === null || (typeof body.notes === "string" && !body.notes.trim())) delete body.notes;
+  if (body.contact && typeof body.contact === "object" && !Array.isArray(body.contact)) {
+    const contact = { ...body.contact } as Record<string, unknown>;
+    for (const key of ["id", "name", "email", "phone"]) {
+      if (contact[key] === null) delete contact[key];
+      if (typeof contact[key] === "string") contact[key] = contact[key].trim();
+    }
+    body.contact = contact;
+  }
   if (body.vehicle && typeof body.vehicle === "object" && !Array.isArray(body.vehicle)) {
     const vehicle = { ...body.vehicle } as Record<string, unknown>;
+    for (const key of ["type", "year", "make", "model", "colour"]) {
+      if (vehicle[key] === null) delete vehicle[key];
+      if (typeof vehicle[key] === "string") vehicle[key] = vehicle[key].trim();
+    }
     if (typeof vehicle.type === "string") vehicle.type = vehicle.type.trim().toLowerCase();
     body.vehicle = vehicle;
   }
@@ -79,15 +99,14 @@ function response(action: Action, special: SpecialKey, booking?: Booking, reason
 }
 
 async function matchCustomer(tx: Transaction, contact: NonNullable<Input["contact"]>) {
-  if (!contact.id?.trim() || !contact.name?.trim()) {
-    fail("A new booking requires contact.id and contact.name.");
+  if (!contact.id?.trim()) {
+    fail("A new booking requires contact.id to identify the GoHighLevel customer.");
   }
   const email = contact.email?.trim().toLowerCase() || null;
   const phone = contact.phone?.trim() || null;
   if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("contact.email is invalid.");
   const digits = phone?.replace(/\D/g, "") ?? "";
   if (phone && (digits.length < 7 || digits.length > 15)) fail("contact.phone is invalid.");
-  if (!email && !phone) fail("A new booking requires a valid customer email or phone.");
 
   // Locks on all matching identities protect simultaneous distinct appointments
   // for one customer. Sorted acquisition avoids deadlocks.
@@ -113,14 +132,14 @@ async function matchCustomer(tx: Transaction, contact: NonNullable<Input["contac
     const [customer] = await tx.update(customersTable).set({
       ghlContactId: contact.id,
       // Preserve existing profile data if the workflow omits it.
-      name: contact.name.trim(),
+      ...(contact.name?.trim() ? { name: contact.name.trim() } : {}),
       ...(email ? { email } : {}),
       ...(phone ? { phone } : {}),
     }).where(eq(customersTable.id, matches[0].id)).returning();
     return customer;
   }
   const [customer] = await tx.insert(customersTable).values({
-    name: contact.name.trim(), email, phone, ghlContactId: contact.id,
+    name: contact.name?.trim() || null, email, phone, ghlContactId: contact.id,
   }).returning();
   return customer;
 }
@@ -153,7 +172,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
     );
     const [mapping] = await tx.select().from(ghlSpecialAppointmentsTable).where(where).limit(1);
     const [booking] = mapping?.bookingId
-      ? await tx.select().from(bookingsTable).where(eq(bookingsTable.id, mapping.bookingId)).limit(1)
+      ? await tx.select().from(bookingsTable).where(eq(bookingsTable.id, mapping.bookingId)).limit(1).for("update")
       : [];
     if (mapping && mapping.calendarId !== input.calendarId) {
       throw new SpecialSyncError(409, "calendar_changed", "An existing appointment cannot move between special calendars; cancel it and create a new appointment.");
@@ -215,67 +234,62 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
         await saveMapping(booking.id);
         return response("ignored", special, booking, "job_already_started");
       }
-      if (!booking.vehicleId) throw new SpecialSyncError(409, "vehicle_missing", "The linked booking vehicle was removed.");
+      if (input.contact) {
+        const contactId = input.contact.id || mapping?.externalContactId || booking.ghlContactId;
+        if (contactId) await matchCustomer(tx, { ...input.contact, id: contactId });
+      }
       const mergedStart = start ?? booking.appointmentAt;
       const mergedEnd = end ?? mapping?.appointmentEndAt;
       if (mergedStart && mergedEnd && mergedEnd <= mergedStart) {
         fail("The appointment end must be later than its start. Send both dates when rescheduling.");
       }
-      const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId)).limit(1);
-      if (!vehicle) throw new SpecialSyncError(409, "vehicle_missing", "The linked booking vehicle was removed.");
-      const vehicleType = (input.vehicle?.type || vehicle.type) as SpecialVehicleType;
-      const vehicleUpdates = {
-        type: vehicleType,
+      const [vehicle] = booking.vehicleId
+        ? await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId)).limit(1)
+        : [];
+      if (booking.vehicleId && !vehicle) throw new SpecialSyncError(409, "vehicle_missing", "The linked booking vehicle was removed.");
+      const pendingVehicle = {
+        ...pendingSpecialVehicle(booking.internalNotes),
         ...(year !== undefined ? { year } : {}),
         ...(input.vehicle?.make?.trim() ? { make: input.vehicle.make.trim() } : {}),
         ...(input.vehicle?.model?.trim() ? { model: input.vehicle.model.trim() } : {}),
         ...(input.vehicle?.colour?.trim() ? { colour: input.vehicle.colour.trim() } : {}),
       };
-      await tx.update(vehiclesTable).set(vehicleUpdates).where(eq(vehiclesTable.id, vehicle.id));
-      let total = booking.totalEstimate;
-      if (vehicleType !== vehicle.type && !booking.isManualPriceOverride) {
-        const items = await tx.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, booking.id));
-        const base = items.find(i => i.itemType === "service" && i.itemName === SPECIAL_NAMES[special]);
-        // Admin replacement line items are deliberately not overwritten.
-        if (base) {
-          const cents = specialPriceCents(special, vehicleType);
-          await tx.update(bookingItemsTable).set({ unitPrice: (cents / 100).toFixed(2) })
-            .where(eq(bookingItemsTable.id, base.id));
-          const subtotalCents = items.reduce((sum, i) =>
-            sum + (i.id === base.id ? cents : Math.round(Number(i.unitPrice ?? 0) * 100)) * i.quantity, 0);
-          total = ((subtotalCents + Math.round(subtotalCents * 0.15)) / 100).toFixed(2);
-        }
+      const vehicleType = (input.vehicle?.type || vehicle?.type) as SpecialVehicleType | undefined;
+      const vehicleUpdates = {
+        ...pendingVehicle,
+        type: vehicleType!,
+      };
+      let vehicleId = booking.vehicleId;
+      if (vehicle) {
+        await tx.update(vehiclesTable).set(vehicleUpdates).where(eq(vehiclesTable.id, vehicle.id));
+      } else if (vehicleType) {
+        const [createdVehicle] = await tx.insert(vehiclesTable).values({
+          customerId: booking.customerId, ...vehicleUpdates,
+        }).returning();
+        vehicleId = createdVehicle.id;
       }
+      const priced = vehicleType && (vehicleType !== vehicle?.type || booking.totalEstimate === null)
+        ? await repriceSpecialBooking(tx, booking, special, vehicleType) : booking;
       const [updated] = await tx.update(bookingsTable).set({
+        vehicleId,
+        internalNotes: specialVehicleNotes(booking.internalNotes, vehicleId ? null : pendingVehicle),
         status: booking.status === "confirmed" && status === "new" ? "confirmed"
           : status === "confirmed" ? "confirmed" : "pending",
         ...(start ? { appointmentAt: start } : {}),
         ...(input.notes !== undefined ? { notes: input.notes } : {}),
-        totalEstimate: total,
+        totalEstimate: priced.totalEstimate,
       }).where(eq(bookingsTable.id, booking.id)).returning();
-      const [loyalty] = await tx.select().from(loyaltyActivityTable)
-        .where(eq(loyaltyActivityTable.bookingId, booking.id)).limit(1);
-      if (loyalty) {
-        await tx.update(loyaltyActivityTable).set({
-          spendAmount: total ?? "0", tierAtTime: getLoyaltyTier(Number(total ?? 0)),
-        }).where(eq(loyaltyActivityTable.id, loyalty.id));
-      } else if (booking.status === "cancelled" && total && booking.customerId) {
-        await tx.insert(loyaltyActivityTable).values({
-          customerId: booking.customerId, bookingId: booking.id,
-          spendAmount: total, tierAtTime: getLoyaltyTier(Number(total)),
-        });
-      }
+      await syncSpecialLoyalty(tx, updated);
       await saveMapping(booking.id);
       return response("updated", special, updated);
     }
 
     if (!start || !end) fail("A new active booking requires startTime and endTime with timezone offsets.");
-    if (!input.vehicle?.type) fail("A new booking requires vehicle.type: car, suv, truck, or van.");
     if (!input.contact) fail("A new booking requires customer contact information.");
     const customer = await matchCustomer(tx, input.contact);
-    const make = input.vehicle.make?.trim() || null;
-    const model = input.vehicle.model?.trim() || null;
-    const existingVehicles = year && make && model
+    const make = input.vehicle?.make?.trim() || null;
+    const model = input.vehicle?.model?.trim() || null;
+    const existingVehicles = input.vehicle?.type && year && make && model
       ? await tx.select().from(vehiclesTable).where(and(
         eq(vehiclesTable.customerId, customer.id), eq(vehiclesTable.year, year),
         sql`lower(trim(${vehiclesTable.make})) = ${make.toLowerCase()}`,
@@ -286,33 +300,40 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
       throw new SpecialSyncError(409, "vehicle_conflict", "Multiple matching vehicles exist for this customer; staff must resolve them before retrying.");
     }
     const vehicleValues = {
-      customerId: customer.id, type: input.vehicle.type, year: year ?? null,
+      customerId: customer.id, type: input.vehicle?.type as SpecialVehicleType, year: year ?? null,
       make, model,
-      ...(input.vehicle.colour?.trim() ? { colour: input.vehicle.colour.trim() } : {}),
+      ...(input.vehicle?.colour?.trim() ? { colour: input.vehicle.colour.trim() } : {}),
     };
-    const [vehicle] = existingVehicles[0]
+    const [vehicle] = !input.vehicle?.type ? [] : existingVehicles[0]
       ? await tx.update(vehiclesTable).set(vehicleValues)
         .where(eq(vehiclesTable.id, existingVehicles[0].id)).returning()
       : await tx.insert(vehiclesTable).values(vehicleValues).returning();
-    const subtotalCents = specialPriceCents(special, input.vehicle.type);
-    const total = ((subtotalCents + Math.round(subtotalCents * 0.15)) / 100).toFixed(2);
+    const subtotalCents = special === "ceramic_special" ? 99500
+      : input.vehicle?.type ? specialPriceCents(special, input.vehicle.type) : null;
+    const total = subtotalCents === null ? null
+      : ((subtotalCents + Math.round(subtotalCents * 0.15)) / 100).toFixed(2);
     const [created] = await tx.insert(bookingsTable).values({
-      customerId: customer.id, vehicleId: vehicle.id,
+      customerId: customer.id, vehicleId: vehicle?.id ?? null,
       status: status === "confirmed" ? "confirmed" : "pending", appointmentAt: start,
       totalEstimate: total, ghlContactId: input.contact.id, source: "other",
       notes: input.notes ?? null,
-      internalNotes: `Imported from GoHighLevel (${SPECIAL_NAMES[special]}). Manage appointment times and cancellations in GoHighLevel. Slot end: ${end.toISOString()}; this is not a promised pickup time.`,
+      internalNotes: specialVehicleNotes(
+        `Imported from GoHighLevel (${SPECIAL_NAMES[special]}). Manage appointment times and cancellations in GoHighLevel. Slot end: ${end.toISOString()}; this is not a promised pickup time.`,
+        vehicle ? null : {
+          ...(year !== undefined ? { year } : {}),
+          ...(make ? { make } : {}), ...(model ? { model } : {}),
+          ...(input.vehicle?.colour?.trim() ? { colour: input.vehicle.colour.trim() } : {}),
+        },
+      ),
     }).returning();
     await tx.insert(bookingItemsTable).values({
       bookingId: created.id, itemType: "service", itemName: SPECIAL_NAMES[special],
-      unitPrice: (subtotalCents / 100).toFixed(2), quantity: 1, isQuoteBased: false,
+      unitPrice: subtotalCents === null ? null : (subtotalCents / 100).toFixed(2),
+      quantity: 1, isQuoteBased: subtotalCents === null,
     });
     await tx.insert(serviceHistoryTable).values({ customerId: customer.id, bookingId: created.id });
     // Keep parity with the existing booking flow's loyalty accounting.
-    await tx.insert(loyaltyActivityTable).values({
-      customerId: customer.id, bookingId: created.id,
-      spendAmount: total, tierAtTime: getLoyaltyTier(Number(total)),
-    });
+    await syncSpecialLoyalty(tx, created);
     await saveMapping(created.id);
     return response("created", special, created);
   });

@@ -297,6 +297,26 @@ test("timezone handling and normalized input", () => {
   })).vehicle?.type, "suv");
 });
 
+test("missing appointment status defaults to new without replacing explicit statuses", () => {
+  for (const appointmentStatus of [undefined, null, "", " \t\n "]) {
+    const input = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+      ...fixture(), appointmentStatus,
+    }));
+    assert.equal(input.appointmentStatus, "new");
+  }
+  for (const appointmentStatus of ["new", "confirmed", "cancelled", "canceled"]) {
+    const input = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+      ...fixture(), appointmentStatus: ` ${appointmentStatus.toUpperCase()} `,
+    }));
+    assert.equal(input.appointmentStatus, appointmentStatus);
+  }
+  for (const appointmentStatus of ["scheduled", "booked", "null", "{{appointment.status}}", 0, false]) {
+    assert.equal(SyncGhlSpecialBookingBody.safeParse(normaliseSpecialInput({
+      ...fixture(), appointmentStatus,
+    })).success, false);
+  }
+});
+
 test("simultaneous deliveries commit only one customer, vehicle, and booking", async () => {
   const input = fixture();
   try {
@@ -370,6 +390,16 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.match(String(warnings.at(-1)?.[1]), /vehicle.type: expected one of "car", "suv", "truck", "van", ""/);
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(privateValue));
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(secret));
+      for (const appointmentStatus of [undefined, null, "", " \t "]) {
+        const response = await send({ ...fixture(), appointmentStatus });
+        assert.equal(response.status, 201);
+        const created = await response.json() as { bookingId: string; status: string };
+        assert.equal(created.status, "pending");
+        const [mapping] = await tx.select().from(ghlSpecialAppointmentsTable)
+          .where(eq(ghlSpecialAppointmentsTable.bookingId, created.bookingId));
+        assert.equal(mapping.externalStatus, "new");
+      }
+      assert.equal((await send({ ...fixture(), appointmentStatus: "scheduled" })).status, 422);
       assert.equal((await send(fixture({ vehicle: undefined, contact: { id: randomUUID() } }))).status, 201);
       assert.equal((await send({ ...fixture(), contact: { id: randomUUID(), name: null, email: null, phone: null }, vehicle: null })).status, 201);
       assert.equal((await send(fixture({ contact: { id: "" } }))).status, 422);

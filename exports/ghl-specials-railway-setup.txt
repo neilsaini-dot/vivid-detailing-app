@@ -132,7 +132,10 @@ TRIGGERING appointment, not the contact's latest appointment.
 }
 
 For a new active booking, contact.id, startTime, and endTime are required along
-with the location, calendar, appointment ID, and supported appointment status.
+with the location, calendar, and appointment ID. A missing, null, empty, or
+whitespace-only appointmentStatus defaults to "new". Explicit statuses are
+trimmed/lowercased and must be new, confirmed, cancelled, or canceled; unknown
+nonblank values still fail rather than accidentally creating a new booking.
 Customer name, email, phone, and all vehicle details are optional. Missing
 optional merge values may be omitted, blank, or null. Supplied nonblank values
 must still be valid (for example, vehicle.type must be car, suv, truck, or van).

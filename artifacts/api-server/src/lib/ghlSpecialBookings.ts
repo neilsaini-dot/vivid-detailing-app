@@ -35,6 +35,11 @@ export function normaliseSpecialInput(raw: unknown): unknown {
   if (typeof body.appointmentStatus === "string") {
     body.appointmentStatus = body.appointmentStatus.trim().toLowerCase();
   }
+  // An unset GHL merge field means a new appointment. Never replace an
+  // explicit status: cancellations and invalid nonblank values must stay visible.
+  if (body.appointmentStatus == null || body.appointmentStatus === "") {
+    body.appointmentStatus = "new";
+  }
   // GHL sends missing merge fields as blank strings or null. Treat optional
   // null intake values as omitted, not as an instruction to erase known data.
   for (const key of ["contact", "vehicle", "startTime", "endTime", "eventUpdatedAt"]) {

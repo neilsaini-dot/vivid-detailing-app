@@ -3,17 +3,18 @@ import { MapPin, Phone, Mail } from "lucide-react";
 
 export function Footer() {
   const [location] = useLocation();
+  const isSpecialBooking = /^\/(?:ceramic|detailing)-special\/?$/.test(location);
   const isBooking = location === "/book";
   const isDashboard = location === "/dashboard";
   const isAdmin = location === "/admin";
   const isReview = location === "/review";
-  const isSimple = isBooking || isDashboard || isAdmin || isReview;
+  const isSimple = isBooking || isDashboard || isAdmin || isReview || isSpecialBooking;
 
   if (isAdmin) return null;
 
   return (
     <footer className="border-t border-border bg-card py-12 md:py-16">
-      <div className={`container grid gap-8 ${isSimple ? "md:grid-cols-1 max-w-sm" : "md:grid-cols-4"}`}>
+      <div className={`container grid gap-8 ${isSimple ? "md:grid-cols-1 max-w-sm" : "md:grid-cols-4"} ${isSpecialBooking ? "mx-auto px-4 sm:px-6 lg:px-8" : ""}`}>
         {!isSimple && (
           <div className="space-y-4">
             <div className="flex items-center gap-3">
@@ -64,7 +65,7 @@ export function Footer() {
           </ul>
         </div>
       </div>
-      <div className="container mt-12 pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground">
+      <div className={`container mt-12 pt-8 border-t border-border flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-muted-foreground ${isSpecialBooking ? "mx-auto max-w-6xl px-4 sm:px-6 lg:px-8" : ""}`}>
         <p>© {new Date().getFullYear()} Vivid Detailing. All rights reserved.</p>
         {!isSimple && (
           <div className="flex items-center gap-4">

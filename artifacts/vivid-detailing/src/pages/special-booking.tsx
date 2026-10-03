@@ -200,7 +200,7 @@ export default function SpecialBooking({ offer }: { offer: Offer }) {
   if (booking && summary) {
     const returnedTotal = typeof booking.totalEstimate === "number" ? booking.totalEstimate : summary.total;
     return (
-      <div className="container max-w-2xl py-10 md:py-16" data-testid="booking-confirmation">
+      <div className="mx-auto w-full max-w-2xl px-4 py-10 sm:px-6 md:py-16 lg:px-8" data-testid="booking-confirmation">
         <div className="mb-6 flex h-12 w-12 items-center justify-center rounded-full bg-primary/15 text-primary"><Check /></div>
         <h1 className="text-3xl font-bold tracking-tight md:text-4xl">Booking request received</h1>
         <p className="mt-3 text-muted-foreground">
@@ -235,7 +235,7 @@ export default function SpecialBooking({ offer }: { offer: Offer }) {
   return (
     <div>
       <section className="border-b border-border bg-card/40">
-        <div className="container grid gap-8 py-10 md:grid-cols-[1.1fr_0.9fr] md:py-16">
+        <div className="mx-auto grid w-full max-w-6xl gap-8 px-4 py-10 sm:px-6 md:grid-cols-[1.1fr_0.9fr] md:py-16 lg:px-8">
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-primary">Vivid Detailing, Prince Edward Island</p>
             <h1 className="mt-3 text-4xl font-bold tracking-tight md:text-5xl" data-testid="heading-offer">{o.name}</h1>
@@ -258,7 +258,7 @@ export default function SpecialBooking({ offer }: { offer: Offer }) {
         </div>
       </section>
 
-      <form onSubmit={onSubmit} noValidate className="container max-w-3xl space-y-10 py-10" data-testid="form-special-booking">
+      <form onSubmit={onSubmit} noValidate className="mx-auto w-full max-w-3xl space-y-10 px-4 py-10 sm:px-6 lg:px-8" data-testid="form-special-booking">
         <section className="space-y-4">
           <h2 className="text-xl font-semibold">1. Your contact details</h2>
           <div className="grid gap-4 sm:grid-cols-2">

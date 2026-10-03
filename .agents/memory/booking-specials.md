@@ -9,6 +9,12 @@ The owner frequently books two specials and wants people sent to a link, not thr
 
 **How to apply:** Add native special booking routes to the existing app, preserve ordinary booking flows, and support matching manually created GoHighLevel appointments separately when needed. Do not claim limited remaining spots without current availability evidence.
 
+Special pages are meant to handle just the booking flow. Do not show the general website navigation links at the top; keep the page content centered with side spacing.
+
+**Why:** The owner explicitly corrected the general navigation and edge-aligned layout.
+
+**How to apply:** Keep both special routes booking-focused on desktop and mobile, without changing navigation on the rest of the app.
+
 ## Owner-provided ceramic special
 
 - $995 Ceramic Coating Special, saving over $1,000 off the regular package price.

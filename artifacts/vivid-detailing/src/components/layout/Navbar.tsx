@@ -6,11 +6,23 @@ import { Button } from "@/components/ui/button";
 export function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const [location] = useLocation();
+  const isSpecialBooking = /^\/(?:ceramic|detailing)-special\/?$/.test(location);
   const isBooking = location === "/book";
   const isDashboard = location === "/dashboard";
   const isAdmin = location === "/admin";
   const isReview = location === "/review";
   const isSimple = isBooking || isDashboard || isAdmin || isReview;
+
+  if (isSpecialBooking) {
+    return (
+      <header className="border-b border-border bg-background" data-testid="special-booking-header">
+        <div className="mx-auto flex h-16 w-full max-w-6xl items-center gap-3 px-4 sm:px-6 lg:px-8">
+          <img src={`${import.meta.env.BASE_URL}logo.png`} alt="" className="h-10 w-10 object-contain" />
+          <span className="text-lg font-bold tracking-tight">Vivid Detailing</span>
+        </div>
+      </header>
+    );
+  }
 
   if (isAdmin) {
     return (

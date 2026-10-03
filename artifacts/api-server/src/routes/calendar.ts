@@ -5,11 +5,13 @@ import { getAvailableSlots, getNextAvailableSlots } from "../lib/googleCalendar"
 const router = Router();
 
 const AvailabilityQuery = z.object({
+  strict: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "date must be YYYY-MM-DD"),
   duration: z.coerce.number().min(0.25).max(48).default(2),
 });
 
 const NextSlotsQuery = z.object({
+  strict: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
   duration: z.coerce.number().min(0.25).max(48).default(2),
   count: z.coerce.number().min(1).max(10).default(3),
 });
@@ -21,10 +23,10 @@ router.get("/calendar/availability", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
-  const { date, duration } = parsed.data;
+  const { date, duration, strict } = parsed.data;
 
   try {
-    const slots = await getAvailableSlots(date, duration);
+    const slots = await getAvailableSlots(date, duration, strict);
     res.json({ date, duration, slots });
   } catch (err: any) {
     req.log.error({ err }, "Failed to fetch calendar availability");
@@ -40,10 +42,10 @@ router.get("/calendar/next-slots", async (req, res) => {
     res.status(400).json({ error: parsed.error.flatten().fieldErrors });
     return;
   }
-  const { duration, count } = parsed.data;
+  const { duration, count, strict } = parsed.data;
 
   try {
-    const slots = await getNextAvailableSlots(duration, count);
+    const slots = await getNextAvailableSlots(duration, count, strict);
     res.json({ duration, count, slots });
   } catch (err: any) {
     req.log.error({ err }, "Failed to fetch next available slots");

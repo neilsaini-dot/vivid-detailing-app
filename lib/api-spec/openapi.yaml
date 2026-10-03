@@ -20,6 +20,49 @@ tags:
   - name: analytics
   - name: calendar
 paths:
+  /integrations/ghl/special-bookings:
+    post:
+      operationId: syncGhlSpecialBooking
+      tags: [bookings]
+      summary: Import a dedicated GoHighLevel special appointment
+      description: Authenticated workflow receiver. Creates or updates one booking per location and appointment; scheduling remains owned by GoHighLevel.
+      security:
+        - GhlSpecialsBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GhlSpecialAppointmentInput"
+      responses:
+        "200":
+          description: Updated, cancelled, duplicate, or ignored delivery
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GhlSpecialSyncResult"
+        "201":
+          description: Booking created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GhlSpecialSyncResult"
+        "400":
+          description: Invalid JSON
+        "401":
+          description: Missing or invalid bearer token
+        "403":
+          description: Location or calendar is not allowed
+        "409":
+          description: Conflicting customer identity or completed booking
+        "413":
+          description: Request exceeds 64 KB
+        "422":
+          description: Invalid or missing appointment or vehicle fields
+        "503":
+          description: Receiver configuration or database migration is missing
+        "500":
+          description: Transaction failed; retry delivery
   /healthz:
     get:
       operationId: healthCheck
@@ -40,6 +83,12 @@ paths:
       tags: [calendar]
       summary: Get available time slots for a given date and service duration
       parameters:
+        - name: strict
+          in: query
+          required: false
+          schema:
+            type: boolean
+            description: Fail rather than claim availability when the calendar cannot be read.
         - name: date
           in: query
           required: true
@@ -70,6 +119,12 @@ paths:
       tags: [calendar]
       summary: Get the next N available booking slots across upcoming days
       parameters:
+        - name: strict
+          in: query
+          required: false
+          schema:
+            type: boolean
+            description: Fail rather than claim availability when the calendar cannot be read.
         - name: duration
           in: query
           required: false
@@ -1116,7 +1171,105 @@ paths:
                 $ref: "#/components/schemas/Inspection"
 
 components:
+  securitySchemes:
+    GhlSpecialsBearer:
+      type: http
+      scheme: bearer
+      description: Shared GHL_SPECIALS_WEBHOOK_SECRET configured on Railway and in the workflow.
   schemas:
+    GhlSpecialAppointmentInput:
+      type: object
+      required: [locationId, appointmentId, calendarId, appointmentStatus]
+      properties:
+        source:
+          type: string
+          enum: [gohighlevel]
+        locationId:
+          type: string
+          minLength: 1
+          maxLength: 100
+        appointmentId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        calendarId:
+          type: string
+          minLength: 1
+          maxLength: 100
+        appointmentStatus:
+          type: string
+          enum: [new, confirmed, cancelled, canceled]
+        startTime:
+          type: string
+          description: ISO 8601 timestamp with Z or explicit UTC offset. Required when creating an active booking.
+          maxLength: 50
+        endTime:
+          type: string
+          description: ISO 8601 timestamp with Z or explicit UTC offset. Required when creating an active booking.
+          maxLength: 50
+        eventUpdatedAt:
+          type: string
+          description: Optional source appointment last-updated timestamp for rejecting out-of-order deliveries. Must not be a retry's current time.
+          maxLength: 50
+        contact:
+          $ref: "#/components/schemas/GhlSpecialContactInput"
+        vehicle:
+          $ref: "#/components/schemas/GhlSpecialVehicleInput"
+        notes:
+          type: ["string", "null"]
+          maxLength: 4000
+    GhlSpecialContactInput:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 100
+        name:
+          type: string
+          maxLength: 200
+        email:
+          type: string
+          maxLength: 254
+        phone:
+          type: string
+          maxLength: 50
+    GhlSpecialVehicleInput:
+      type: object
+      properties:
+        type:
+          type: string
+          enum: [car, suv, truck, van, ""]
+        year:
+          type: [integer, string, "null"]
+        make:
+          type: string
+          maxLength: 100
+        model:
+          type: string
+          maxLength: 100
+        colour:
+          type: string
+          maxLength: 100
+    GhlSpecialSyncResult:
+      type: object
+      required: [success, action, bookingId, special, status, totalEstimate]
+      properties:
+        success:
+          type: boolean
+        action:
+          type: string
+          enum: [created, updated, duplicate, cancelled, ignored]
+        bookingId:
+          type: ["string", "null"]
+        special:
+          type: string
+          enum: [ceramic_special, detailing_special]
+        status:
+          type: string
+        totalEstimate:
+          type: ["number", "null"]
+        reason:
+          type: string
     HealthStatus:
       type: object
       properties:
@@ -1319,6 +1472,10 @@ components:
     CreateBookingBody:
       type: object
       properties:
+        specialOffer:
+          type: string
+          enum: [ceramic_special, detailing_special]
+          description: Dedicated special booking; the server derives its base price and tax and ignores client price overrides.
         existingCustomerId:
           type: string
           nullable: true

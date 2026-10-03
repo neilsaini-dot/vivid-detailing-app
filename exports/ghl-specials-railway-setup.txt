@@ -1,0 +1,237 @@
+VIVID DETAILING — RAILWAY / GOHIGHLEVEL SPECIALS SETUP
+
+The receiving endpoint is implemented in this project:
+POST /api/integrations/ghl/special-bookings
+
+It is not active on Railway until this code is deployed, the database migration
+is applied, and the two required Railway variables below are configured.
+No Replit connector or GoHighLevel API key is required.
+
+1. DATABASE MIGRATION
+
+Run scripts/migrate-ghl-specials.sql against the existing app database before
+deploying the new code. This only creates the ghl_special_appointments mapping
+table. It does not change existing packages, prices, or booking constraints.
+
+Apply it to the database used by Railway's DATABASE_URL (for example, in the
+Supabase SQL editor if that is your app database). Do not create a different
+database or replace the app's current connection.
+
+2. RAILWAY VARIABLES
+
+GHL_SPECIALS_WEBHOOK_SECRET
+  A long random private token, at least 32 characters, without whitespace.
+  Use the identical value as the Bearer Token in both GoHighLevel workflows.
+  This is not a GoHighLevel API key or account password. Do not put it in
+  customer messages, links, forms, screenshots, or shared documents.
+
+GHL_SPECIALS_LOCATION_ID
+  Your actual GoHighLevel sub-account/location ID. The request's locationId must
+  match exactly. This prevents appointments from other locations being imported.
+
+Existing DATABASE_URL and the rest of the app's Railway configuration remain
+unchanged. Restart/redeploy the Railway service after configuring variables.
+The endpoint fails closed with HTTP 503 until the required configuration exists.
+
+3. CALENDAR MAPPING AND PRICES
+
+Ceramic Coating:
+  Calendar ID: w3wIA0X8OrUEnHtDaOQZ
+  App service: Ceramic Coating Special
+  Appointment slot: 24 hours
+  Price for car/SUV/truck/van: $995 before HST; $1,144.25 including HST.
+  Advertised vehicle turnaround: 24–36 hours (not a promised pickup time).
+
+Book a detailing:
+  Calendar ID: 5gTCnqzF1ruvjvlf0kVv
+  App service: Full Interior & Exterior Detail Special
+  Appointment slot: 6 hours
+  Car: $199 before HST; $228.85 including HST.
+  SUV: $219 before HST; $251.85 including HST.
+  Truck: $239 before HST; $274.85 including HST.
+  Van: $269 before HST; $309.35 including HST.
+  Ongoing offer: no October 31 deadline for this flow.
+
+The server calculates prices and 15% HST itself. Incoming price/total fields
+are ignored. It imports the base special only; optional paid extras can be
+added through the existing admin/inspection flow.
+
+4. BOOKING LINKS AND VEHICLE FIELDS
+
+Open each existing calendar in GoHighLevel and copy its actual public booking
+link using Share. Give the two links to the conversation bot.
+The links have not been supplied or configured in this project.
+
+For these specials, instruct the bot to explain the offer and send the dedicated
+calendar link, not to call its booking tool. Do not claim an appointment has
+been booked merely because the bot sent a link.
+
+Collect vehicle type (car/suv/truck/van), year, make, model, and optionally colour
+and notes in the booking form. Staff must also enter vehicle type for appointments
+created manually. Missing vehicle type is rejected, never assumed to be a car.
+
+5. GOHIGHLEVEL WORKFLOWS
+
+Create:
+  Vivid — Ceramic Special Appointment Sync
+  Vivid — Detailing Special Appointment Sync
+
+For each workflow:
+  Trigger: Appointment Status.
+  Filter: In Calendar = the corresponding dedicated calendar.
+  Enrollment: Contact only (not guests).
+  Include New, Confirmed, and Cancelled status changes; use separate triggers
+  if your workflow builder requires them.
+  Include both customer-created and staff-created appointments. Do not restrict
+  Modified By to Customer or use only Customer Booked Appointment.
+  Ensure recurring workflow entry for distinct appointments and reschedules.
+  A reschedule must send the same triggering appointment ID and the new dates.
+
+Do not map Showed/No-show to app service completion: attending an appointment is
+not the same as finishing the detailing job.
+
+Add action: Custom Webhook
+  Event = CUSTOM
+  Method = POST
+  Content-Type = application/json
+  Authorization = Bearer Token (the private shared token configured in Railway)
+
+URL:
+  https://[ACTUAL LIVE APP DOMAIN]/api/integrations/ghl/special-bookings
+
+Use the real Railway or custom production domain, not the Replit development URL.
+
+6. EXACT JSON CONTRACT
+
+The placeholders below are explanatory, NOT GoHighLevel merge-field names.
+Replace them using the workflow's dynamic value picker. Use fields from the
+TRIGGERING appointment, not the contact's latest appointment.
+
+{
+  "source": "gohighlevel",
+  "locationId": "<actual location ID>",
+  "appointmentId": "<triggering appointment ID>",
+  "calendarId": "<triggering calendar ID>",
+  "appointmentStatus": "<new, confirmed, or cancelled>",
+  "startTime": "<ISO 8601 start with timezone>",
+  "endTime": "<ISO 8601 end with timezone>",
+  "contact": {
+    "id": "<contact ID>",
+    "name": "<full customer name>",
+    "email": "<email, or empty string if phone supplied>",
+    "phone": "<phone, or empty string if email supplied>"
+  },
+  "vehicle": {
+    "type": "<car, suv, truck, or van>",
+    "year": "<four-digit year or empty string>",
+    "make": "<make>",
+    "model": "<model>",
+    "colour": "<colour or empty string>"
+  },
+  "notes": "<condition notes or requested extras>"
+}
+
+For a new active booking, contact.id, contact.name, at least one valid email or
+phone, vehicle.type, startTime, and endTime are required. Other vehicle details
+are optional. On later notifications, omitted fields preserve existing data.
+Send both dates when rescheduling. Start must be earlier than end.
+
+Date examples:
+  Summer Halifax: 2027-07-12T09:00:00-03:00
+  Winter Halifax: 2027-01-12T09:00:00-04:00
+  Equivalent UTC timestamps ending in Z are also accepted.
+Do not send locale-formatted dates or times without offsets.
+
+If your workflow exposes the appointment's raw last-updated timestamp, add:
+  "eventUpdatedAt": "<source appointment last-updated timestamp with timezone>"
+Omit this property if unavailable. Do not send an empty merge token or use the
+current time on every retry: it must represent the source appointment revision.
+Older timestamped notifications are ignored.
+
+Minimum cancellation payload:
+{
+  "locationId": "<actual location ID>",
+  "appointmentId": "<triggering appointment ID>",
+  "calendarId": "<triggering calendar ID>",
+  "appointmentStatus": "cancelled"
+}
+
+Cancellation can arrive before creation: the app remembers it and prevents a
+late creation notification from reviving the appointment. Once cancelled,
+reopening the same ID requires a strictly newer eventUpdatedAt than the recorded
+cancellation (and a timestamp on that cancellation); otherwise create a new GHL
+appointment. Mapping an existing ID to a different contact or special calendar
+is rejected; cancel it and create a new appointment instead.
+
+7. SUCCESS AND FAILURE HANDLING
+
+201: A new app booking was created.
+200: Updated, cancelled, duplicate, or safely ignored notification.
+  Body includes success, action, bookingId, special, status, totalEstimate.
+  bookingId may be null for a cancellation received before creation.
+  Check action/reason: ignored is a deliberate acknowledgement, not a new job.
+
+401: Missing or incorrect token.
+403: Location or calendar is not allowed.
+409: Customer identity conflict, removed booking/vehicle, contact/calendar changed,
+     or attempted cancellation of a completed job. Alert staff for resolution.
+422: Required data missing or invalid. Correct the mapped fields and retry.
+413: Payload exceeds 64 KB.
+503: Configuration or database migration is missing.
+500: Transaction failed. Retry with the same appointment ID after investigation.
+
+Configure failure notifications and retry handling supported by your account.
+Do not put real customer data or the token in public webhook-inspection services.
+
+8. BOOKING OWNERSHIP AND EXISTING APP FLOWS
+
+Location ID + appointment ID is the duplicate-protection key. Repeated and
+simultaneous deliveries create only one job, one history record, and one initial
+loyalty activity entry. Each distinct appointment gets its own booking.
+
+New maps to pending, Confirmed to confirmed, Cancelled to cancelled.
+Late New notifications do not downgrade confirmed jobs. Existing in-progress or
+completed app jobs are not reset by New/Confirmed notifications. A completed
+service cannot be cancelled by an appointment notification.
+
+Imported jobs appear in the normal admin booking list under source Other, with
+the special's service name. Internal notes identify GoHighLevel scheduling
+ownership. The admin list refreshes every 30 seconds while open.
+
+Existing inspection, internal notes, pickup updates, service-completion, photos,
+and review flows remain available. Existing customer matching is by GoHighLevel
+contact ID, then email/phone when unambiguous. Vehicles are reused when the same
+customer has one matching year/make/model; ambiguous matches require staff review.
+
+GoHighLevel owns scheduling. Reschedule/cancel in its calendar, not the app's
+appointment controls. Attempts to change times/cancel through the app or run its
+external Resync action are blocked for imported specials to avoid divergence.
+
+The receiver sends NO outbound GoHighLevel appointment creation or confirmation
+request and creates NO Google Calendar event. Configure GoHighLevel's own Google
+Calendar sync if you want these events visible there. Ensure only one existing
+workflow sends customer confirmations. App pickup/completion workflows may still
+send their existing operational messages; those workflows must not create a
+second appointment.
+
+9. ACTIVATION CHECKLIST
+
+- Apply the migration and deploy the new code to Railway.
+- Set both required Railway variables and configure the workflow token.
+- Verify payload mappings using synthetic test contacts.
+- Test self-booking and staff-created appointments on BOTH calendars.
+- Test all detailing vehicle prices and HST.
+- Test duplicate delivery, confirmation, reschedule, and cancellation.
+- Test multiple appointments for the same contact and missing vehicle type.
+- Confirm the booking appears in admin and can start an inspection.
+- Confirm there is one calendar event and one customer confirmation.
+- Review workflow execution logs and test error/retry handling.
+- Activate the production workflows only after these checks pass.
+
+Development automated check:
+  pnpm --filter @workspace/api-server run test:ghl-specials
+The mapping table must already exist in the development database.
+
+Official HighLevel references:
+https://help.gohighlevel.com/support/solutions/articles/155000002619-workflow-trigger-appointment-status
+https://help.gohighlevel.com/support/solutions/articles/155000003305-workflow-action-custom-webhook

@@ -135,7 +135,8 @@ export interface NextAvailableSlot {
 
 export async function getAvailableSlots(
   date: string,
-  durationHours: number
+  durationHours: number,
+  strict = false,
 ): Promise<TimeSlot[]> {
   const dayOfWeek = new Date(`${date}T12:00:00`).getDay();
   if (dayOfWeek === 0) return [];
@@ -151,10 +152,12 @@ export async function getAvailableSlots(
       const data = await res.json() as { items?: typeof events };
       events = data?.items ?? [];
     } else {
+      if (strict) throw new Error("Calendar availability could not be verified.");
       const text = await res.text().catch(() => "");
       logger.warn({ status: res.status, text, date }, "Google Calendar availability fetch failed");
     }
   } catch (err) {
+    if (strict) throw err;
     logger.warn({ err, date }, "Google Calendar availability fetch error — returning all slots open");
     events = [];
   }
@@ -181,7 +184,8 @@ export async function getAvailableSlots(
 
 export async function getNextAvailableSlots(
   durationHours: number,
-  count: number = 3
+  count: number = 3,
+  strict = false,
 ): Promise<NextAvailableSlot[]> {
   const results: NextAvailableSlot[] = [];
   const nowHalifax = currentHalifaxDate();
@@ -195,7 +199,7 @@ export async function getNextAvailableSlots(
   while (results.length < count && daysTried < maxDays) {
     const dateStr = toDateStr(cursor);
     const isToday = dateStr === todayStr;
-    const slots = await getAvailableSlots(dateStr, durationHours);
+    const slots = await getAvailableSlots(dateStr, durationHours, strict);
 
     for (const slot of slots) {
       if (!slot.available) continue;

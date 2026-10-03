@@ -28,6 +28,8 @@ app.use(
 );
 
 app.use(cors());
+// Keep integration deliveries small; the general upload routes retain their limit.
+app.use("/api/integrations/ghl/special-bookings", express.json({ limit: "64kb" }));
 app.use(express.json({ limit: "20mb" }));
 app.use(express.urlencoded({ extended: true, limit: "20mb" }));
 app.use("/api", router);

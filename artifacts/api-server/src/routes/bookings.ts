@@ -24,7 +24,9 @@ import {
 } from "@workspace/api-zod";
 import { calculateServicePrice, HST_RATE, getLoyaltyTier } from "../lib/pricing";
 import { sendGhlWebhook, sendGhlBookingConfirmed } from "../lib/ghl";
-import { createCalendarEvent } from "../lib/googleCalendar";
+import { createCalendarEvent, getAvailableSlots } from "../lib/googleCalendar";
+import { isGhlSpecialBooking, GHL_SCHEDULING_MESSAGE } from "../lib/ghlSpecialBookingOwnership";
+import { prepareNativeSpecial } from "../lib/nativeSpecials";
 import { formatCustomer, formatVehicle, formatBooking } from "./customers";
 
 /** Formats an ISO date string as "Tuesday, May 5th at 2:00 PM" (Atlantic time) */
@@ -48,6 +50,32 @@ const router = Router();
 router.post("/bookings", async (req, res) => {
   try {
     const body = CreateBookingBody.parse(req.body);
+    let special: ReturnType<typeof prepareNativeSpecial>;
+    try {
+      special = prepareNativeSpecial(body);
+    } catch (error) {
+      res.status(422).json({ error: error instanceof Error ? error.message : "Invalid special booking." });
+      return;
+    }
+    if (special) {
+      const appointment = new Date(body.appointmentAt!);
+      const date = new Intl.DateTimeFormat("en-CA", {
+        timeZone: "America/Halifax", year: "numeric", month: "2-digit", day: "2-digit",
+      }).format(appointment);
+      const time = new Intl.DateTimeFormat("en-GB", {
+        timeZone: "America/Halifax", hour: "2-digit", minute: "2-digit", hourCycle: "h23",
+      }).format(appointment);
+      try {
+        const slots = await getAvailableSlots(date, special.durationHours, true);
+        if (!slots.some(slot => slot.start === time && slot.available)) {
+          res.status(409).json({ error: "That time is no longer available. Choose another appointment." });
+          return;
+        }
+      } catch {
+        res.status(503).json({ error: "We couldn't verify appointment availability. Please try again shortly." });
+        return;
+      }
+    }
 
     // Upsert customer — always prefer existing record matched by email or phone
     // so returning customers never lose their loyalty history.
@@ -175,6 +203,12 @@ router.post("/bookings", async (req, res) => {
       quantity: number;
       isQuoteBased: boolean;
     }> = [];
+    if (special) {
+      items.push({
+        itemType: "service", itemName: special.itemName,
+        unitPrice: special.subtotal.toFixed(2), quantity: 1, isQuoteBased: false,
+      });
+    }
 
     const services = await db.select().from(servicesTable);
     const servicePrices = await db.select().from(servicePricesTable);
@@ -227,9 +261,9 @@ router.post("/bookings", async (req, res) => {
     }
 
     const subtotal = items.reduce((s, i) => s + Number(i.unitPrice ?? 0), 0);
-    const bundleDiscount = body.bundleDiscount ?? 0;
+    const bundleDiscount = special ? 0 : body.bundleDiscount ?? 0;
     const discountedSubtotal = Math.max(0, subtotal - bundleDiscount);
-    const total = Math.round(discountedSubtotal * (1 + HST_RATE) * 100) / 100;
+    const total = special?.total ?? Math.round(discountedSubtotal * (1 + HST_RATE) * 100) / 100;
 
     // Create booking
     const [booking] = await db
@@ -239,8 +273,9 @@ router.post("/bookings", async (req, res) => {
         vehicleId: vehicle.id,
         status: "pending",
         appointmentAt: body.appointmentAt ? new Date(body.appointmentAt) : null,
-        totalEstimate: String(body.totalEstimate ?? total),
+        totalEstimate: String(special ? total : body.totalEstimate ?? total),
         notes: body.notes ?? null,
+        ...(special ? { internalNotes: `Booked through the ${special.itemName} page. ${special.durationHours}-hour appointment slot${special.special === "ceramic_special" ? "; advertised vehicle turnaround is 24–36 hours" : ""}. Paid extras require staff review.` } : {}),
       })
       .returning();
 
@@ -263,7 +298,7 @@ router.post("/bookings", async (req, res) => {
     }
 
     // Build shared context for async side-effects
-    const serviceNames = body.serviceIds
+    const serviceNames = special ? [special.itemName] : body.serviceIds
       .map((id) => services.find((s) => s.id === id)?.name ?? id)
       .filter(Boolean);
     const addOnNames = body.addOnIds
@@ -302,7 +337,7 @@ router.post("/bookings", async (req, res) => {
       .join("\n");
 
     // Rough duration estimate: 2 h base + 1 h per additional service, cap 6 h
-    const durationHours = Math.min(2 + Math.max(0, serviceNames.length - 1), 6);
+    const durationHours = special?.durationHours ?? Math.min(2 + Math.max(0, serviceNames.length - 1), 6);
 
     // Fire GHL booking-confirmed webhook (creates contact + marks opportunity won)
     sendGhlBookingConfirmed({
@@ -407,6 +442,10 @@ router.patch("/bookings/:id", async (req, res) => {
   try {
     const { id } = UpdateBookingParams.parse(req.params);
     const body = UpdateBookingBody.parse(req.body);
+    if ((body.appointmentAt !== undefined || body.status !== undefined) && await isGhlSpecialBooking(id)) {
+      res.status(409).json({ error: GHL_SCHEDULING_MESSAGE });
+      return;
+    }
 
     const updates: Partial<typeof bookingsTable.$inferInsert> = {};
     if (body.status) updates.status = body.status;

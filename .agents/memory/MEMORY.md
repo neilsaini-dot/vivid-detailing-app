@@ -1,0 +1,3 @@
+- [Authoritative pricing](authoritative-pricing.md) — owner confirms selection-screen amounts, not calculator amounts, are correct.
+- [Frequently booked specials](booking-specials.md) — owner-provided offers and requirement for direct booking links and GoHighLevel appointment intake.
+- [Browser testing on Nix](browser-testing-nix.md) — local Chromium needs compatible libraries; broad global library paths break Node and shell runtimes.

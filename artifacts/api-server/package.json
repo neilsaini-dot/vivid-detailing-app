@@ -7,7 +7,9 @@
     "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:ghl-specials": "esbuild tests/ghl-specials.test.ts --bundle --platform=node --format=cjs --external:pg-native --outfile=.test-build/ghl-specials.test.cjs && node --test .test-build/ghl-specials.test.cjs",
+    "test:native-specials": "esbuild tests/native-specials.test.ts --bundle --platform=node --format=cjs --outfile=.test-build/native-specials.test.cjs && node --test .test-build/native-specials.test.cjs"
   },
   "dependencies": {
     "@google-cloud/storage": "^7.19.0",

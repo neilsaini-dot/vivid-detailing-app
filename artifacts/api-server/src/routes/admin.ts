@@ -40,6 +40,7 @@ import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, findCale
 import { googleFetch } from "../lib/googleAuth";
 import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
+import { isGhlSpecialBooking, GHL_SCHEDULING_MESSAGE } from "../lib/ghlSpecialBookingOwnership";
 
 const router = Router();
 
@@ -361,6 +362,10 @@ router.patch("/admin/bookings/:id", async (req, res) => {
   try {
     const { id } = AdminUpdateBookingParams.parse(req.params);
     const body = AdminUpdateBookingBody.parse(req.body);
+    if ((body.appointmentAt !== undefined || body.status === "cancelled") && await isGhlSpecialBooking(id)) {
+      res.status(409).json({ error: GHL_SCHEDULING_MESSAGE });
+      return;
+    }
 
     // Fetch existing booking upfront when pickup time, appointment date, or cancel status is being updated
     let existingPickupAt: Date | null = null;
@@ -829,6 +834,10 @@ router.post("/admin/bookings/:id/sync-to-drive", async (req, res) => {
 router.post("/admin/bookings/:id/resync", async (req, res) => {
   try {
     const { id } = AdminUpdateBookingParams.parse(req.params);
+    if (await isGhlSpecialBooking(id)) {
+      res.status(409).json({ error: "This appointment already exists in GoHighLevel. Retry its GoHighLevel sync workflow instead of creating duplicate events." });
+      return;
+    }
 
     const [booking] = await db
       .select()

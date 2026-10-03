@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { useLocation } from "wouter";
 import {
-  useAdminListBookings, useAdminListServices, useGetAnalytics,
+  useAdminListBookings, getAdminListBookingsQueryKey, useAdminListServices, useGetAnalytics,
   useListSeasonalPromos, useUpdateSeasonalPromo, useCreateSeasonalPromo,
   useDeleteSeasonalPromo, useAdminUpdateService, useAdminUpdateBooking,
   useAdminCreateBooking, useAdminSearchCustomers,
@@ -2637,7 +2637,9 @@ function AdminDashboard() {
   const [reviewRatingFilter, setReviewRatingFilter] = useState<number | null>(null);
   const [selectedReview, setSelectedReview] = useState<any>(null);
 
-  const { data: bookings = [] } = useAdminListBookings({});
+  const { data: bookings = [] } = useAdminListBookings({}, {
+    query: { queryKey: getAdminListBookingsQueryKey({}), refetchInterval: 30_000, refetchOnMount: "always" },
+  });
   const selectedBooking = bookings.find((b: any) => b.id === selectedBookingId) ?? null;
   const { data: bookingDrafts = [], refetch: refetchDrafts } = useAdminListBookingDrafts();
   const deleteDraft = useAdminDeleteBookingDraft();

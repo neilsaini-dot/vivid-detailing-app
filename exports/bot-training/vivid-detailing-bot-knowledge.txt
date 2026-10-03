@@ -1,0 +1,309 @@
+Vivid Detailing — Conversation Bot Knowledge
+
+Pricing, packages, add-ons, tint choices, and quoting guidance
+
+Catalog snapshot date: October 3, 2026. Source: the app's active public catalog and selection-screen amounts, plus its booking and quote screens. The owner has confirmed that selection-screen amounts are the correct prices. This is not a verified snapshot of the published site's database. Dollar amounts use the app's $ notation; confirm the currency with the owner before explicitly labeling it CAD.
+
+1. Bot instructions and pricing safety
+
+• Ask for the vehicle type first: car, SUV, truck, or van. Ask for the year, make, model, desired service, and relevant condition concerns.
+
+• All catalog prices below are before 15% HST unless a total is explicitly labeled tax-inclusive. Distinguish the base service from optional paid add-ons.
+
+• Use the selection-screen prices listed in this document as the owner-approved prices. Quote the exact amount for the customer's vehicle type. Do not replace these prices with calculator-derived amounts, apply vehicle multipliers, or round package prices up to $5.
+
+• For Paint Correction and PPF, offer a custom quote. Missing or pending prices are not free. Do not present a subtotal for known items as the complete price when a quote-based item is included.
+
+• Do not invent discounts, guarantees, extra coverage, deposit requirements, cancellation fees, or payment policies. Do not promise appointment availability or a pickup time without checking the current booking system or staff.
+
+• Use only the current active catalog. Refresh this document when the owner changes prices, package inclusions, offers, or availability. Verify against production before using it for a live customer bot.
+
+• Listed coating durability and tint warranty statements are catalog claims. Do not add warranty terms, damage guarantees, or maintenance promises that are not listed.
+
+2. Pricing rules
+
+Look up the exact vehicle-specific service price in Section 3. These are the amounts shown on the selection screen and confirmed by the owner. Do not derive prices from a base-price multiplier or round them up. For example, Vivid Ceramic Gloss Pro for a car is $299 before HST, not $300.
+
+Add-ons use their exact vehicle-specific prices in Section 4. Do not apply vehicle multipliers to add-ons. Paint Correction and PPF require a custom quote.
+
+Calculation: subtotal = listed services + listed add-ons. Subtract an eligible booking-time bundle discount before tax. HST = 15% of the discounted subtotal. Round tax and totals to cents. Quote-only items still need a separate confirmed amount.
+
+3. Service catalog
+
+Vivid Interior
+
+Category: Detailing
+
+Deep interior detail — seats, carpets, dash, panels, and glass cleaned to a showroom finish.
+
+Included: Seat extraction & shampoo; Carpet shampoo; Leather conditioning; Vent cleaning; Full glass clean
+
+Owner-approved selection-screen prices before HST: Car: $189.00; SUV: $209.00; Truck: $229.00; Van: $249.00
+
+Base car service-time estimate in the app: 4–6 hours. Not a guaranteed turnaround or pickup time.
+
+Vivid Luster
+
+Category: Detailing
+
+Complete exterior detail — hand wash, clay bar, tire shine, and spray wax for a showroom-ready shine.
+
+Included: Hand wash & dry; Clay bar decontamination; Tire & wheel cleaning; Spray wax; Exterior glass clean
+
+Owner-approved selection-screen prices before HST: Car: $219.00; SUV: $239.00; Truck: $259.00; Van: $279.00
+
+Base car service-time estimate in the app: 5–6 hours. Not a guaranteed turnaround or pickup time.
+
+Vivid Glow
+
+Category: Detailing
+
+Full interior + exterior detail with a single-stage paint enhancement for a deeper, glossier finish.
+
+Included: Everything in Vivid Luster; Single-stage machine polish; Paint decontamination; Interior detail; Tire dressing
+
+Owner-approved selection-screen prices before HST: Car: $329.00; SUV: $349.00; Truck: $369.00; Van: $389.00
+
+Base car service-time estimate in the app: 6–7 hours. Not a guaranteed turnaround or pickup time.
+
+Summer Special Ceramic Exterior
+
+Category: Seasonal
+
+1-year ceramic exterior protection at a summer-exclusive flat rate. Any vehicle, one price.
+
+Included: Exterior wash; Paint decontamination; Ceramic (painted surfaces); 1-year protection; Free maintenance wash
+
+Owner-approved selection-screen prices before HST: Car: $249.00; SUV: $249.00; Truck: $249.00; Van: $249.00
+
+Seasonal offer: active in this development snapshot. No validity dates are provided here; confirm current availability before promising it.
+
+Base car service-time estimate in the app: 7 hours. Not a guaranteed turnaround or pickup time.
+
+Vivid Ceramic Gloss Pro
+
+Category: Ceramic
+
+Entry-level professional ceramic coating with 1-year durability. Hydrophobic, scratch-resistant, gloss-enhancing.
+
+Included: Paint decontamination; Ceramic coating (painted surfaces); 1-year protection; Hydrophobic finish
+
+Owner-approved selection-screen prices before HST: Car: $299.00; SUV: $360.00; Truck: $390.00; Van: $420.00
+
+Base car service-time estimate in the app: 7 hours. Not a guaranteed turnaround or pickup time.
+
+Vivid Ceramic Guard
+
+Category: Ceramic
+
+3-year ceramic protection with a single-stage paint enhancement. Covers paint, trim, and glass surfaces.
+
+Included: Decontamination wash; Single-stage paint enhancement; Ceramic (paint + trim); 3-year protection
+
+Owner-approved selection-screen prices before HST: Car: $999.00; SUV: $1,200.00; Truck: $1,300.00; Van: $1,400.00
+
+Base car service-time estimate in the app: 24 hours. Not a guaranteed turnaround or pickup time.
+
+Coverage clarification required: the description mentions glass, but the inclusion list specifies paint + trim only. Confirm glass coverage with staff; do not promise it as included.
+
+Vivid Ceramic Elite Guard
+
+Category: Ceramic
+
+Our most comprehensive ceramic package — 5-year durability covering paint, trim, and glass.
+
+Included: Everything in Ceramic Guard; 5-year ceramic durability; Premium paint enhancement; Glass ceramic included
+
+Owner-approved selection-screen prices before HST: Car: $1,299.00; SUV: $1,500.00; Truck: $1,600.00; Van: $1,700.00
+
+Base car service-time estimate in the app: 36 hours. Not a guaranteed turnaround or pickup time.
+
+Vivid Ceramic Tint - Rear
+
+Category: Tint
+
+Nano ceramic IR tint on back windows and rear windshield. Lifetime warranty.
+
+Included: Back side windows; Rear windshield; Nano ceramic IR film; Lifetime warranty
+
+Owner-approved selection-screen prices before HST: Car: $275.00; SUV: $275.00; Truck: $275.00; Van: $275.00
+
+Base car service-time estimate in the app: 6 hours. Not a guaranteed turnaround or pickup time.
+
+Vivid Ceramic Tint - Full
+
+Category: Tint
+
+Full vehicle nano ceramic IR tint — rear + all front side windows. Lifetime warranty.
+
+Included: All side windows; Rear windshield; Nano ceramic IR film; Lifetime warranty
+
+Owner-approved selection-screen prices before HST: Car: $350.00; SUV: $350.00; Truck: $350.00; Van: $350.00
+
+Base car service-time estimate in the app: 8 hours. Not a guaranteed turnaround or pickup time.
+
+Full tint covers all side windows and the rear windshield. Full front-windshield tint is not listed as included.
+
+Windshield Eyebrow Tint
+
+Category: Tint
+
+A tinted visor strip along the top of the windshield to cut sun glare.
+
+Included: Top 6" windshield strip; Carbon or ceramic film; Lifetime warranty
+
+Owner-approved selection-screen prices before HST: Car: $50.00; SUV: $50.00; Truck: $50.00; Van: $50.00
+
+Base car service-time estimate in the app: 2 hours. Not a guaranteed turnaround or pickup time.
+
+Paint Correction
+
+Category: Paint Correction
+
+Single or multi-stage machine polishing to remove swirl marks, scratches, and oxidation. Priced after inspection.
+
+Included: Paint decontamination; Machine polish; Before/after photos; Quote-based pricing
+
+Pricing status: CUSTOM QUOTE REQUIRED. No fixed price is configured.
+
+Base car service-time estimate in the app: 4–24 hours. Not a guaranteed turnaround or pickup time.
+
+PPF - Full Front
+
+Category: Ppf
+
+Paint Protection Film on the full front end — hood, fenders, mirrors, bumper, A-pillars.
+
+Included: Hood; Fenders; Front bumper; Side mirrors; A-pillars; Self-healing film
+
+Pricing status: CUSTOM QUOTE REQUIRED. No fixed price is configured.
+
+Base car service-time estimate in the app: Custom. Not a guaranteed turnaround or pickup time.
+
+4. Add-on catalog
+
+All prices below are regular add-on prices before HST. Add-ons are optional. Names alone do not establish extra scope, guaranteed results, or quantity definitions.
+
+Interior Upgrades
+
+• Pet Hair Removal — Car: $50.00; SUV: $60.00; Truck: $70.00; Van: $80.00. Added time estimate: 1–2 hour(s).
+
+• Steam Cleaning Interior — Car: $40.00; SUV: $50.00; Truck: $60.00; Van: $70.00. Added time estimate: 1 hour(s).
+
+• Shampoo Upholstery — Car: $95.00; SUV: $105.00; Truck: $105.00; Van: $135.00. Added time estimate: 3 hour(s).
+
+• Headliner Cleaning — Car: $40.00; SUV: $50.00; Truck: $60.00; Van: $70.00. Added time estimate: 1 hour(s).
+
+• Ozone Treatment / Deodorizer — Car: $95.00; SUV: $105.00; Truck: $105.00; Van: $135.00. Added time estimate: 2 hour(s).
+
+• Child Seat Clean & Sanitize — Car: $10.00; SUV: $10.00; Truck: $10.00; Van: $10.00. Added time estimate: 1 hour(s).
+
+• Additional Mats — Car: $15.00; SUV: $15.00; Truck: $15.00; Van: $25.00. Added time estimate: 1 hour(s).
+
+• Vivid Interior Ceramic Leather — Car: $199.00; SUV: $240.00; Truck: $260.00; Van: $280.00. Added time estimate: 2 hour(s).
+
+Exterior Upgrades
+
+• Headlight Restoration — Car: $60.00; SUV: $60.00; Truck: $60.00; Van: $60.00. Added time estimate: 2 hour(s).
+
+• Engine Shampoo — Car: $75.00; SUV: $85.00; Truck: $85.00; Van: $105.00. Added time estimate: 1 hour(s).
+
+• Ceramic Rims — Car: $60.00; SUV: $70.00; Truck: $80.00; Van: $70.00. Added time estimate: 1 hour(s).
+
+• Paint Decontamination — Car: $150.00; SUV: $175.00; Truck: $200.00; Van: $200.00. Added time estimate: 1 hour(s).
+
+• Paint Sealant — Car: $150.00; SUV: $175.00; Truck: $200.00; Van: $200.00. Added time estimate: 1 hour(s).
+
+• Minor Scratch/Blemish Correction — Car: $150.00; SUV: $175.00; Truck: $200.00; Van: $200.00. Added time estimate: 1 hour(s).
+
+• Windshield Hydrophobic Coating — Car: $120.00; SUV: $140.00; Truck: $160.00; Van: $160.00. Added time estimate: 1 hour(s).
+
+• Soft Top / Tonneau Cover Protection — Car: $95.00; SUV: $95.00; Truck: $95.00; Van: $95.00. Added time estimate: 1 hour(s).
+
+• Vivid Ceramic Glass - Full Vehicle — Car: $129.00; SUV: $129.00; Truck: $129.00; Van: $129.00. Added time estimate: 2 hour(s).
+
+• Windshield Ceramic — Car: $89.00; SUV: $89.00; Truck: $89.00; Van: $89.00. Added time estimate: 1 hour(s).
+
+The protection-selection step additionally offers Vivid Interior Ceramic Leather, Vivid Ceramic Glass - Full Vehicle, and Windshield Ceramic.
+
+Windshield Hydrophobic Coating ($120/$140/$160/$160) and Windshield Ceramic ($89 for every vehicle type) are separate catalog entries. Do not treat them as the same product or substitute one price for the other.
+
+Do not automatically charge for an add-on already covered by a package. Clarify intended extra scope with staff, especially shampoo, decontamination, and glass treatments.
+
+5. Booking-time bundle offer
+
+The app offers 25% off selected recommended add-ons when added through the Exclusive Bundle Offer step at booking time. This is not 25% off the whole booking, and it does not automatically apply to every add-on selected earlier. Each eligible add-on's savings is rounded to cents before summing; HST is applied after the discount.
+
+• Vivid Interior: Ozone Treatment / Deodorizer
+
+• Vivid Luster: Paint Sealant; Windshield Hydrophobic Coating
+
+• Vivid Glow: Vivid Ceramic Glass - Full Vehicle
+
+• Summer Special Ceramic Exterior: Windshield Ceramic; Ceramic Rims
+
+• Vivid Ceramic Gloss Pro: Windshield Ceramic; Ceramic Rims
+
+• Vivid Ceramic Guard: Vivid Ceramic Glass - Full Vehicle; Vivid Interior Ceramic Leather; Ceramic Rims
+
+• Vivid Ceramic Elite Guard: Vivid Ceramic Glass - Full Vehicle; Vivid Interior Ceramic Leather; Ceramic Rims
+
+• Vivid Ceramic Tint - Full: Windshield Eyebrow Tint; Vivid Ceramic Glass - Full Vehicle
+
+No package-specific recommendations are configured for Rear Tint, Eyebrow Tint, Paint Correction, or PPF alone. With multiple services selected, the offer uses the union of their recommended add-ons. Confirm that a specific add-on is offered and selected through the bundle step before promising its discount.
+
+Example: Full Tint $350 + eligible Eyebrow Tint $50. Eyebrow discount = $12.50. Discounted subtotal = $387.50; HST = $58.13; total = $445.63. Without the eligible bundle discount, the same two items total $460.00 including HST.
+
+6. Tint darkness options
+
+VLT means visible light transmission. Lower percentages are darker. The app offers 5%, 15%, 25%, 35%, and 50%; the default selection is 35%. No separate shade surcharge is configured in the pricing logic.
+
+• 5% — Limo: maximum privacy, excellent heat rejection; hardest to see out of at night.
+
+• 15% — Very Dark: high privacy; described by the app as matching most factory rear window tints; strong glare reduction.
+
+• 25% — Dark: popular side-window choice with strong privacy and heat rejection.
+
+• 35% — Medium: balance of privacy and visibility; popular all-around choice.
+
+• 50% — Light: visible interior and better nighttime visibility; still described as providing UV and heat protection.
+
+The preview is illustrative, not a measurement of actual film performance. Do not guarantee a legal tint percentage or recommend illegal installations. Confirm applicable local rules and which windows may be tinted with staff. No independently verified legal limits or numerical UV/heat-rejection specifications are provided in this document.
+
+7. Condition, safety, and time notes
+
+• Shampoo Upholstery: the app says it is only needed for heavy staining and the vehicle must be left overnight.
+
+• Ozone Treatment / Deodorizer: the vehicle must air out for 2–3 hours after treatment before it can be occupied or driven.
+
+• Engine Shampoo: the engine must be fully cool before service begins; hood access is required.
+
+• Headlight Restoration: results may vary on severely cracked, pitted, or deeply scratched lenses.
+
+• Minor Scratch/Blemish Correction: suitable for light surface scratches only; deep chips, gouges, or panel damage cannot be fully corrected.
+
+• Pet Hair Removal: heavily embedded hair may require extra time; the final result depends on buildup severity.
+
+Service-time estimates add 1 hour per base service for an SUV or truck, and 2 hours per base service for a van. Add-on times are added separately. If PPF is selected, the app displays a custom time estimate. These are app estimates, not confirmed work hours, appointment availability, or completion guarantees. Ask staff about multi-day services and actual pickup timing.
+
+8. Custom-quote options and handoff
+
+The separate quote form offers Paint Correction / Polishing, Paint Protection Film (PPF), Advanced Ceramic Coating, Full Restoration, and Other / Not Sure. These form categories do not establish additional fixed-price packages.
+
+For a quote, collect the customer's name, email and phone; vehicle type, year, make, and model; desired service; current condition and goals; and useful photos. Refer the request to staff. Do not claim a request has been submitted, an appointment booked, or a price approved unless the bot actually completed that action.
+
+A quote-based item can appear as TBD while the app totals known-priced items. Explain that the displayed estimate excludes unpriced work and is not the complete final price.
+
+9. Example bot responses
+
+Customer: “How much is full tint?” Bot: “Full ceramic tint is $350 before 15% HST, or $402.50 including HST. It covers all side windows and the rear windshield; full front-windshield tint is not listed as included. The available darkness options are 5%, 15%, 25%, 35%, and 50%. Staff can confirm which options are appropriate and legal for your windows.”
+
+Customer: “What does an interior detail cost for my SUV?” Bot: “Vivid Interior for an SUV is $209.00 before 15% HST, or $240.35 including HST. It includes seat extraction and shampoo, carpet shampoo, leather conditioning, vent cleaning, and glass cleaning. Optional add-ons cost extra. What year, make, and model is your SUV?”
+
+Customer: “How much is PPF?” Bot: “PPF is custom quoted. The listed Full Front option covers the hood, fenders, front bumper, side mirrors, and A-pillars with self-healing film. What vehicle do you have, and can you share the coverage you want and photos for the team to review?”
+
+Customer: “Can I get 25% off everything?” Bot: “The booking offer is 25% off eligible recommended add-ons added through the bundle step, not the whole booking. Tell me your package and the add-ons you’re considering so we can check eligibility.”
+
+10. Maintaining this knowledge
+
+The owner has confirmed the selection-screen amounts as the correct service prices. Refresh this document whenever those amounts or add-on prices change. Confirm current seasonal-offer availability and unresolved package-coverage details with staff. No app code or business data was changed to produce this document.

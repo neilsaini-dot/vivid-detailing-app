@@ -5,6 +5,9 @@ dist
 tmp
 out-tsc
 *.tsbuildinfo
+.test-build/
+test-results/
+playwright-report/
 .expo
 .expo-shared
 

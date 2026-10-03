@@ -1,5 +1,4 @@
 uploads = []
-outputs = []
 
 [[generated]]
 id = "anxoiSzCWV1b8GWNHXM5L"
@@ -36,3 +35,45 @@ id = "ebOqUeurDnQvPnOtoarjo"
 uri = "file://artifacts/vivid-detailing/public/vehicle-van.png"
 type = "image"
 title = "van side profile"
+
+[[outputs]]
+id = "R0KGNDaf_kyh8z6h6Qtz-"
+uri = "file://exports/bot-training/vivid-detailing-bot-knowledge.docx"
+type = "word_document"
+title = "Updated Bot Training Document — Selection-Screen Prices"
+description = "Editable Word document using the owner-approved selection-screen amounts for all packages and vehicle types. Conflicting calculator prices and warnings removed."
+logical_id = "a346eb1a-76f3-4172-b871-025a850174c2"
+content_hash = "sha256:49455b0938481bf2b6d0a71069f3b017555bdb1eaf1bc3b732fd34d5f78d9761"
+size = 7485
+mtime_ms = 1791057661896
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:86e4e102-278a-41a9-8c70-65bc6ffecefc/a346eb1a-76f3-4172-b871-025a850174c2/761a8fc9-740f-45ca-b9cc-873a64e15f74"
+storage_version_token = "1791057675274530"
+content_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+[[outputs]]
+id = "MnBVy0tNF_I1ezc7CDOud"
+uri = "file://exports/bot-training/vivid-detailing-bot-knowledge.txt"
+type = "text"
+title = "Updated Bot Knowledge — Plain Text"
+description = "Bot-upload version with selection-screen pricing, package inclusions, add-ons, HST, bundle offers, and updated example responses."
+logical_id = "2a533c8e-2aab-4e95-9f5d-d1cbb14cc157"
+content_hash = "sha256:1a03184a4d45107c748c3cb0d423c5869c2b4375eac7c842edff6c9b3cbe1f69"
+size = 17413
+mtime_ms = 1791057664348
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:86e4e102-278a-41a9-8c70-65bc6ffecefc/2a533c8e-2aab-4e95-9f5d-d1cbb14cc157/724c0024-f439-4f4c-a618-648d66c08f5a"
+storage_version_token = "1791057675762844"
+content_type = "text/plain"
+
+[[outputs]]
+id = "7j98rbq-d1HqPHjzDkMQJ"
+uri = "file://exports/ghl-specials-railway-setup.txt"
+type = "text"
+title = "Railway & GoHighLevel Specials Setup Guide"
+description = "Configuration, database migration, webhook payloads, workflow setup, prices, and activation checklist."
+logical_id = "962a11eb-901e-49f5-9acb-bd6f16665d57"
+content_hash = "sha256:849204a13b59a923781f0a3eff08b3b3a3d281db4e20441476516101fa4fb870"
+size = 10799
+mtime_ms = 1791059293680
+storage_uri = "gcs://replit-rams-assets-worf/rams/assets/repl:86e4e102-278a-41a9-8c70-65bc6ffecefc/962a11eb-901e-49f5-9acb-bd6f16665d57/20419480-4d8d-4cea-a35a-04c74d118dfa"
+storage_version_token = "1791059395745581"
+content_type = "text/plain"

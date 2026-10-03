@@ -8,6 +8,116 @@
 import * as zod from "zod";
 
 /**
+ * Authenticated workflow receiver. Creates or updates one booking per location and appointment; scheduling remains owned by GoHighLevel.
+ * @summary Import a dedicated GoHighLevel special appointment
+ */
+export const syncGhlSpecialBookingBodyLocationIdMax = 100;
+
+export const syncGhlSpecialBookingBodyAppointmentIdMax = 200;
+
+export const syncGhlSpecialBookingBodyCalendarIdMax = 100;
+
+export const syncGhlSpecialBookingBodyStartTimeMax = 50;
+
+export const syncGhlSpecialBookingBodyEndTimeMax = 50;
+
+export const syncGhlSpecialBookingBodyEventUpdatedAtMax = 50;
+
+export const syncGhlSpecialBookingBodyContactIdMax = 100;
+
+export const syncGhlSpecialBookingBodyContactNameMax = 200;
+
+export const syncGhlSpecialBookingBodyContactEmailMax = 254;
+
+export const syncGhlSpecialBookingBodyContactPhoneMax = 50;
+
+export const syncGhlSpecialBookingBodyVehicleMakeMax = 100;
+
+export const syncGhlSpecialBookingBodyVehicleModelMax = 100;
+
+export const syncGhlSpecialBookingBodyVehicleColourMax = 100;
+
+export const syncGhlSpecialBookingBodyNotesMax = 4000;
+
+export const SyncGhlSpecialBookingBody = zod.object({
+  source: zod.enum(["gohighlevel"]).optional(),
+  locationId: zod.string().min(1).max(syncGhlSpecialBookingBodyLocationIdMax),
+  appointmentId: zod
+    .string()
+    .min(1)
+    .max(syncGhlSpecialBookingBodyAppointmentIdMax),
+  calendarId: zod.string().min(1).max(syncGhlSpecialBookingBodyCalendarIdMax),
+  appointmentStatus: zod.enum(["new", "confirmed", "cancelled", "canceled"]),
+  startTime: zod
+    .string()
+    .max(syncGhlSpecialBookingBodyStartTimeMax)
+    .optional()
+    .describe(
+      "ISO 8601 timestamp with Z or explicit UTC offset. Required when creating an active booking.",
+    ),
+  endTime: zod
+    .string()
+    .max(syncGhlSpecialBookingBodyEndTimeMax)
+    .optional()
+    .describe(
+      "ISO 8601 timestamp with Z or explicit UTC offset. Required when creating an active booking.",
+    ),
+  eventUpdatedAt: zod
+    .string()
+    .max(syncGhlSpecialBookingBodyEventUpdatedAtMax)
+    .optional()
+    .describe(
+      "Optional source appointment last-updated timestamp for rejecting out-of-order deliveries. Must not be a retry's current time.",
+    ),
+  contact: zod
+    .object({
+      id: zod.string().max(syncGhlSpecialBookingBodyContactIdMax).optional(),
+      name: zod
+        .string()
+        .max(syncGhlSpecialBookingBodyContactNameMax)
+        .optional(),
+      email: zod
+        .string()
+        .max(syncGhlSpecialBookingBodyContactEmailMax)
+        .optional(),
+      phone: zod
+        .string()
+        .max(syncGhlSpecialBookingBodyContactPhoneMax)
+        .optional(),
+    })
+    .optional(),
+  vehicle: zod
+    .object({
+      type: zod.enum(["car", "suv", "truck", "van", ""]).optional(),
+      year: zod.union([zod.number(), zod.string()]).nullish(),
+      make: zod
+        .string()
+        .max(syncGhlSpecialBookingBodyVehicleMakeMax)
+        .optional(),
+      model: zod
+        .string()
+        .max(syncGhlSpecialBookingBodyVehicleModelMax)
+        .optional(),
+      colour: zod
+        .string()
+        .max(syncGhlSpecialBookingBodyVehicleColourMax)
+        .optional(),
+    })
+    .optional(),
+  notes: zod.string().max(syncGhlSpecialBookingBodyNotesMax).nullish(),
+});
+
+export const SyncGhlSpecialBookingResponse = zod.object({
+  success: zod.boolean(),
+  action: zod.enum(["created", "updated", "duplicate", "cancelled", "ignored"]),
+  bookingId: zod.string().nullable(),
+  special: zod.enum(["ceramic_special", "detailing_special"]),
+  status: zod.string(),
+  totalEstimate: zod.number().nullable(),
+  reason: zod.string().optional(),
+});
+
+/**
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
@@ -18,6 +128,7 @@ export const HealthCheckResponse = zod.object({
  * @summary Get available time slots for a given date and service duration
  */
 export const GetCalendarAvailabilityQueryParams = zod.object({
+  strict: zod.coerce.boolean().optional(),
   date: zod.coerce.string(),
   duration: zod.coerce.number().optional(),
 });
@@ -39,6 +150,7 @@ export const GetCalendarAvailabilityResponse = zod.object({
  * @summary Get the next N available booking slots across upcoming days
  */
 export const GetCalendarNextSlotsQueryParams = zod.object({
+  strict: zod.coerce.boolean().optional(),
   duration: zod.coerce.number().optional(),
   count: zod.coerce.number().optional(),
 });
@@ -195,6 +307,12 @@ export const CalculatePriceResponse = zod.object({
  * @summary Create a new booking
  */
 export const CreateBookingBody = zod.object({
+  specialOffer: zod
+    .enum(["ceramic_special", "detailing_special"])
+    .optional()
+    .describe(
+      "Dedicated special booking; the server derives its base price and tax and ignores client price overrides.",
+    ),
   existingCustomerId: zod
     .string()
     .nullish()

@@ -50,6 +50,8 @@ import type {
   GetAnalyticsParams,
   GetCalendarAvailabilityParams,
   GetCalendarNextSlotsParams,
+  GhlSpecialAppointmentInput,
+  GhlSpecialSyncResult,
   HealthStatus,
   Inspection,
   ListAddOnsParams,
@@ -82,6 +84,94 @@ type AwaitedInput<T> = PromiseLike<T> | T;
 type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
+
+/**
+ * Authenticated workflow receiver. Creates or updates one booking per location and appointment; scheduling remains owned by GoHighLevel.
+ * @summary Import a dedicated GoHighLevel special appointment
+ */
+export const getSyncGhlSpecialBookingUrl = () => {
+  return `/api/integrations/ghl/special-bookings`;
+};
+
+export const syncGhlSpecialBooking = async (
+  ghlSpecialAppointmentInput: GhlSpecialAppointmentInput,
+  options?: RequestInit,
+): Promise<GhlSpecialSyncResult> => {
+  return customFetch<GhlSpecialSyncResult>(getSyncGhlSpecialBookingUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(ghlSpecialAppointmentInput),
+  });
+};
+
+export const getSyncGhlSpecialBookingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncGhlSpecialBooking>>,
+    TError,
+    { data: BodyType<GhlSpecialAppointmentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof syncGhlSpecialBooking>>,
+  TError,
+  { data: BodyType<GhlSpecialAppointmentInput> },
+  TContext
+> => {
+  const mutationKey = ["syncGhlSpecialBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof syncGhlSpecialBooking>>,
+    { data: BodyType<GhlSpecialAppointmentInput> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return syncGhlSpecialBooking(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type SyncGhlSpecialBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof syncGhlSpecialBooking>>
+>;
+export type SyncGhlSpecialBookingMutationBody =
+  BodyType<GhlSpecialAppointmentInput>;
+export type SyncGhlSpecialBookingMutationError = ErrorType<void>;
+
+/**
+ * @summary Import a dedicated GoHighLevel special appointment
+ */
+export const useSyncGhlSpecialBooking = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof syncGhlSpecialBooking>>,
+    TError,
+    { data: BodyType<GhlSpecialAppointmentInput> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof syncGhlSpecialBooking>>,
+  TError,
+  { data: BodyType<GhlSpecialAppointmentInput> },
+  TContext
+> => {
+  return useMutation(getSyncGhlSpecialBookingMutationOptions(options));
+};
 
 /**
  * @summary Health check

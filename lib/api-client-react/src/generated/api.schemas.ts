@@ -5,6 +5,130 @@
  * Vivid Detailing API
  * OpenAPI spec version: 0.1.0
  */
+export type GhlSpecialAppointmentInputSource =
+  (typeof GhlSpecialAppointmentInputSource)[keyof typeof GhlSpecialAppointmentInputSource];
+
+export const GhlSpecialAppointmentInputSource = {
+  gohighlevel: "gohighlevel",
+} as const;
+
+export type GhlSpecialAppointmentInputAppointmentStatus =
+  (typeof GhlSpecialAppointmentInputAppointmentStatus)[keyof typeof GhlSpecialAppointmentInputAppointmentStatus];
+
+export const GhlSpecialAppointmentInputAppointmentStatus = {
+  new: "new",
+  confirmed: "confirmed",
+  cancelled: "cancelled",
+  canceled: "canceled",
+} as const;
+
+export interface GhlSpecialContactInput {
+  /** @maxLength 100 */
+  id?: string;
+  /** @maxLength 200 */
+  name?: string;
+  /** @maxLength 254 */
+  email?: string;
+  /** @maxLength 50 */
+  phone?: string;
+}
+
+export type GhlSpecialVehicleInputType =
+  (typeof GhlSpecialVehicleInputType)[keyof typeof GhlSpecialVehicleInputType];
+
+export const GhlSpecialVehicleInputType = {
+  car: "car",
+  suv: "suv",
+  truck: "truck",
+  van: "van",
+  "": "",
+} as const;
+
+export interface GhlSpecialVehicleInput {
+  type?: GhlSpecialVehicleInputType;
+  /** @nullable */
+  year?: number | string | null;
+  /** @maxLength 100 */
+  make?: string;
+  /** @maxLength 100 */
+  model?: string;
+  /** @maxLength 100 */
+  colour?: string;
+}
+
+export interface GhlSpecialAppointmentInput {
+  source?: GhlSpecialAppointmentInputSource;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  locationId: string;
+  /**
+   * @minLength 1
+   * @maxLength 200
+   */
+  appointmentId: string;
+  /**
+   * @minLength 1
+   * @maxLength 100
+   */
+  calendarId: string;
+  appointmentStatus: GhlSpecialAppointmentInputAppointmentStatus;
+  /**
+   * ISO 8601 timestamp with Z or explicit UTC offset. Required when creating an active booking.
+   * @maxLength 50
+   */
+  startTime?: string;
+  /**
+   * ISO 8601 timestamp with Z or explicit UTC offset. Required when creating an active booking.
+   * @maxLength 50
+   */
+  endTime?: string;
+  /**
+   * Optional source appointment last-updated timestamp for rejecting out-of-order deliveries. Must not be a retry's current time.
+   * @maxLength 50
+   */
+  eventUpdatedAt?: string;
+  contact?: GhlSpecialContactInput;
+  vehicle?: GhlSpecialVehicleInput;
+  /**
+   * @maxLength 4000
+   * @nullable
+   */
+  notes?: string | null;
+}
+
+export type GhlSpecialSyncResultAction =
+  (typeof GhlSpecialSyncResultAction)[keyof typeof GhlSpecialSyncResultAction];
+
+export const GhlSpecialSyncResultAction = {
+  created: "created",
+  updated: "updated",
+  duplicate: "duplicate",
+  cancelled: "cancelled",
+  ignored: "ignored",
+} as const;
+
+export type GhlSpecialSyncResultSpecial =
+  (typeof GhlSpecialSyncResultSpecial)[keyof typeof GhlSpecialSyncResultSpecial];
+
+export const GhlSpecialSyncResultSpecial = {
+  ceramic_special: "ceramic_special",
+  detailing_special: "detailing_special",
+} as const;
+
+export interface GhlSpecialSyncResult {
+  success: boolean;
+  action: GhlSpecialSyncResultAction;
+  /** @nullable */
+  bookingId: string | null;
+  special: GhlSpecialSyncResultSpecial;
+  status: string;
+  /** @nullable */
+  totalEstimate: number | null;
+  reason?: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -181,6 +305,17 @@ export interface Booking {
   serviceHistory?: ServiceHistorySummary | null;
 }
 
+/**
+ * Dedicated special booking; the server derives its base price and tax and ignores client price overrides.
+ */
+export type CreateBookingBodySpecialOffer =
+  (typeof CreateBookingBodySpecialOffer)[keyof typeof CreateBookingBodySpecialOffer];
+
+export const CreateBookingBodySpecialOffer = {
+  ceramic_special: "ceramic_special",
+  detailing_special: "detailing_special",
+} as const;
+
 export interface UpsertCustomerBody {
   name: string;
   email: string;
@@ -209,6 +344,8 @@ export interface CreateVehicleBody {
 }
 
 export interface CreateBookingBody {
+  /** Dedicated special booking; the server derives its base price and tax and ignores client price overrides. */
+  specialOffer?: CreateBookingBodySpecialOffer;
   /** ID of a previously captured lead to link instead of creating a new customer */
   existingCustomerId?: string | null;
   customer: UpsertCustomerBody;
@@ -611,6 +748,10 @@ export interface UpdateInspectionBody {
 
 export type GetCalendarAvailabilityParams = {
   /**
+   * Fail rather than claim availability when the calendar cannot be read.
+   */
+  strict?: boolean;
+  /**
    * Date in YYYY-MM-DD format
    */
   date: string;
@@ -621,6 +762,10 @@ export type GetCalendarAvailabilityParams = {
 };
 
 export type GetCalendarNextSlotsParams = {
+  /**
+   * Fail rather than claim availability when the calendar cannot be read.
+   */
+  strict?: boolean;
   /**
    * Service duration in hours
    */

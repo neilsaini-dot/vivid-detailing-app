@@ -23,6 +23,12 @@ export function createGhlSpecialBookingHandler(
   }
   const parsed = SyncGhlSpecialBookingBody.safeParse(normaliseSpecialInput(req.body));
   if (!parsed.success) {
+    // Zod messages may include supplied values. Log only schema paths and codes.
+    req.log.warn({
+      statusCode: 422,
+      code: "invalid_appointment",
+      fields: parsed.error.issues.map(i => ({ path: i.path.join("."), code: i.code })),
+    }, "GHL special-bookings validation failed (422)");
     res.status(422).json({
       error: "Invalid appointment data.",
       fields: parsed.error.issues.map(i => ({ path: i.path.join("."), message: i.message })),
@@ -38,6 +44,12 @@ export function createGhlSpecialBookingHandler(
     res.status(result.action === "created" ? 201 : 200).json(SyncGhlSpecialBookingResponse.parse(result));
   } catch (error) {
     if (error instanceof SpecialSyncError) {
+      // These messages are application-defined rules, never payload values.
+      req.log.warn({
+        statusCode: error.status,
+        code: error.code,
+        reason: error.message,
+      }, "GHL special-bookings sync rejected");
       res.status(error.status).json({ error: error.message, code: error.code });
       return;
     }

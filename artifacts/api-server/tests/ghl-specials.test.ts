@@ -238,7 +238,11 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
     const app = express();
     app.set("env", "test");
     app.use(express.json({ limit: "64kb" }));
-    app.use((req, _res, next) => { req.log = { error: () => {} } as typeof req.log; next(); });
+    const warnings: unknown[][] = [];
+    app.use((req, _res, next) => {
+      req.log = { error: () => {}, warn: (...args: unknown[]) => { warnings.push(args); } } as unknown as typeof req.log;
+      next();
+    });
     app.post("/receiver", createGhlSpecialBookingHandler(
       () => ({ secret, locationId: "test-location" }),
       input => syncSpecialAppointment(input, tx),
@@ -257,7 +261,14 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.equal((await send(fixture({ locationId: "wrong-location" }))).status, 403);
       assert.equal((await send(fixture({ calendarId: "wrong-calendar" }))).status, 403);
       assert.equal((await send({})).status, 422);
+      assert.match(JSON.stringify(warnings), /locationId/);
+      assert.match(JSON.stringify(warnings), /invalid_appointment/);
+      const privateValue = "private-customer-value";
+      assert.equal((await send({ ...fixture(), vehicle: { type: privateValue } })).status, 422);
+      assert.doesNotMatch(JSON.stringify(warnings), new RegExp(privateValue));
+      assert.doesNotMatch(JSON.stringify(warnings), new RegExp(secret));
       assert.equal((await send(fixture({ vehicle: undefined }))).status, 422);
+      assert.match(JSON.stringify(warnings), /A new booking requires vehicle.type/);
       assert.equal((await send(fixture(), secret, "/unconfigured")).status, 503);
       assert.equal((await send({ padding: "x".repeat(70_000) })).status, 413);
       const input = fixture();

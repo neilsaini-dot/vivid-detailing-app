@@ -1,9 +1,30 @@
 import { Router, type RequestHandler } from "express";
+import type { ZodIssue } from "zod";
 import { SyncGhlSpecialBookingBody, SyncGhlSpecialBookingResponse } from "@workspace/api-zod";
 import { getSpecialsConfig, validSpecialsToken, specialForCalendar, type SpecialsConfig } from "../lib/ghlSpecialsConfig";
 import { normaliseSpecialInput, SpecialSyncError, syncSpecialAppointment } from "../lib/ghlSpecialBookings";
 
 const router = Router();
+
+// Explain schema rules without Zod's raw messages, which can echo private input.
+function validationReason(issue: ZodIssue): string {
+  switch (issue.code) {
+    case "invalid_type":
+      return issue.received === "undefined"
+        ? `required; expected ${issue.expected}`
+        : `expected ${issue.expected}`;
+    case "invalid_enum_value":
+      return `expected one of ${issue.options.map(value => JSON.stringify(value)).join(", ")}`;
+    case "too_small":
+      return `minimum ${issue.minimum}${issue.type === "string" ? " characters" : ""}`;
+    case "too_big":
+      return `maximum ${issue.maximum}${issue.type === "string" ? " characters" : ""}`;
+    case "invalid_union":
+      return "invalid type; vehicle.year must be a number or string (or omitted/null)";
+    default:
+      return `invalid format (${issue.code})`;
+  }
+}
 
 // Dependency injection lets tests exercise real transactions without modifying
 // environment secrets or calling external services.
@@ -23,12 +44,17 @@ export function createGhlSpecialBookingHandler(
   }
   const parsed = SyncGhlSpecialBookingBody.safeParse(normaliseSpecialInput(req.body));
   if (!parsed.success) {
-    // Zod messages may include supplied values. Log only schema paths and codes.
+    const fields = parsed.error.issues.map(i => ({
+      path: i.path.join(".") || "body",
+      code: i.code,
+      message: validationReason(i),
+    }));
+    const summary = fields.map(f => `${f.path}: ${f.message}`).join("; ");
     req.log.warn({
       statusCode: 422,
       code: "invalid_appointment",
-      fields: parsed.error.issues.map(i => ({ path: i.path.join("."), code: i.code })),
-    }, "GHL special-bookings validation failed (422)");
+      fields,
+    }, `GHL special-bookings validation failed (422): ${summary}`);
     res.status(422).json({
       error: "Invalid appointment data.",
       fields: parsed.error.issues.map(i => ({ path: i.path.join("."), message: i.message })),
@@ -49,7 +75,7 @@ export function createGhlSpecialBookingHandler(
         statusCode: error.status,
         code: error.code,
         reason: error.message,
-      }, "GHL special-bookings sync rejected");
+      }, `GHL special-bookings sync rejected (${error.status}): ${error.message}`);
       res.status(error.status).json({ error: error.message, code: error.code });
       return;
     }

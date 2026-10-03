@@ -261,10 +261,12 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.equal((await send(fixture({ locationId: "wrong-location" }))).status, 403);
       assert.equal((await send(fixture({ calendarId: "wrong-calendar" }))).status, 403);
       assert.equal((await send({})).status, 422);
+      assert.match(String(warnings.at(-1)?.[1]), /locationId: required; expected string/);
       assert.match(JSON.stringify(warnings), /locationId/);
       assert.match(JSON.stringify(warnings), /invalid_appointment/);
       const privateValue = "private-customer-value";
       assert.equal((await send({ ...fixture(), vehicle: { type: privateValue } })).status, 422);
+      assert.match(String(warnings.at(-1)?.[1]), /vehicle.type: expected one of "car", "suv", "truck", "van", ""/);
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(privateValue));
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(secret));
       assert.equal((await send(fixture({ vehicle: undefined }))).status, 422);

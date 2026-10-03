@@ -26,6 +26,16 @@ function validationReason(issue: ZodIssue): string {
   }
 }
 
+// Enum-like fields (appointmentStatus, vehicle.type) are not customer data, so
+// their normalised values are safe to log. Truncate to bound log size, and
+// report the type for non-string values (e.g. null, number, object).
+function describeEnumValue(value: unknown): string {
+  if (value === undefined) return "<undefined>";
+  if (value === null) return "<null>";
+  if (typeof value === "string") return JSON.stringify(value.length > 100 ? `${value.slice(0, 100)}…` : value);
+  return `<${Array.isArray(value) ? "array" : typeof value}>`;
+}
+
 // Dependency injection lets tests exercise real transactions without modifying
 // environment secrets or calling external services.
 export function createGhlSpecialBookingHandler(
@@ -42,8 +52,19 @@ export function createGhlSpecialBookingHandler(
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const parsed = SyncGhlSpecialBookingBody.safeParse(normaliseSpecialInput(req.body));
+  const normalised = normaliseSpecialInput(req.body);
+  const parsed = SyncGhlSpecialBookingBody.safeParse(normalised);
   if (!parsed.success) {
+    const received = normalised && typeof normalised === "object" && !Array.isArray(normalised)
+      ? normalised as Record<string, unknown>
+      : {};
+    const vehicle = received.vehicle && typeof received.vehicle === "object" && !Array.isArray(received.vehicle)
+      ? received.vehicle as Record<string, unknown>
+      : undefined;
+    req.log.warn({
+      receivedAppointmentStatus: describeEnumValue(received.appointmentStatus),
+      receivedVehicleType: describeEnumValue(vehicle?.type),
+    }, "GHL special-bookings received enum values (post-normalisation) for failed validation");
     const fields = parsed.error.issues.map(i => ({
       path: i.path.join(".") || "body",
       code: i.code,

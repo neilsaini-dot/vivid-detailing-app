@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import express from "express";
 import { eq } from "drizzle-orm";
-import { db, pool, bookingsTable, customersTable, vehiclesTable, aiBookingConversionsTable,
+import { db, pool, bookingsTable, bookingItemsTable, customersTable, vehiclesTable, aiBookingConversionsTable,
   ghlSpecialAppointmentsTable, serviceHistoryTable, loyaltyActivityTable } from "@workspace/db";
 import { SyncGhlSpecialBookingBody } from "@workspace/api-zod";
 import { syncSpecialAppointment } from "../src/lib/ghlSpecialBookings";
@@ -33,10 +33,11 @@ const review = () => ({
   vehicle: { type: "car" as const, year: 2020, make: "Test", model: "Fixture", colour: "Blue" },
   notes: "Synthetic test only",
 });
-async function imported(tx: Pick<typeof db, "transaction">, ceramic = false) {
+async function imported(tx: Pick<typeof db, "transaction">, ceramic = false, calendarId?: string) {
   const input = SyncGhlSpecialBookingBody.parse({
     locationId: "synthetic-location", appointmentId: randomUUID(),
-    calendarId: ceramic ? SPECIAL_CALENDARS.ceramic : SPECIAL_CALENDARS.detailing, appointmentStatus: "new",
+    calendarId: calendarId ?? (ceramic ? SPECIAL_CALENDARS.ceramic : SPECIAL_CALENDARS.detailing), appointmentStatus: "new",
+    ...(calendarId ? { title: "Synthetic General Service" } : {}),
     startTime: "2027-01-12T09:00:00-04:00", endTime: "2027-01-12T15:00:00-04:00", contact: { id: randomUUID() },
   });
   const created = await syncSpecialAppointment(input, tx);
@@ -321,9 +322,167 @@ test("confirmation retry never recreates Google or repeats the successful GHL de
   });
 });
 
-test("AI queue includes chat/voice only, excluding Google, app, and unverified appointments", async () => {
+test("manual HighLevel conversion uses the same ordered handover and resumes without re-fetching a deleted appointment", async () => {
   await rollback(async tx => {
-    const origins = ["chat_bot", "voice_bot", "google", "app", "unknown"] as const;
+    const { id, input } = await imported(tx);
+    const order: string[] = [];
+    let origins = 0, hooks = 0;
+    const effects = {
+      origin: async (identity: Parameters<typeof getAppointmentOrigin>[0]) => {
+        origins++;
+        return getAppointmentOrigin(identity, null, {
+          token: "fixture-token", locationId: input.locationId,
+          fetcher: async () => new Response(JSON.stringify({ appointment: {
+            id: input.appointmentId, calendarId: input.calendarId, locationId: input.locationId,
+            contactId: input.contact!.id, source: "api",
+          } })),
+        });
+      },
+      calendar: async () => { order.push("google"); return aiCalendarEventId(id); },
+      deleteAppointment: async () => { order.push("delete"); },
+      webhook: async () => {
+        order.push("confirm");
+        if (++hooks === 1) throw new GhlConversionDeliveryError(false, "Synthetic rejection");
+      },
+    };
+    await assert.rejects(() => convertAiBookingReal(id, review(), tx, effects), AiConversionError);
+    assert.deepEqual(order, ["google", "delete", "confirm"]);
+    const queue = await readAiBookingsReal(tx, async () => "unknown");
+    assert.equal(queue.find(row => row.id === id)?.botOrigin, "highlevel");
+    await convertAiBookingReal(id, review(), tx, effects);
+    await convertAiBookingReal(id, review(), tx, effects);
+    assert.deepEqual(order, ["google", "delete", "confirm", "confirm"]);
+    assert.equal(origins, 1);
+    const [receipt] = await tx.select().from(aiBookingConversionsTable).where(eq(aiBookingConversionsTable.bookingId, id));
+    assert.equal(receipt.state, "converted");
+    assert.equal(receipt.botOrigin, "highlevel");
+  });
+});
+
+test("other HighLevel calendars use reviewed pricing and preserve conversion when manual deletion fails", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx, false, "synthetic-general-calendar");
+    const [pending] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id));
+    assert.equal(pending.totalEstimate, null);
+    const queue = await readAiBookingsReal(tx, async () => "highlevel");
+    const queued = queue.find(row => row.id === id)!;
+    assert.equal(queued.special, "highlevel_booking");
+    assert.equal(queued.serviceName, "Synthetic General Service");
+    const order: string[] = [];
+    const effects = {
+      origin: async () => "highlevel" as const,
+      calendar: async (event: any) => {
+        order.push("google");
+        assert.equal(event.calendarId, "contact@vividpei.com");
+        assert.match(event.description, /Synthetic General Service/);
+        assert.match(event.description, /218\.50/);
+        return aiCalendarEventId(id);
+      },
+      deleteAppointment: async () => { order.push("delete"); throw new Error("Synthetic deletion failure"); },
+      webhook: async (payload: any) => {
+        order.push("confirm");
+        assert.equal(payload.booking.id, id);
+        assert.equal(payload.booking.total_estimate, 218.5);
+        assert.equal(payload.booking.is_quote_based, false);
+        assert.deepEqual(payload.booking.services, ["Synthetic General Service"]);
+      },
+    };
+    await assert.rejects(() => convertAiBookingReal(id, review(), tx, effects), /Enter the booking amount/);
+    assert.deepEqual(order, []);
+    const body = { ...review(), totalEstimate: 218.5 };
+    await saveAiBooking(id, body, tx);
+    const [priced] = await tx.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, id));
+    assert.equal(Number(priced.unitPrice), 190);
+    assert.equal(priced.isQuoteBased, false);
+    await convertAiBookingReal(id, body, tx, effects);
+    await convertAiBookingReal(id, body, tx, effects);
+    assert.deepEqual(order, ["google", "delete", "confirm"]);
+    const [receipt] = await tx.select().from(aiBookingConversionsTable).where(eq(aiBookingConversionsTable.bookingId, id));
+    assert.equal(receipt.state, "converted");
+    assert.equal(receipt.botOrigin, "highlevel");
+    assert.equal(receipt.ghlDeleteState, "failed");
+    assert.equal((await readAiBookingsReal(tx, async () => "unknown")).find(row => row.id === id)?.requiresGhlCleanup, true);
+    const lateCancel = await syncSpecialAppointment({ ...input, appointmentStatus: "cancelled" }, tx);
+    assert.equal(lateCancel.action, "ignored");
+    assert.equal(lateCancel.reason, "appointment_transferred_to_app");
+  });
+});
+
+test("generic-source HighLevel mirrors of an app-owned slot are excluded from intake, review and conversion", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx);
+    const [importedBooking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id));
+    await tx.insert(bookingsTable).values({
+      customerId: importedBooking.customerId, vehicleId: importedBooking.vehicleId,
+      appointmentAt: importedBooking.appointmentAt, status: "confirmed",
+      calendarEventId: "synthetic-native-app-event", createdByAdmin: true,
+    });
+    const queue = await readAiBookingsReal(tx, async () => "highlevel");
+    assert.equal(queue.some(row => row.id === id), false);
+    let effects = 0;
+    await assert.rejects(() => convertAiBookingReal(id, review(), tx, {
+      origin: async () => "highlevel",
+      calendar: async () => { effects++; return "bad"; },
+      deleteAppointment: async () => { effects++; },
+      webhook: async () => { effects++; },
+    }), /already has an app-owned booking/);
+    assert.equal(effects, 0);
+    const mirrorId = randomUUID();
+    const ignored = await syncSpecialAppointment({ ...input, appointmentId: mirrorId }, tx);
+    assert.equal(ignored.action, "ignored");
+    assert.equal(ignored.bookingId, null);
+    assert.equal(ignored.reason, "app_owned_appointment");
+    assert.equal((await tx.select().from(ghlSpecialAppointmentsTable).where(eq(ghlSpecialAppointmentsTable.appointmentId, mirrorId))).length, 0);
+  });
+});
+
+test("literal null customer names cannot be sent in a booking confirmation", async () => {
+  await rollback(async tx => {
+    const { id } = await imported(tx);
+    const body = { ...review(), customer: { ...review().customer, name: "null" } };
+    let effects = 0;
+    await assert.rejects(() => convertAiBookingReal(id, body, tx, {
+      origin: async () => "highlevel",
+      calendar: async () => { effects++; return "bad"; },
+      deleteAppointment: async () => { effects++; },
+      webhook: async () => { effects++; },
+    }), /name.*required/i);
+    assert.equal(effects, 0);
+  });
+});
+
+test("an unconverted GHL Google mirror is not mistaken for app ownership", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx);
+    await tx.update(bookingsTable).set({ calendarEventId: "synthetic-original-ghl-mirror" }).where(eq(bookingsTable.id, id));
+    const second = await syncSpecialAppointment({ ...input, appointmentId: randomUUID() }, tx);
+    assert.equal(second.action, "created");
+    const queue = await readAiBookingsReal(tx, async () => "highlevel");
+    assert.equal(queue.some(row => row.id === id), true);
+    assert.equal(queue.some(row => row.id === second.bookingId), true);
+  });
+});
+
+test("app mirrors with only a contact ID cannot create duplicate customer or booking records", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx);
+    const [source] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id));
+    const externalId = randomUUID();
+    await tx.insert(bookingsTable).values({
+      customerId: source.customerId, appointmentAt: source.appointmentAt,
+      ghlContactId: externalId, calendarEventId: "synthetic-app-owned-event", status: "confirmed",
+    });
+    const ignored = await syncSpecialAppointment({
+      ...input, appointmentId: randomUUID(), contact: { id: externalId },
+    }, tx);
+    assert.equal(ignored.action, "ignored");
+    assert.equal((await tx.select().from(customersTable).where(eq(customersTable.ghlContactId, externalId))).length, 0);
+  });
+});
+
+test("review queue includes manual HighLevel and bot bookings, excluding Google, app and missing records", async () => {
+  await rollback(async tx => {
+    const origins = ["chat_bot", "voice_bot", "highlevel", "google", "app", "unknown"] as const;
     const ids = new Map<string, typeof origins[number]>();
     const rows = [];
     for (const origin of origins) {
@@ -333,9 +492,9 @@ test("AI queue includes chat/voice only, excluding Google, app, and unverified a
     }
     const queue = await readAiBookingsReal(tx, async identity => ids.get(identity.appointmentId) ?? "unknown");
     const fixtureIds = new Set(rows.map(row => row.id));
-    assert.deepEqual(queue.filter(row => fixtureIds.has(row.id)).map(row => row.botOrigin).sort(), ["chat_bot", "voice_bot"]);
+    assert.deepEqual(queue.filter(row => fixtureIds.has(row.id)).map(row => row.botOrigin).sort(), ["chat_bot", "highlevel", "voice_bot"]);
     let effects = 0;
-    await assert.rejects(() => convertAiBookingReal(rows[2].id, review(), tx, {
+    await assert.rejects(() => convertAiBookingReal(rows[3].id, review(), tx, {
       origin: async () => "google",
       calendar: async () => { effects++; return "bad"; },
       deleteAppointment: async () => { effects++; },
@@ -345,12 +504,26 @@ test("AI queue includes chat/voice only, excluding Google, app, and unverified a
   });
 });
 
-test("GHL origin requires explicit bot metadata; Google overrides a bot intake marker", async () => {
+test("live GHL records need no bot marker; explicit Google/app metadata still overrides intake", async () => {
   assert.equal(appointmentOrigin({ createdBy: { source: "Conversation AI" } }), "chat_bot");
   assert.equal(appointmentOrigin({ createdBy: { channel: "voice_ai" } }), "voice_bot");
   assert.equal(appointmentOrigin({ source: "api" }), "unknown");
   assert.equal(appointmentOrigin({ source: "vivid-app" }), "app");
   const identity = { appointmentId: "fixture-event", calendarId: "fixture-calendar", locationId: "fixture-location" };
+  for (const source of [undefined, "api", "manual", "app"]) {
+    assert.equal(await getAppointmentOrigin(identity, null, {
+      token: "fixture-token", locationId: identity.locationId,
+      fetcher: async () => new Response(JSON.stringify({ appointment: {
+        id: identity.appointmentId, calendarId: identity.calendarId, source,
+      } })),
+    }), "highlevel");
+  }
+  assert.equal(await getAppointmentOrigin(identity, "voice_bot", {
+    token: "fixture-token", locationId: identity.locationId,
+    fetcher: async () => new Response(JSON.stringify({ appointment: {
+      id: identity.appointmentId, calendarId: identity.calendarId, source: "vivid-app",
+    } })),
+  }), "app");
   assert.equal(await getAppointmentOrigin(identity, "chat_bot", {
     token: "fixture-token", locationId: identity.locationId,
     fetcher: async () => new Response(JSON.stringify({ event: { id: identity.appointmentId, calendarId: identity.calendarId, createdBy: { source: "Google Calendar" } } })),

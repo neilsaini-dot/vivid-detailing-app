@@ -66,8 +66,8 @@ export function createGhlSpecialBookingHandler(
     });
     return;
   }
-  if (parsed.data.locationId !== config.locationId || !specialForCalendar(parsed.data.calendarId)) {
-    res.status(403).json({ error: "Location or calendar is not allowed." });
+  if (parsed.data.locationId !== config.locationId) {
+    res.status(403).json({ error: "Location is not allowed." });
     return;
   }
   if (ignoredFields.length) {
@@ -84,7 +84,7 @@ export function createGhlSpecialBookingHandler(
       if (origin === "google" || origin === "app") {
         res.status(200).json(SyncGhlSpecialBookingResponse.parse({
           success: true, action: "ignored", bookingId: null,
-          special: specialForCalendar(parsed.data.calendarId), status: "ignored", totalEstimate: null,
+          special: specialForCalendar(parsed.data.calendarId) ?? "highlevel_booking", status: "ignored", totalEstimate: null,
           reason: "app_or_google_origin",
         }));
         return;

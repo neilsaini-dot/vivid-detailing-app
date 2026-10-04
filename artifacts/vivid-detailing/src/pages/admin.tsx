@@ -50,8 +50,8 @@ export default function AdminPanel() {
 
   if (!isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Card className="w-[400px] bg-surface border-border">
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
+        <Card className="w-full max-w-[400px] bg-surface border-border">
           <CardHeader>
             <CardTitle>Admin Access</CardTitle>
           </CardHeader>
@@ -2896,8 +2896,8 @@ function AdminDashboard() {
   ];
 
   return (
-    <div className="container py-8">
-      <div className="flex items-center justify-between mb-8">
+    <div className="admin-shell min-w-0 py-8">
+      <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
         <h1 className="text-3xl font-bold">Admin Dashboard</h1>
         <Button
           variant="outline"

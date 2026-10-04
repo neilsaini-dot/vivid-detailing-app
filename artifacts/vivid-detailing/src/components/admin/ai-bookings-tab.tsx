@@ -18,7 +18,8 @@ import { AlertTriangle, RefreshCw, CheckCircle2, Sparkles, ExternalLink } from "
 const TZ = "America/Halifax";
 const fmtHalifax = (iso: string | null) =>
   iso ? new Intl.DateTimeFormat("en-CA", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" }).format(new Date(iso)) + " (Halifax)" : "—";
-const specialLabel = (s: string) => (s === "ceramic_special" ? "Ceramic Special" : "Detailing Special");
+const specialLabel = (s: string) => s === "ceramic_special" ? "Ceramic Special" : s === "detailing_special" ? "Detailing Special" : "HighLevel Booking";
+const detail = (value: string | null | undefined) => value && !/^(null|undefined)$/i.test(value.trim()) ? value : "";
 const money = (n: number | null) => (n == null ? "Pending" : `$${n.toFixed(2)}`);
 const isActive = (b: AiBooking) => b.status === "pending" || b.status === "confirmed";
 
@@ -43,11 +44,11 @@ function Row({ b, onAction, actionLabel }: { b: AiBooking; onAction: () => void;
   return (
     <div className="bg-card border border-border rounded-lg p-4 grid gap-3 md:grid-cols-[1.1fr_1.2fr_1.3fr_auto_1.2fr_auto] md:items-center" data-testid={`row-ai-booking-${b.id}`}>
       <div>
-        <p className="font-semibold text-sm">{specialLabel(b.special)}</p>
-        <p className="text-xs text-muted-foreground capitalize">{b.status} · {b.conversionState === "converted" ? "App owned" : b.botOrigin === "voice_bot" ? "Voice bot" : "Chat bot"}</p>
+        <p className="font-semibold text-sm">{b.special === "highlevel_booking" ? b.serviceName : specialLabel(b.special)}</p>
+        <p className="text-xs text-muted-foreground capitalize">{b.status} · {b.conversionState === "converted" ? "App owned" : b.botOrigin === "voice_bot" ? "Voice bot" : b.botOrigin === "chat_bot" ? "Chat bot" : "HighLevel"}</p>
       </div>
       <div className="text-sm min-w-0">
-        <p className="font-medium truncate">{b.customer.name || "Name missing"}</p>
+        <p className="font-medium truncate">{detail(b.customer.name) || "Name missing"}</p>
         <p className="text-xs text-muted-foreground truncate">{[b.customer.phone, b.customer.email].filter(Boolean).join(" · ") || "No contact details"}</p>
       </div>
       <div className="text-sm">
@@ -77,11 +78,12 @@ function Section({ title, hint, items, empty, actionLabel, onAction }: {
   );
 }
 
-type Form = { name: string; email: string; phone: string; type: string; year: string; make: string; model: string; colour: string; notes: string };
+type Form = { name: string; email: string; phone: string; type: string; year: string; make: string; model: string; colour: string; notes: string; total: string };
 const toForm = (b: AiBooking): Form => ({
-  name: b.customer.name ?? "", email: b.customer.email ?? "", phone: b.customer.phone ?? "",
+  name: detail(b.customer.name), email: detail(b.customer.email), phone: detail(b.customer.phone),
   type: b.vehicle.type ?? "", year: b.vehicle.year ? String(b.vehicle.year) : "",
-  make: b.vehicle.make ?? "", model: b.vehicle.model ?? "", colour: b.vehicle.colour ?? "", notes: b.notes ?? "",
+  make: detail(b.vehicle.make), model: detail(b.vehicle.model), colour: detail(b.vehicle.colour), notes: detail(b.notes),
+  total: b.totalEstimate == null ? "" : String(b.totalEstimate),
 });
 
 function errMessage(e: unknown): { message: string; fields: string[] } {
@@ -117,13 +119,16 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
   const yearBad = yearNum != null && (!Number.isInteger(yearNum) || yearNum < 1900 || yearNum > new Date().getFullYear() + 2);
   const emailBad = !!form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim());
   const typeOk = ["car", "suv", "truck", "van"].includes(form.type);
+  const generic = booking.special === "highlevel_booking";
+  const price = form.total.trim() ? Number(form.total) : null;
+  const priceBad = generic && price !== null && (!Number.isFinite(price) || price < 0 || price > 1000000 || !/^\d+(?:\.\d{1,2})?$/.test(form.total.trim()));
   const converted = booking.conversionState === "converted";
   const needsVerify = booking.webhookState === "uncertain" || booking.webhookState === "sending" || booking.conversionState === "processing";
    const frozen = !!booking.calendarEventId || booking.webhookState !== "pending" || booking.conversionState === "processing";
   const lockFields = converted || frozen;
   const webhookLocked = booking.webhookState === "uncertain" || booking.webhookState === "sending";
-  const canConvert = isActive(booking) && !busy && !converted && !webhookLocked && booking.conversionState !== "processing" && !!form.name.trim() && digits.length >= 7 && !phoneBad && typeOk && !yearBad && !emailBad;
-  const canSave = !busy && !converted && !frozen && typeOk && !yearBad && !emailBad && (!form.phone.trim() || (digits.length >= 7 && !phoneBad));
+  const canConvert = isActive(booking) && !busy && !converted && !webhookLocked && booking.conversionState !== "processing" && !!detail(form.name).trim() && digits.length >= 7 && !phoneBad && typeOk && !yearBad && !emailBad && !priceBad && (!generic || price !== null);
+  const canSave = isActive(booking) && !busy && !converted && !frozen && typeOk && !yearBad && !emailBad && !priceBad && (!form.phone.trim() || (digits.length >= 7 && !phoneBad));
   const retry = booking.conversionState === "failed" && !converted;
 
   const body = (): AiBookingReviewBody => frozen ? bodyOf(toForm(booking)) : bodyOf(form);
@@ -131,6 +136,7 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
     customer: { name: form.name.trim(), email: form.email.trim(), phone: form.phone.trim() },
     vehicle: { type: form.type as AiBookingReviewBody["vehicle"]["type"], year: form.year.trim() ? Number(form.year) : null, make: form.make.trim(), model: form.model.trim(), colour: form.colour.trim() },
     notes: form.notes.trim(),
+    ...(generic ? { totalEstimate: form.total.trim() ? Number(form.total) : null } : {}),
   });
   const run = (kind: "save" | "convert") => {
     setErrors(null);
@@ -222,7 +228,14 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
                 <SelectTrigger className={inp} data-testid="select-ai-type"><SelectValue placeholder="Select type" /></SelectTrigger>
                 <SelectContent>{["car", "suv", "truck", "van"].map(t => <SelectItem key={t} value={t} className="capitalize">{t}</SelectItem>)}</SelectContent>
               </Select>
-              <p className="text-[11px] text-muted-foreground mt-1">Price is set by the server from vehicle type.</p></div>
+              <p className="text-[11px] text-muted-foreground mt-1">{generic ? "Review the vehicle details before converting." : "Price is set by the server from vehicle type."}</p></div>
+            {generic && <div className="col-span-2">
+              <label className={lbl}>Booking amount including HST *</label>
+              <Input className={inp} type="number" min="0" max="1000000" step="0.01" value={form.total} onChange={e => set("total", e.target.value)} disabled={lockFields} data-testid="input-ai-total" />
+              <p className={`text-[11px] mt-1 ${priceBad || price === null ? "text-amber-500" : "text-muted-foreground"}`}>
+                {priceBad ? "Enter a valid amount with at most two decimal places." : price === null ? "An amount is required before conversion. No special price is assumed." : "This is the total for the booking, including HST."}
+              </p>
+            </div>}
             <div><label className={lbl}>Year</label><Input className={inp} inputMode="numeric" value={form.year} onChange={e => set("year", e.target.value)} disabled={lockFields} data-testid="input-ai-year" />
               {yearBad && <p className="text-[11px] text-red-400 mt-1">Enter a valid year</p>}</div>
             <div><label className={lbl}>Make</label><Input className={inp} value={form.make} onChange={e => set("make", e.target.value)} disabled={lockFields} data-testid="input-ai-make" /></div>
@@ -283,11 +296,11 @@ export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: st
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /><p className="text-sm text-muted-foreground">Chat and voice-bot specials only. Convert creates the app Google event, deletes the GHL appointment, then sends confirmation.</p></div>
+        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /><p className="text-sm text-muted-foreground">HighLevel bookings, including manual, chat and voice bookings. Convert creates the app Google event, deletes the HighLevel appointment, then sends confirmation.</p></div>
         <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-ai"><RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
       </div>
-      <Section title="Review queue" hint="Only explicit chat/voice-bot origins are included. Unknown origins are excluded; bot-specific webhook intake can supply bookingOrigin." items={queue} empty="No verified bot bookings waiting. App and Google-origin appointments do not appear here." actionLabel="Review" onAction={b => setSelectedId(b.id)} />
-      <Section title="Converted history" items={history} empty="No converted specials yet." actionLabel="Details" onAction={b => setSelectedId(b.id)} />
+      <Section title="Review queue" hint="Manual and bot-created appointments from every HighLevel calendar can be reviewed here. App-owned bookings and Google mirrors are excluded." items={queue} empty="No HighLevel bookings waiting. App and Google-origin appointments do not appear here." actionLabel="Review" onAction={b => setSelectedId(b.id)} />
+      <Section title="Converted history" items={history} empty="No converted HighLevel bookings yet." actionLabel="Details" onAction={b => setSelectedId(b.id)} />
       {history.length > 0 && (
         <div className="grid gap-2 md:grid-cols-2">
           {history.map(b => (

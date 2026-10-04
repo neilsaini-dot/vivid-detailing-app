@@ -36,6 +36,13 @@ export type AiBookingReviewBodyVehicle = {
 };
 
 export interface AiBookingReviewBody {
+  /**
+   * Staff-entered total including HST for non-special HighLevel appointments. Specials retain server-owned pricing.
+   * @minimum 0
+   * @maximum 1000000
+   * @nullable
+   */
+  totalEstimate?: number | null;
   customer: AiBookingReviewBodyCustomer;
   vehicle: AiBookingReviewBodyVehicle;
   /** @maxLength 4000 */
@@ -48,6 +55,7 @@ export type AiBookingSpecial =
 export const AiBookingSpecial = {
   ceramic_special: "ceramic_special",
   detailing_special: "detailing_special",
+  highlevel_booking: "highlevel_booking",
 } as const;
 
 export type AiBookingCustomer = {
@@ -91,6 +99,7 @@ export type AiBookingBotOrigin =
 export const AiBookingBotOrigin = {
   chat_bot: "chat_bot",
   voice_bot: "voice_bot",
+  highlevel: "highlevel",
 } as const;
 
 export type AiBookingGhlDeleteState =
@@ -106,6 +115,7 @@ export const AiBookingGhlDeleteState = {
 export interface AiBooking {
   id: string;
   special: AiBookingSpecial;
+  serviceName: string;
   ghlAppointmentId: string;
   status: string;
   appointmentAt: string | null;
@@ -194,9 +204,11 @@ export interface GhlSpecialVehicleInput {
 }
 
 /**
- * GHL webhook intake is normalized before validation. Unusable optional customer/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start/end times remain mandatory for creation.
+ * HighLevel webhook intake accepts all calendars in the configured location, including manual bookings. Unusable optional intake is ignored. Appointment identities and valid start/end times are mandatory for creation. Specials use their fixed rates; other calendars require staff-reviewed pricing before conversion.
  */
 export interface GhlSpecialAppointmentInput {
+  /** @maxLength 200 */
+  title?: string;
   /** Set only by the authenticated chat/voice-bot booking workflow, not a generic appointment or Google-sync workflow. */
   bookingOrigin?: GhlSpecialAppointmentInputBookingOrigin;
   source?: GhlSpecialAppointmentInputSource;
@@ -257,6 +269,7 @@ export type GhlSpecialSyncResultSpecial =
 export const GhlSpecialSyncResultSpecial = {
   ceramic_special: "ceramic_special",
   detailing_special: "detailing_special",
+  highlevel_booking: "highlevel_booking",
 } as const;
 
 export interface GhlSpecialSyncResult {

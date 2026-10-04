@@ -11,6 +11,8 @@ import * as zod from "zod";
  * Authenticated workflow receiver. Creates or updates one booking per location and appointment. Scheduling belongs to GHL before conversion; app/Google-origin imports and callbacks for app-owned converted bookings are ignored.
  * @summary Import a dedicated GoHighLevel special appointment
  */
+export const syncGhlSpecialBookingBodyTitleMax = 200;
+
 export const syncGhlSpecialBookingBodyLocationIdMax = 100;
 
 export const syncGhlSpecialBookingBodyAppointmentIdMax = 200;
@@ -41,6 +43,7 @@ export const syncGhlSpecialBookingBodyNotesMax = 4000;
 
 export const SyncGhlSpecialBookingBody = zod
   .object({
+    title: zod.string().max(syncGhlSpecialBookingBodyTitleMax).optional(),
     bookingOrigin: zod
       .enum(["chat_bot", "voice_bot"])
       .optional()
@@ -120,14 +123,18 @@ export const SyncGhlSpecialBookingBody = zod
     notes: zod.string().max(syncGhlSpecialBookingBodyNotesMax).nullish(),
   })
   .describe(
-    "GHL webhook intake is normalized before validation. Unusable optional customer\/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start\/end times remain mandatory for creation.",
+    "HighLevel webhook intake accepts all calendars in the configured location, including manual bookings. Unusable optional intake is ignored. Appointment identities and valid start\/end times are mandatory for creation. Specials use their fixed rates; other calendars require staff-reviewed pricing before conversion.",
   );
 
 export const SyncGhlSpecialBookingResponse = zod.object({
   success: zod.boolean(),
   action: zod.enum(["created", "updated", "duplicate", "cancelled", "ignored"]),
   bookingId: zod.string().nullable(),
-  special: zod.enum(["ceramic_special", "detailing_special"]),
+  special: zod.enum([
+    "ceramic_special",
+    "detailing_special",
+    "highlevel_booking",
+  ]),
   status: zod.string(),
   totalEstimate: zod.number().nullable(),
   reason: zod.string().optional(),
@@ -1133,7 +1140,12 @@ export const AdminDeleteBookingDraftParams = zod.object({
  */
 export const AdminListAiBookingsResponseItem = zod.object({
   id: zod.string(),
-  special: zod.enum(["ceramic_special", "detailing_special"]),
+  special: zod.enum([
+    "ceramic_special",
+    "detailing_special",
+    "highlevel_booking",
+  ]),
+  serviceName: zod.string(),
   ghlAppointmentId: zod.string(),
   status: zod.string(),
   appointmentAt: zod.string().nullable(),
@@ -1157,7 +1169,7 @@ export const AdminListAiBookingsResponseItem = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
-  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot", "highlevel"]).nullable(),
   ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
   ghlDeleteError: zod.string().nullable(),
   requiresGhlCleanup: zod.boolean(),
@@ -1187,6 +1199,9 @@ export const AdminSaveAiBookingParams = zod.object({
   id: zod.coerce.string().uuid(),
 });
 
+export const adminSaveAiBookingBodyTotalEstimateMin = 0;
+export const adminSaveAiBookingBodyTotalEstimateMax = 1000000;
+
 export const adminSaveAiBookingBodyCustomerNameMax = 200;
 
 export const adminSaveAiBookingBodyCustomerEmailMax = 254;
@@ -1202,6 +1217,14 @@ export const adminSaveAiBookingBodyVehicleColourMax = 100;
 export const adminSaveAiBookingBodyNotesMax = 4000;
 
 export const AdminSaveAiBookingBody = zod.object({
+  totalEstimate: zod
+    .number()
+    .min(adminSaveAiBookingBodyTotalEstimateMin)
+    .max(adminSaveAiBookingBodyTotalEstimateMax)
+    .nullish()
+    .describe(
+      "Staff-entered total including HST for non-special HighLevel appointments. Specials retain server-owned pricing.",
+    ),
   customer: zod.object({
     name: zod.string().max(adminSaveAiBookingBodyCustomerNameMax),
     email: zod.string().max(adminSaveAiBookingBodyCustomerEmailMax),
@@ -1219,7 +1242,12 @@ export const AdminSaveAiBookingBody = zod.object({
 
 export const AdminSaveAiBookingResponse = zod.object({
   id: zod.string(),
-  special: zod.enum(["ceramic_special", "detailing_special"]),
+  special: zod.enum([
+    "ceramic_special",
+    "detailing_special",
+    "highlevel_booking",
+  ]),
+  serviceName: zod.string(),
   ghlAppointmentId: zod.string(),
   status: zod.string(),
   appointmentAt: zod.string().nullable(),
@@ -1243,7 +1271,7 @@ export const AdminSaveAiBookingResponse = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
-  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot", "highlevel"]).nullable(),
   ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
   ghlDeleteError: zod.string().nullable(),
   requiresGhlCleanup: zod.boolean(),
@@ -1255,6 +1283,9 @@ export const AdminSaveAiBookingResponse = zod.object({
 export const AdminConvertAiBookingParams = zod.object({
   id: zod.coerce.string().uuid(),
 });
+
+export const adminConvertAiBookingBodyTotalEstimateMin = 0;
+export const adminConvertAiBookingBodyTotalEstimateMax = 1000000;
 
 export const adminConvertAiBookingBodyCustomerNameMax = 200;
 
@@ -1271,6 +1302,14 @@ export const adminConvertAiBookingBodyVehicleColourMax = 100;
 export const adminConvertAiBookingBodyNotesMax = 4000;
 
 export const AdminConvertAiBookingBody = zod.object({
+  totalEstimate: zod
+    .number()
+    .min(adminConvertAiBookingBodyTotalEstimateMin)
+    .max(adminConvertAiBookingBodyTotalEstimateMax)
+    .nullish()
+    .describe(
+      "Staff-entered total including HST for non-special HighLevel appointments. Specials retain server-owned pricing.",
+    ),
   customer: zod.object({
     name: zod.string().max(adminConvertAiBookingBodyCustomerNameMax),
     email: zod.string().max(adminConvertAiBookingBodyCustomerEmailMax),
@@ -1288,7 +1327,12 @@ export const AdminConvertAiBookingBody = zod.object({
 
 export const AdminConvertAiBookingResponse = zod.object({
   id: zod.string(),
-  special: zod.enum(["ceramic_special", "detailing_special"]),
+  special: zod.enum([
+    "ceramic_special",
+    "detailing_special",
+    "highlevel_booking",
+  ]),
+  serviceName: zod.string(),
   ghlAppointmentId: zod.string(),
   status: zod.string(),
   appointmentAt: zod.string().nullable(),
@@ -1312,7 +1356,7 @@ export const AdminConvertAiBookingResponse = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
-  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot", "highlevel"]).nullable(),
   ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
   ghlDeleteError: zod.string().nullable(),
   requiresGhlCleanup: zod.boolean(),
@@ -1332,7 +1376,12 @@ export const AdminResolveAiBookingWebhookBody = zod.object({
 
 export const AdminResolveAiBookingWebhookResponse = zod.object({
   id: zod.string(),
-  special: zod.enum(["ceramic_special", "detailing_special"]),
+  special: zod.enum([
+    "ceramic_special",
+    "detailing_special",
+    "highlevel_booking",
+  ]),
+  serviceName: zod.string(),
   ghlAppointmentId: zod.string(),
   status: zod.string(),
   appointmentAt: zod.string().nullable(),
@@ -1356,7 +1405,7 @@ export const AdminResolveAiBookingWebhookResponse = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
-  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot", "highlevel"]).nullable(),
   ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
   ghlDeleteError: zod.string().nullable(),
   requiresGhlCleanup: zod.boolean(),

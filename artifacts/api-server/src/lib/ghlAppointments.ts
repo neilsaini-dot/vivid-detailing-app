@@ -1,5 +1,6 @@
 export type BotOrigin = "chat_bot" | "voice_bot";
-export type AppointmentOrigin = BotOrigin | "google" | "app" | "unknown";
+export type ConversionOrigin = BotOrigin | "highlevel";
+export type AppointmentOrigin = ConversionOrigin | "google" | "app" | "unknown";
 export interface GhlAppointmentIdentity {
   locationId: string;
   appointmentId: string;
@@ -12,14 +13,14 @@ export class GhlAppointmentApiError extends Error {
 const API = "https://services.leadconnectorhq.com";
 const normalized = (value: unknown) => typeof value === "string" ? value.toLowerCase().replace(/[^a-z0-9]/g, "") : "";
 
-// Only explicit creator metadata is evidence. A calendar ID, contact tag,
-// customer name or generic "api" source does not prove bot provenance.
+// Generic "app"/"api" labels do not identify Vivid or prove bot provenance.
+// Use explicit product/provider metadata and local app-ownership checks.
 export function appointmentOrigin(event: Record<string, unknown>): AppointmentOrigin {
   const creator = event.createdBy && typeof event.createdBy === "object"
     ? event.createdBy as Record<string, unknown> : {};
   const sources = [creator.source, creator.channel, creator.type, event.source, event.appointmentSource].map(normalized);
   if (sources.some(s => ["google", "googlecalendar"].includes(s))) return "google";
-  if (sources.some(s => ["app", "vividapp", "vividdetailing"].includes(s))) return "app";
+  if (sources.some(s => ["vividapp", "vividdetailing"].includes(s))) return "app";
   if (sources.some(s => ["voiceai", "voiceaibot", "voicebot"].includes(s))) return "voice_bot";
   if (sources.some(s => ["conversationai", "conversationaibot", "chatai", "chatbot"].includes(s))) return "chat_bot";
   return "unknown";
@@ -39,7 +40,7 @@ function options(settings: Config, method: string): RequestInit {
 function checkLocation(identity: GhlAppointmentIdentity, settings: Config) {
   if (identity.locationId !== settings.locationId) throw new GhlAppointmentApiError(409, "The appointment does not belong to the configured GHL location.");
 }
-export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, trustedOrigin?: BotOrigin | null, settings: Config = config()): Promise<AppointmentOrigin> {
+export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, trustedOrigin?: ConversionOrigin | null, settings: Config = config()): Promise<AppointmentOrigin> {
   checkLocation(identity, settings);
   const response = await (settings.fetcher ?? fetch)(
     `${API}/calendars/events/appointments/${encodeURIComponent(identity.appointmentId)}`, options(settings, "GET"));
@@ -63,9 +64,9 @@ export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, tru
     throw new GhlAppointmentApiError(409, `GHL appointment ${identity.appointmentId} identity could not be verified: ${mismatches.join(", ")} mismatch.`);
   }
   const origin = appointmentOrigin(event);
-  // Bot-only, authenticated workflow intake may supply an explicit marker
-  // when GHL's API reports only a generic creator. Google/app always wins.
-  return origin === "unknown" ? trustedOrigin ?? "unknown" : origin;
+  // A matching, live GHL appointment is eligible without AI/bot metadata.
+  // Explicit Google/app origins still win over any supplied intake marker.
+  return origin === "unknown" ? trustedOrigin ?? "highlevel" : origin;
 }
 export async function deleteGhlAppointment(identity: GhlAppointmentIdentity, settings: Config = config()): Promise<void> {
   checkLocation(identity, settings);

@@ -1319,6 +1319,11 @@ components:
       type: object
       required: [customer, vehicle, notes]
       properties:
+        totalEstimate:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 1000000
+          description: Staff-entered total including HST for non-special HighLevel appointments. Specials retain server-owned pricing.
         customer:
           type: object
           required: [name, email, phone]
@@ -1356,13 +1361,15 @@ components:
           maxLength: 4000
     AiBooking:
       type: object
-      required: [id, special, ghlAppointmentId, status, appointmentAt, appointmentEndAt, totalEstimate, customer, vehicle, notes, conversionState, webhookState, calendarEventId, convertedAt, lastError, botOrigin, ghlDeleteState, ghlDeleteError, requiresGhlCleanup]
+      required: [id, special, serviceName, ghlAppointmentId, status, appointmentAt, appointmentEndAt, totalEstimate, customer, vehicle, notes, conversionState, webhookState, calendarEventId, convertedAt, lastError, botOrigin, ghlDeleteState, ghlDeleteError, requiresGhlCleanup]
       properties:
         id:
           type: string
         special:
           type: string
-          enum: [ceramic_special, detailing_special]
+          enum: [ceramic_special, detailing_special, highlevel_booking]
+        serviceName:
+          type: string
         ghlAppointmentId:
           type: string
         status:
@@ -1429,7 +1436,7 @@ components:
         botOrigin:
           type: string
           nullable: true
-          enum: [chat_bot, voice_bot]
+          enum: [chat_bot, voice_bot, highlevel]
         ghlDeleteState:
           type: string
           enum: [pending, deleting, deleted, failed]
@@ -1440,9 +1447,12 @@ components:
           type: boolean
     GhlSpecialAppointmentInput:
       type: object
-      description: GHL webhook intake is normalized before validation. Unusable optional customer/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start/end times remain mandatory for creation.
+      description: HighLevel webhook intake accepts all calendars in the configured location, including manual bookings. Unusable optional intake is ignored. Appointment identities and valid start/end times are mandatory for creation. Specials use their fixed rates; other calendars require staff-reviewed pricing before conversion.
       required: [locationId, appointmentId, calendarId, appointmentStatus]
       properties:
+        title:
+          type: string
+          maxLength: 200
         bookingOrigin:
           type: string
           enum: [chat_bot, voice_bot]
@@ -1531,7 +1541,7 @@ components:
           type: ["string", "null"]
         special:
           type: string
-          enum: [ceramic_special, detailing_special]
+          enum: [ceramic_special, detailing_special, highlevel_booking]
         status:
           type: string
         totalEstimate:

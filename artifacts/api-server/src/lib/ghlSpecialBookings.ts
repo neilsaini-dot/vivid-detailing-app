@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, sql, ne, isNotNull, isNull, or } from "drizzle-orm";
 import {
   db, bookingsTable, bookingItemsTable, customersTable, vehiclesTable,
   serviceHistoryTable, loyaltyActivityTable, ghlSpecialAppointmentsTable, aiBookingConversionsTable,
@@ -59,7 +59,8 @@ export function normaliseSpecialInput(raw: unknown, ignoredFields: string[] = []
     object: Record<string, unknown>, key: string, path: string, valid: (value: unknown) => boolean,
   ) => {
     if (typeof object[key] === "string") object[key] = (object[key] as string).trim();
-    if (object[key] == null || object[key] === "") {
+    if (object[key] == null || object[key] === ""
+      || (typeof object[key] === "string" && /^(null|undefined)$/i.test(object[key] as string))) {
       delete object[key];
     } else if ((typeof object[key] === "string" && /\{\{[^{}]*\}\}/.test(object[key] as string)) || !valid(object[key])) {
       delete object[key];
@@ -68,6 +69,7 @@ export function normaliseSpecialInput(raw: unknown, ignoredFields: string[] = []
   };
   cleanOptional(body, "source", "source", value => SyncGhlSpecialBookingBody.shape.source.safeParse(value).success);
   cleanOptional(body, "notes", "notes", value => SyncGhlSpecialBookingBody.shape.notes.safeParse(value).success);
+  cleanOptional(body, "title", "title", value => SyncGhlSpecialBookingBody.shape.title.safeParse(value).success);
   cleanOptional(body, "eventUpdatedAt", "eventUpdatedAt", value => {
     if (!SyncGhlSpecialBookingBody.shape.eventUpdatedAt.safeParse(value).success) return false;
     try { return !!parseSpecialDate(value as string, "eventUpdatedAt"); }
@@ -202,12 +204,12 @@ function suppliedYear(input: Input): number | undefined {
   return validOptionalYear(raw) ? Number(raw) : undefined;
 }
 
-function response(action: Action, special: SpecialKey, booking?: Booking, reason?: string) {
+function response(action: Action, special: SpecialKey | null, booking?: Booking, reason?: string) {
   return {
     success: true,
     action,
     bookingId: booking?.id ?? null,
-    special,
+    special: special ?? "highlevel_booking",
     status: booking?.status ?? "cancelled",
     totalEstimate: booking?.totalEstimate == null ? null : Number(booking.totalEstimate),
     ...(reason ? { reason } : {}),
@@ -265,9 +267,27 @@ async function matchCustomer(tx: Transaction, contact: NonNullable<Input["contac
  * No external API calls here: GHL owns appointments and Google Calendar sync.
  * Everything is atomic; retries cannot produce orphan customers or duplicate jobs.
  */
+export async function hasAppOwnedAppointment(database: Pick<typeof db, "select">, booking: Pick<Booking, "customerId" | "appointmentAt"> & { id?: string; ghlContactId?: string | null }) {
+  if (!booking.appointmentAt || (!booking.customerId && !booking.ghlContactId)) return false;
+  const [owned] = await database.select({ id: bookingsTable.id }).from(bookingsTable)
+    .leftJoin(ghlSpecialAppointmentsTable, eq(ghlSpecialAppointmentsTable.bookingId, bookingsTable.id))
+    .leftJoin(aiBookingConversionsTable, eq(aiBookingConversionsTable.bookingId, bookingsTable.id)).where(and(
+    or(...(booking.customerId ? [eq(bookingsTable.customerId, booking.customerId)] : []),
+      ...(booking.ghlContactId ? [eq(bookingsTable.ghlContactId, booking.ghlContactId)] : [])),
+    eq(bookingsTable.appointmentAt, booking.appointmentAt),
+    isNotNull(bookingsTable.calendarEventId),
+    // An unconverted GHL import can point at its original Google mirror;
+    // that does not make it an app-owned appointment.
+    or(isNull(ghlSpecialAppointmentsTable.bookingId),
+      isNotNull(aiBookingConversionsTable.calendarEventId), eq(aiBookingConversionsTable.state, "converted")),
+    ne(bookingsTable.status, "cancelled"),
+    ...(booking.id ? [ne(bookingsTable.id, booking.id)] : []),
+  )).limit(1);
+  return !!owned;
+}
+
 export async function syncSpecialAppointment(input: Input, database: Database = db) {
   const special = specialForCalendar(input.calendarId);
-  if (!special) throw new SpecialSyncError(403, "calendar_not_allowed", "Calendar is not an approved special calendar.");
   const status = input.appointmentStatus === "canceled" ? "cancelled" : input.appointmentStatus;
   const start = parseSpecialDate(input.startTime, "startTime");
   const end = parseSpecialDate(input.endTime, "endTime");
@@ -302,7 +322,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
       }
     }
     if (mapping && mapping.calendarId !== input.calendarId) {
-      throw new SpecialSyncError(409, "calendar_changed", "An existing appointment cannot move between special calendars; cancel it and create a new appointment.");
+      throw new SpecialSyncError(409, "calendar_changed", "An existing imported appointment cannot move between calendars; staff must resolve its mapping.");
     }
     if (mapping?.externalContactId && input.contact?.id && mapping.externalContactId !== input.contact.id) {
       throw new SpecialSyncError(409, "contact_changed", "An existing appointment cannot be assigned to a different contact.");
@@ -413,7 +433,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
         }).returning();
         vehicleId = createdVehicle.id;
       }
-      const priced = vehicleType && (vehicleType !== vehicle?.type || booking.totalEstimate === null)
+      const priced = special && vehicleType && (vehicleType !== vehicle?.type || booking.totalEstimate === null)
         ? await repriceSpecialBooking(tx, booking, special, vehicleType) : booking;
       const [updated] = await tx.update(bookingsTable).set({
         vehicleId,
@@ -431,7 +451,13 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
 
     if (!start || !end) fail("A new active booking requires valid startTime and endTime.");
     if (!input.contact) fail("A new booking requires customer contact information.");
+    if (await hasAppOwnedAppointment(tx, { customerId: null, appointmentAt: start, ghlContactId: input.contact.id })) {
+      return { ...response("ignored", special, undefined, "app_owned_appointment"), status: "ignored" };
+    }
     const customer = await matchCustomer(tx, input.contact);
+    if (await hasAppOwnedAppointment(tx, { customerId: customer.id, appointmentAt: start })) {
+      return { ...response("ignored", special, undefined, "app_owned_appointment"), status: "ignored" };
+    }
     const make = input.vehicle?.make?.trim() || null;
     const model = input.vehicle?.model?.trim() || null;
     const existingVehicles = year && make && model
@@ -454,7 +480,8 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
       ? await tx.update(vehiclesTable).set(vehicleValues)
         .where(eq(vehiclesTable.id, existingVehicles[0].id)).returning()
       : await tx.insert(vehiclesTable).values(vehicleValues).returning();
-    const subtotalCents = specialPriceCents(special, vehicleType);
+    const serviceName = special ? SPECIAL_NAMES[special] : input.title?.trim() || "HighLevel Booking";
+    const subtotalCents = special ? specialPriceCents(special, vehicleType) : null;
     const total = subtotalCents === null ? null
       : ((subtotalCents + Math.round(subtotalCents * 0.15)) / 100).toFixed(2);
     const [created] = await tx.insert(bookingsTable).values({
@@ -463,7 +490,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
       totalEstimate: total, ghlContactId: input.contact.id, source: "other",
       notes: input.notes ?? null,
       internalNotes: specialVehicleNotes(
-        `Imported from GoHighLevel (${SPECIAL_NAMES[special]}). Manage appointment times and cancellations in GoHighLevel. Slot end: ${end.toISOString()}; this is not a promised pickup time.`,
+        `Imported from GoHighLevel (${serviceName}). Manage appointment times and cancellations in GoHighLevel. Slot end: ${end.toISOString()}; this is not a promised pickup time.`,
         vehicle ? null : {
           ...(year !== undefined ? { year } : {}),
           ...(make ? { make } : {}), ...(model ? { model } : {}),
@@ -472,7 +499,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
       ),
     }).returning();
     await tx.insert(bookingItemsTable).values({
-      bookingId: created.id, itemType: "service", itemName: SPECIAL_NAMES[special],
+      bookingId: created.id, itemType: "service", itemName: serviceName,
       unitPrice: subtotalCents === null ? null : (subtotalCents / 100).toFixed(2),
       quantity: 1, isQuoteBased: subtotalCents === null,
     });

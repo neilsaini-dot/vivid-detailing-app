@@ -583,7 +583,11 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.equal((await send(fixture(), null)).status, 401);
       assert.equal((await send(fixture(), "wrong")).status, 401);
       assert.equal((await send(fixture({ locationId: "wrong-location" }))).status, 403);
-      assert.equal((await send(fixture({ calendarId: "wrong-calendar" }))).status, 403);
+      const otherCalendar = await send({ ...fixture({ calendarId: "another-highlevel-calendar" }), title: "Synthetic Other Service" });
+      assert.equal(otherCalendar.status, 201);
+      const otherResult = await otherCalendar.json();
+      assert.equal(otherResult.special, "highlevel_booking");
+      assert.equal(otherResult.totalEstimate, null);
       assert.equal((await send({})).status, 422);
       assert.match(String(warnings.at(-1)?.[1]), /locationId: required; expected string/);
       assert.match(JSON.stringify(warnings), /locationId/);

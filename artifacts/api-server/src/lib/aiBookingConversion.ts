@@ -10,6 +10,8 @@ import { repriceSpecialBooking, syncSpecialLoyalty } from "./ghlSpecialIntake";
 import { sendGhlConversionConfirmed, GhlConversionDeliveryError, type GhlBookingConfirmedPayload } from "./ghl";
 import { createCalendarEvent, type CalendarEventInput } from "./googleCalendar";
 import { getAppointmentOrigin, deleteGhlAppointment, type BotOrigin, type AppointmentOrigin, type GhlAppointmentIdentity } from "./ghlAppointments";
+import { type ConversionOrigin } from "./ghlAppointments";
+import { hasAppOwnedAppointment } from "./ghlSpecialBookings";
 
 type Database = Pick<typeof db, "transaction">;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -19,14 +21,17 @@ export class AiConversionError extends Error {
 }
 function error(status: number, message: string): never { throw new AiConversionError(status, message); }
 
-type OriginResolver = (identity: GhlAppointmentIdentity, trustedOrigin?: BotOrigin | null) => Promise<AppointmentOrigin>;
-const botOrigin = (value: string | null | undefined): BotOrigin | null =>
-  value === "chat_bot" || value === "voice_bot" ? value : null;
+type OriginResolver = (identity: GhlAppointmentIdentity, trustedOrigin?: ConversionOrigin | null) => Promise<AppointmentOrigin>;
+const botOrigin = (value: string | null | undefined): ConversionOrigin | null =>
+  value === "chat_bot" || value === "voice_bot" || value === "highlevel" ? value : null;
 
 export async function readAiBookings(database: Pick<typeof db, "select"> = db, originResolver: OriginResolver = getAppointmentOrigin) {
   const rows = await database.select({
     booking: bookingsTable, mapping: ghlSpecialAppointmentsTable,
     customer: customersTable, vehicle: vehiclesTable, conversion: aiBookingConversionsTable,
+    serviceName: sql<string | null>`(select ${bookingItemsTable.itemName} from ${bookingItemsTable}
+      where ${bookingItemsTable.bookingId} = ${bookingsTable.id} and ${bookingItemsTable.itemType} = 'service'
+      order by ${bookingItemsTable.id} limit 1)`,
   }).from(ghlSpecialAppointmentsTable)
     .innerJoin(bookingsTable, eq(ghlSpecialAppointmentsTable.bookingId, bookingsTable.id))
     .leftJoin(customersTable, eq(bookingsTable.customerId, customersTable.id))
@@ -35,15 +40,21 @@ export async function readAiBookings(database: Pick<typeof db, "select"> = db, o
   const result = [];
   // Bound API concurrency instead of issuing one burst per admin poll.
   for (let index = 0; index < rows.length; index += 4) {
-  const batch = await Promise.all(rows.slice(index, index + 4).map(async ({ booking, mapping, customer, vehicle, conversion }) => {
-    const special = specialForCalendar(mapping.calendarId);
-    if (!special) return [];
+  const eligibleRows = [];
+  // Database work is sequential even when a transaction pins one connection.
+  // Only external origin lookups run concurrently.
+  for (const row of rows.slice(index, index + 4)) {
+    if (row.conversion?.calendarEventId || row.conversion?.state === "converted"
+      || !await hasAppOwnedAppointment(database, row.booking)) eligibleRows.push(row);
+  }
+  const batch = await Promise.all(eligibleRows.map(async ({ booking, mapping, customer, vehicle, conversion, serviceName }) => {
+    const special = specialForCalendar(mapping.calendarId) ?? "highlevel_booking";
     const recordedOrigin = botOrigin(conversion?.botOrigin);
     const origin = conversion?.state === "converted" || (conversion?.calendarEventId && recordedOrigin)
       ? recordedOrigin : await originResolver(mapping, recordedOrigin);
-    if (conversion?.state !== "converted" && origin !== "chat_bot" && origin !== "voice_bot") return [];
+    if (conversion?.state !== "converted" && !botOrigin(origin)) return [];
     return [{
-      id: booking.id, special, ghlAppointmentId: mapping.appointmentId, status: booking.status,
+      id: booking.id, special, serviceName: serviceName ?? "HighLevel Booking", ghlAppointmentId: mapping.appointmentId, status: booking.status,
       appointmentAt: booking.appointmentAt?.toISOString() ?? null,
       appointmentEndAt: mapping.appointmentEndAt?.toISOString() ?? null,
       totalEstimate: booking.totalEstimate === null ? null : Number(booking.totalEstimate),
@@ -75,6 +86,11 @@ function validateReview(body: Review, converting: boolean): Review {
     vehicle: { ...body.vehicle, make: body.vehicle.make.trim(), model: body.vehicle.model.trim(), colour: body.vehicle.colour.trim() },
     notes: body.notes.trim(),
   };
+  if (/^(null|undefined)$/i.test(clean.customer.name)) clean.customer.name = "";
+  if (body.totalEstimate != null && (!Number.isFinite(body.totalEstimate) || body.totalEstimate < 0
+    || body.totalEstimate > 1000000 || Number(body.totalEstimate.toFixed(2)) !== body.totalEstimate)) {
+    error(422, "Enter a valid total including HST.");
+  }
   if (clean.customer.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.customer.email)) error(422, "Enter a valid email or leave it blank.");
   const digits = clean.customer.phone.replace(/\D/g, "");
   if (clean.customer.phone && (digits.length < 7 || digits.length > 15)) error(422, "Enter a valid phone number.");
@@ -109,6 +125,9 @@ async function saveReview(tx: Tx, id: string, body: Review, converting: boolean)
     error(409, "Check GHL automation history and verify webhook delivery before trying conversion again.");
   }
   const clean = validateReview(body, converting);
+  if (!locked.conversion?.calendarEventId && await hasAppOwnedAppointment(tx, locked.booking)) {
+    error(409, "This appointment already has an app-owned booking. Open the existing booking instead of converting its HighLevel mirror.");
+  }
   if (!locked.booking.customerId || !locked.booking.vehicleId) error(409, "This booking needs a linked customer and vehicle.");
   const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, locked.booking.customerId)).for("update");
   const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, locked.booking.vehicleId)).for("update");
@@ -117,7 +136,9 @@ async function saveReview(tx: Tx, id: string, body: Review, converting: boolean)
     const current = { customer: { name: customer.name ?? "", email: customer.email ?? "", phone: customer.phone ?? "" },
       vehicle: { type: vehicle.type, year: vehicle.year, make: vehicle.make ?? "", model: vehicle.model ?? "", colour: vehicle.colour ?? "" },
       notes: locked.booking.notes ?? "" };
-    if (JSON.stringify(clean) !== JSON.stringify(current)) error(409, "Conversion has already started. Resume its unfinished steps without changing details.");
+    const priceChanged = body.totalEstimate !== undefined
+      && body.totalEstimate !== (locked.booking.totalEstimate === null ? null : Number(locked.booking.totalEstimate));
+    if (priceChanged || JSON.stringify(clean) !== JSON.stringify(current)) error(409, "Conversion has already started. Resume its unfinished steps without changing details.");
     return locked;
   }
   await tx.update(customersTable).set({
@@ -126,11 +147,26 @@ async function saveReview(tx: Tx, id: string, body: Review, converting: boolean)
   await tx.update(vehiclesTable).set({
     ...clean.vehicle, make: clean.vehicle.make || null, model: clean.vehicle.model || null, colour: clean.vehicle.colour || null,
   }).where(eq(vehiclesTable.id, vehicle.id));
-  const special = specialForCalendar(locked.mapping.calendarId)!;
-  const priced = vehicle.type !== clean.vehicle.type || locked.booking.totalEstimate === null
+  const special = specialForCalendar(locked.mapping.calendarId);
+  if (special && body.totalEstimate !== undefined) error(422, "Special prices are calculated by the server, not entered during review.");
+  const priced = special && (vehicle.type !== clean.vehicle.type || locked.booking.totalEstimate === null)
     ? await repriceSpecialBooking(tx, locked.booking, special, clean.vehicle.type) : locked.booking;
+  if (!special && body.totalEstimate != null) {
+    const items = await tx.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, id));
+    // Price a new generic intake's single unknown service so native invoices
+    // and later resyncs do not still treat it as an unapproved quote. Never
+    // rewrite staff-entered/replacement lines or extras.
+    if (items.length === 1 && items[0].isQuoteBased && items[0].unitPrice === null) {
+      await tx.update(bookingItemsTable).set({
+        unitPrice: (body.totalEstimate / 1.15 / items[0].quantity).toFixed(2), isQuoteBased: false,
+      }).where(eq(bookingItemsTable.id, items[0].id));
+    }
+  }
   const [saved] = await tx.update(bookingsTable).set({
-    totalEstimate: priced.totalEstimate, notes: clean.notes || null,
+    totalEstimate: !special && body.totalEstimate !== undefined
+      ? body.totalEstimate === null ? null : body.totalEstimate.toFixed(2) : priced.totalEstimate,
+    ...(!special && body.totalEstimate !== undefined ? { isManualPriceOverride: body.totalEstimate !== null } : {}),
+    notes: clean.notes || null,
     createdByAdmin: true,
   }).where(eq(bookingsTable.id, id)).returning();
   await syncSpecialLoyalty(tx, saved);
@@ -179,13 +215,13 @@ export async function convertAiBooking(id: string, body: Review, database: Datab
     if (conversion?.state === "converted") return null;
     const verifiedOrigin = conversion?.calendarEventId && botOrigin(conversion.botOrigin)
       ? botOrigin(conversion.botOrigin) : await effects.origin(mapping, botOrigin(conversion?.botOrigin));
-    if (verifiedOrigin !== "chat_bot" && verifiedOrigin !== "voice_bot") {
-      error(422, "Only verified chat/voice-bot appointments can be converted. Do not convert app or Google-origin appointments.");
+    if (!botOrigin(verifiedOrigin)) {
+      error(422, "Only live HighLevel appointments can be converted. App/Google-origin and missing appointments cannot be converted.");
     }
     if (!booking.appointmentAt || !mapping.appointmentEndAt || mapping.appointmentEndAt <= booking.appointmentAt) {
       error(422, "A valid appointment start and end are required. Correct the appointment in GHL first.");
     }
-    if (booking.totalEstimate === null) error(422, "Complete special pricing before conversion.");
+    if (booking.totalEstimate === null) error(422, "Enter the booking amount before conversion.");
     const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, booking.customerId!));
     const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId!));
     const items = await tx.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, id));
@@ -193,9 +229,10 @@ export async function convertAiBooking(id: string, body: Review, database: Datab
     const addons = items.filter(item => item.itemType === "addon").map(item => item.itemName);
     const vehicleLabel = [vehicle.year, vehicle.make, vehicle.model].filter(Boolean).join(" ") || vehicle.type;
     const total = Number(booking.totalEstimate);
+    const special = specialForCalendar(mapping.calendarId);
     const description = [
       `Customer: ${customer.name} | ${customer.phone} | ${customer.email ?? ""}`,
-      `Vehicle: ${vehicleLabel}`, `Services: ${services.join(", ") || SPECIAL_NAMES[specialForCalendar(mapping.calendarId)!]}`,
+      `Vehicle: ${vehicleLabel}`, `Services: ${services.join(", ") || (special ? SPECIAL_NAMES[special] : "HighLevel Booking")}`,
       addons.length ? `Add-ons: ${addons.join(", ")}` : null,
       `Estimated Total (incl. HST): $${total.toFixed(2)}`, booking.notes ? `Notes: ${booking.notes}` : null,
       `Booking ID: ${id}`, `GoHighLevel appointment: ${mapping.appointmentId}`,
@@ -213,7 +250,7 @@ export async function convertAiBooking(id: string, body: Review, database: Datab
       opportunity: { title: `${services[0] ?? "Detailing"} - ${vehicleLabel}`, status: "won" as const,
         monetaryValue: total, pipelineStageName: "Won" as const, notes: description },
       booking: { id, services, addons, vehicle: vehicleLabel, appointment_at: appointment,
-        total_estimate: total, is_quote_based: items.some(item => item.isQuoteBased), notes: booking.notes,
+        total_estimate: total, is_quote_based: !booking.isManualPriceOverride && items.some(item => item.isQuoteBased), notes: booking.notes,
         ghl_appointment_id: mapping.appointmentId, ghl_calendar_id: mapping.calendarId },
       source: "vivid-app" as const, conversion_id: `ai-conversion:${id}`,
     };

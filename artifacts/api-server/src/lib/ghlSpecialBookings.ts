@@ -5,6 +5,7 @@ import {
   serviceHistoryTable, loyaltyActivityTable, ghlSpecialAppointmentsTable,
 } from "@workspace/db";
 import { SyncGhlSpecialBookingBody } from "@workspace/api-zod";
+import { logger } from "./logger";
 import {
   pendingSpecialVehicle, specialVehicleNotes, repriceSpecialBooking, syncSpecialLoyalty,
 } from "./ghlSpecialIntake";
@@ -68,9 +69,33 @@ export function normaliseSpecialInput(raw: unknown): unknown {
 
 export function parseSpecialDate(value: string | undefined, name: string): Date | undefined {
   if (value === undefined || value === "") return undefined;
+  const rawValue: unknown = value;
+  if (rawValue === null) {
+    logger.warn({ field: name, rawValue: null }, "GHL special booking timestamp is null");
+    fail(`${name} must be an ISO 8601 timestamp. Times without an offset use America/Halifax.`);
+  }
+  if (typeof rawValue !== "string") {
+    logger.warn(
+      { field: name, rawValue, rawType: typeof rawValue },
+      "GHL special booking timestamp is not a string",
+    );
+    fail(`${name} must be an ISO 8601 timestamp. Times without an offset use America/Halifax.`);
+  }
   value = value.trim();
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?$/i.exec(value);
   if (!match) {
+    // Timestamps are not customer PII, so the raw value is logged to diagnose rejects.
+    logger.warn(
+      {
+        field: name,
+        rawValue,
+        rawLength: (rawValue as string).length,
+        trimmedValue: value,
+        trimmedLength: value.length,
+        regexMatched: false,
+      },
+      "GHL special booking timestamp failed ISO 8601 validation",
+    );
     fail(`${name} must be an ISO 8601 timestamp. Times without an offset use America/Halifax.`);
   }
   // Reject impossible calendar days which JavaScript would otherwise normalize.

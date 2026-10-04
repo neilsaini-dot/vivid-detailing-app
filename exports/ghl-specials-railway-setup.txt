@@ -137,14 +137,17 @@ whitespace-only appointmentStatus defaults to "new". Explicit statuses are
 trimmed/lowercased and must be new, confirmed, cancelled, or canceled; unknown
 nonblank values still fail rather than accidentally creating a new booking.
 Customer name, email, phone, and all vehicle details are optional. Missing
-optional merge values may be omitted, blank, or null. Supplied nonblank values
-must still be valid (for example, vehicle.type must be car, suv, truck, or van).
+optional merge values may be omitted, blank, or null. Unusable optional values
+are skipped, not rejected: invalid year/email/phone, unresolved merge tags,
+wrong field types, and overlong descriptions/notes do not block the appointment.
+Invalid optional eventUpdatedAt is ignored; startTime/endTime remain required
+for new active appointments and must describe a real, ordered time slot.
 If vehicle type is omitted, null, empty, or whitespace-only, default to car.
 Detailing is then $199 before HST ($228.85 including HST); ceramic remains
 $995 before HST. Supplied year/make/model/colour are saved with that vehicle.
 On updates, a missing type preserves an existing SUV/truck/van rather than
 overwriting it with car. Staff or GHL can correct the type and recalculate the
-special price on the SAME booking. Unknown nonblank types still fail explicitly.
+special price on the SAME booking. Unknown types are treated as missing.
 On later notifications, omitted/blank optional intake values preserve existing data.
 Send both dates when rescheduling. Start must be earlier than end.
 

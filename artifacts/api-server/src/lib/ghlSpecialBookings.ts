@@ -29,7 +29,13 @@ function fail(message: string): never {
   throw new SpecialSyncError(422, "invalid_appointment", message);
 }
 
-export function normaliseSpecialInput(raw: unknown): unknown {
+function validOptionalYear(raw: unknown): boolean {
+  if ((typeof raw !== "number" && typeof raw !== "string") || !/^\d{4}$/.test(String(raw))) return false;
+  const year = Number(raw);
+  return year >= 1900 && year <= new Date().getUTCFullYear() + 2;
+}
+
+export function normaliseSpecialInput(raw: unknown, ignoredFields: string[] = []): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const body = { ...raw } as Record<string, unknown>;
   if (typeof body.appointmentStatus === "string") {
@@ -45,22 +51,56 @@ export function normaliseSpecialInput(raw: unknown): unknown {
   for (const key of ["contact", "vehicle", "startTime", "endTime", "eventUpdatedAt"]) {
     if (body[key] === null) delete body[key];
   }
-  if (body.notes === null || (typeof body.notes === "string" && !body.notes.trim())) delete body.notes;
+  const cleanOptional = (
+    object: Record<string, unknown>, key: string, path: string, valid: (value: unknown) => boolean,
+  ) => {
+    if (typeof object[key] === "string") object[key] = (object[key] as string).trim();
+    if (object[key] == null || object[key] === "") {
+      delete object[key];
+    } else if ((typeof object[key] === "string" && /\{\{[^{}]*\}\}/.test(object[key] as string)) || !valid(object[key])) {
+      delete object[key];
+      ignoredFields.push(path);
+    }
+  };
+  cleanOptional(body, "source", "source", value => SyncGhlSpecialBookingBody.shape.source.safeParse(value).success);
+  cleanOptional(body, "notes", "notes", value => SyncGhlSpecialBookingBody.shape.notes.safeParse(value).success);
+  cleanOptional(body, "eventUpdatedAt", "eventUpdatedAt", value => {
+    if (!SyncGhlSpecialBookingBody.shape.eventUpdatedAt.safeParse(value).success) return false;
+    try { return !!parseSpecialDate(value as string, "eventUpdatedAt"); }
+    catch (error) {
+      if (error instanceof SpecialSyncError) return false;
+      throw error;
+    }
+  });
+  for (const key of ["contact", "vehicle"]) {
+    if (body[key] !== undefined && (typeof body[key] !== "object" || Array.isArray(body[key]))) {
+      delete body[key];
+      ignoredFields.push(key);
+    }
+  }
   if (body.contact && typeof body.contact === "object" && !Array.isArray(body.contact)) {
     const contact = { ...body.contact } as Record<string, unknown>;
-    for (const key of ["id", "name", "email", "phone"]) {
-      if (contact[key] === null) delete contact[key];
-      if (typeof contact[key] === "string") contact[key] = contact[key].trim();
-    }
+    if (contact.id === null) delete contact.id;
+    if (typeof contact.id === "string") contact.id = contact.id.trim();
+    const fields = SyncGhlSpecialBookingBody.shape.contact.unwrap().shape;
+    cleanOptional(contact, "name", "contact.name", value => fields.name.safeParse(value).success);
+    cleanOptional(contact, "email", "contact.email", value =>
+      fields.email.safeParse(value).success && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value as string));
+    cleanOptional(contact, "phone", "contact.phone", value => {
+      if (!fields.phone.safeParse(value).success) return false;
+      const digits = (value as string).replace(/\D/g, "");
+      return digits.length >= 7 && digits.length <= 15;
+    });
     body.contact = contact;
   }
   if (body.vehicle && typeof body.vehicle === "object" && !Array.isArray(body.vehicle)) {
     const vehicle = { ...body.vehicle } as Record<string, unknown>;
-    for (const key of ["type", "year", "make", "model", "colour"]) {
-      if (vehicle[key] === null) delete vehicle[key];
-      if (typeof vehicle[key] === "string") vehicle[key] = vehicle[key].trim();
-    }
     if (typeof vehicle.type === "string") vehicle.type = vehicle.type.trim().toLowerCase();
+    const fields = SyncGhlSpecialBookingBody.shape.vehicle.unwrap().shape;
+    for (const key of ["type", "year", "make", "model", "colour"]) {
+      cleanOptional(vehicle, key, `vehicle.${key}`, value =>
+        fields[key as keyof typeof fields].safeParse(value).success && (key !== "year" || validOptionalYear(value)));
+    }
     body.vehicle = vehicle;
   }
   return body;
@@ -155,10 +195,7 @@ export function parseSpecialDate(value: string | undefined, name: string): Date 
 function suppliedYear(input: Input): number | undefined {
   const raw = input.vehicle?.year;
   if (raw === undefined || raw === null || raw === "") return undefined;
-  if (!/^\d{4}$/.test(String(raw))) fail("vehicle.year must be a four-digit year or blank.");
-  const year = Number(raw);
-  if (year < 1900 || year > new Date().getUTCFullYear() + 2) fail("vehicle.year is outside the supported range.");
-  return year;
+  return validOptionalYear(raw) ? Number(raw) : undefined;
 }
 
 function response(action: Action, special: SpecialKey, booking?: Booking, reason?: string) {
@@ -177,11 +214,12 @@ async function matchCustomer(tx: Transaction, contact: NonNullable<Input["contac
   if (!contact.id?.trim()) {
     fail("A new booking requires contact.id to identify the GoHighLevel customer.");
   }
-  const email = contact.email?.trim().toLowerCase() || null;
-  const phone = contact.phone?.trim() || null;
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail("contact.email is invalid.");
+  const suppliedEmail = contact.email?.trim().toLowerCase() || null;
+  const email = suppliedEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(suppliedEmail) ? suppliedEmail : null;
+  const suppliedPhone = contact.phone?.trim() || null;
+  const suppliedDigits = suppliedPhone?.replace(/\D/g, "") ?? "";
+  const phone = suppliedPhone && suppliedDigits.length >= 7 && suppliedDigits.length <= 15 ? suppliedPhone : null;
   const digits = phone?.replace(/\D/g, "") ?? "";
-  if (phone && (digits.length < 7 || digits.length > 15)) fail("contact.phone is invalid.");
 
   // Locks on all matching identities protect simultaneous distinct appointments
   // for one customer. Sorted acquisition avoids deadlocks.

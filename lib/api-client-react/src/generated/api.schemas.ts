@@ -22,6 +22,9 @@ export const GhlSpecialAppointmentInputAppointmentStatus = {
   canceled: "canceled",
 } as const;
 
+/**
+ * Contact ID is required for creation. Unusable optional name/email/phone values are ignored; updates preserve existing good values.
+ */
 export interface GhlSpecialContactInput {
   /** @maxLength 100 */
   id?: string;
@@ -44,6 +47,9 @@ export const GhlSpecialVehicleInputType = {
   "": "",
 } as const;
 
+/**
+ * Unusable optional vehicle fields are ignored. Missing or unknown type uses a known existing type or defaults to car; invalid years are omitted rather than inferred.
+ */
 export interface GhlSpecialVehicleInput {
   type?: GhlSpecialVehicleInputType;
   /** @nullable */
@@ -56,6 +62,9 @@ export interface GhlSpecialVehicleInput {
   colour?: string;
 }
 
+/**
+ * GHL webhook intake is normalized before validation. Unusable optional customer/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start/end times remain mandatory for creation.
+ */
 export interface GhlSpecialAppointmentInput {
   source?: GhlSpecialAppointmentInputSource;
   /**

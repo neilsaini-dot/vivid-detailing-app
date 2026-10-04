@@ -42,7 +42,8 @@ export function createGhlSpecialBookingHandler(
     res.status(401).json({ error: "Unauthorized." });
     return;
   }
-  const parsed = SyncGhlSpecialBookingBody.safeParse(normaliseSpecialInput(req.body));
+  const ignoredFields: string[] = [];
+  const parsed = SyncGhlSpecialBookingBody.safeParse(normaliseSpecialInput(req.body, ignoredFields));
   if (!parsed.success) {
     const fields = parsed.error.issues.map(i => ({
       path: i.path.join(".") || "body",
@@ -64,6 +65,10 @@ export function createGhlSpecialBookingHandler(
   if (parsed.data.locationId !== config.locationId || !specialForCalendar(parsed.data.calendarId)) {
     res.status(403).json({ error: "Location or calendar is not allowed." });
     return;
+  }
+  if (ignoredFields.length) {
+    req.log.warn({ code: "optional_intake_ignored", ignoredFields },
+      `GHL special-bookings ignored unusable optional intake fields: ${ignoredFields.join(", ")}`);
   }
   try {
     const result = await sync(parsed.data);

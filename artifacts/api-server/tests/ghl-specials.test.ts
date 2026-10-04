@@ -113,11 +113,10 @@ test("cancel-before-create tombstones and stale events prevent resurrection", as
   });
 });
 
-test("missing identifiers and invalid provided data still roll back", async () => {
+test("missing identifiers and invalid required appointment times still roll back", async () => {
   await rollbackTest(async tx => {
     for (const overrides of [
       { contact: undefined }, { contact: { id: "" } }, { startTime: undefined },
-      { vehicle: { type: "car", year: "abc" } },
       { startTime: "2027-01-12 09:00:00" }, { endTime: "2027-01-11T09:00:00Z" },
       { startTime: "2027-02-30T09:00:00Z" },
     ]) {
@@ -127,6 +126,81 @@ test("missing identifiers and invalid provided data still roll back", async () =
         assert.equal((await tx.select().from(customersTable).where(eq(customersTable.ghlContactId, input.contact.id))).length, 0);
       }
     }
+  });
+});
+
+test("unusable optional intake is omitted while valid basics and details survive", () => {
+  const original = {
+    ...fixture(),
+    source: "unsupported-source",
+    contact: { id: "valid-contact-id", name: { private: "data" }, email: "not-email", phone: "bad" },
+    vehicle: { type: "unrecognized", year: "26", make: 42, model: ["bad"], colour: true },
+    notes: { private: "data" }, eventUpdatedAt: "{{appointment.updated_at}}",
+  };
+  const ignored: string[] = [];
+  const cleaned = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput(original, ignored));
+  assert.deepEqual(cleaned.contact, { id: "valid-contact-id" });
+  assert.deepEqual(cleaned.vehicle, {});
+  assert.equal(cleaned.notes, undefined);
+  assert.equal(cleaned.eventUpdatedAt, undefined);
+  assert.equal(cleaned.source, undefined);
+  assert.equal(cleaned.startTime, original.startTime);
+  assert.equal(original.vehicle.year, "26");
+  assert.deepEqual(new Set(ignored), new Set([
+    "source", "notes", "eventUpdatedAt", "contact.name", "contact.email", "contact.phone",
+    "vehicle.type", "vehicle.year", "vehicle.make", "vehicle.model", "vehicle.colour",
+  ]));
+  for (const year of ["26", "2020 Toyota", "{{contact.year}}", false, {}, [], 1800, 9999, 20.5]) {
+    const input = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({ ...fixture(), vehicle: { year } }));
+    assert.equal(input.vehicle?.year, undefined);
+  }
+  const oversized = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+    ...fixture(), contact: { id: "valid-contact", name: "x".repeat(201), email: "x".repeat(255), phone: "1".repeat(51) },
+    vehicle: { make: "x".repeat(101), model: "x".repeat(101), colour: "x".repeat(101) },
+    notes: "x".repeat(4001), eventUpdatedAt: "not-a-date",
+  }));
+  assert.deepEqual(oversized.contact, { id: "valid-contact" });
+  assert.deepEqual(oversized.vehicle, {});
+  assert.equal(oversized.notes, undefined);
+  assert.equal(oversized.eventUpdatedAt, undefined);
+  const valid = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+    ...fixture(), vehicle: { type: " SUV ", year: " 2020 ", make: " Toyota ", model: " Rav4 ", colour: " Blue " },
+  }));
+  assert.deepEqual(valid.vehicle, { type: "suv", year: "2020", make: "Toyota", model: "Rav4", colour: "Blue" });
+});
+
+test("unusable optional updates preserve known customer, vehicle, notes, and source timestamp", async () => {
+  await rollbackTest(async tx => {
+    const input = fixture({
+      contact: { id: randomUUID(), name: "Keep name", email: `${randomUUID()}@example.invalid`, phone: "+19025550123" },
+      vehicle: { type: "truck", year: "2020", make: "Keep make", model: "Keep model", colour: "Blue" },
+      notes: "Keep notes", eventUpdatedAt: "2027-01-01T09:00:00Z",
+    });
+    const created = await syncSpecialAppointment(input, tx);
+    const dirty = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+      ...input, appointmentStatus: "confirmed",
+      contact: { id: input.contact!.id, name: "{{contact.name}}", email: "bad-email", phone: "26" },
+      vehicle: { type: "unknown", year: "26", make: {}, model: [], colour: false },
+      notes: {}, eventUpdatedAt: "bad-date",
+    }));
+    const updated = await syncSpecialAppointment(dirty, tx);
+    assert.equal(updated.bookingId, created.bookingId);
+    assert.equal(updated.totalEstimate, created.totalEstimate);
+    const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
+    const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, booking.customerId!));
+    const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId!));
+    const [mapping] = await tx.select().from(ghlSpecialAppointmentsTable)
+      .where(eq(ghlSpecialAppointmentsTable.bookingId, booking.id));
+    assert.equal(customer.name, "Keep name");
+    assert.equal(customer.email, input.contact!.email);
+    assert.equal(customer.phone, "+19025550123");
+    assert.equal(vehicle.type, "truck");
+    assert.equal(vehicle.year, 2020);
+    assert.equal(vehicle.make, "Keep make");
+    assert.equal(vehicle.model, "Keep model");
+    assert.equal(vehicle.colour, "Blue");
+    assert.equal(booking.notes, "Keep notes");
+    assert.equal(mapping.externalUpdatedAt?.toISOString(), "2027-01-01T09:00:00.000Z");
   });
 });
 
@@ -515,8 +589,28 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.match(JSON.stringify(warnings), /locationId/);
       assert.match(JSON.stringify(warnings), /invalid_appointment/);
       const privateValue = "private-customer-value";
-      assert.equal((await send({ ...fixture(), vehicle: { type: privateValue } })).status, 422);
-      assert.match(String(warnings.at(-1)?.[1]), /vehicle.type: expected one of "car", "suv", "truck", "van", ""/);
+      assert.equal((await send({ ...fixture(), vehicle: { type: privateValue } })).status, 201);
+      assert.match(String(warnings.at(-1)?.[1]), /ignored unusable optional intake fields: vehicle.type/);
+      const basicOnly = await send({
+        ...fixture(), source: "irrelevant-source",
+        contact: { id: randomUUID(), name: {}, email: "bad-email", phone: "bad-phone" },
+        vehicle: { type: "{{contact.vehicle_type}}", year: "26", make: [], model: {}, colour: true },
+        notes: {}, eventUpdatedAt: "not-a-date",
+      });
+      assert.equal(basicOnly.status, 201);
+      const basicBooking = await basicOnly.json() as { bookingId: string; totalEstimate: number };
+      assert.equal(basicBooking.totalEstimate, 228.85);
+      const [storedBasic] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, basicBooking.bookingId));
+      const [basicVehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, storedBasic.vehicleId!));
+      const [basicCustomer] = await tx.select().from(customersTable).where(eq(customersTable.id, storedBasic.customerId!));
+      assert.equal(basicVehicle.type, "car");
+      assert.equal(basicVehicle.year, null);
+      assert.equal(basicVehicle.make, null);
+      assert.equal(basicCustomer.name, null);
+      assert.equal(basicCustomer.email, null);
+      assert.equal(basicCustomer.phone, null);
+      assert.equal(storedBasic.notes, null);
+      assert.match(String(warnings.at(-1)?.[1]), /vehicle.year/);
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(privateValue));
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(secret));
       for (const field of ["startTime", "endTime"] as const) {

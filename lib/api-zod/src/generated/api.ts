@@ -39,73 +39,83 @@ export const syncGhlSpecialBookingBodyVehicleColourMax = 100;
 
 export const syncGhlSpecialBookingBodyNotesMax = 4000;
 
-export const SyncGhlSpecialBookingBody = zod.object({
-  source: zod.enum(["gohighlevel"]).optional(),
-  locationId: zod.string().min(1).max(syncGhlSpecialBookingBodyLocationIdMax),
-  appointmentId: zod
-    .string()
-    .min(1)
-    .max(syncGhlSpecialBookingBodyAppointmentIdMax),
-  calendarId: zod.string().min(1).max(syncGhlSpecialBookingBodyCalendarIdMax),
-  appointmentStatus: zod.enum(["new", "confirmed", "cancelled", "canceled"]),
-  startTime: zod
-    .string()
-    .max(syncGhlSpecialBookingBodyStartTimeMax)
-    .optional()
-    .describe(
-      "ISO 8601 or GHL English month\/day AM-PM timestamp, optionally prefixed by a weekday. Explicit ISO offsets are preserved; offset-free and GHL local values use America\/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.",
-    ),
-  endTime: zod
-    .string()
-    .max(syncGhlSpecialBookingBodyEndTimeMax)
-    .optional()
-    .describe(
-      "ISO 8601 or GHL English month\/day AM-PM timestamp, optionally prefixed by a weekday. Explicit ISO offsets are preserved; offset-free and GHL local values use America\/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.",
-    ),
-  eventUpdatedAt: zod
-    .string()
-    .max(syncGhlSpecialBookingBodyEventUpdatedAtMax)
-    .optional()
-    .describe(
-      "Optional source appointment last-updated ISO or GHL English month\/day AM-PM timestamp for rejecting out-of-order deliveries. Offset-free and GHL local values use America\/Halifax with daylight-saving rules. Must not be a retry's current time.",
-    ),
-  contact: zod
-    .object({
-      id: zod.string().max(syncGhlSpecialBookingBodyContactIdMax).optional(),
-      name: zod
-        .string()
-        .max(syncGhlSpecialBookingBodyContactNameMax)
-        .optional(),
-      email: zod
-        .string()
-        .max(syncGhlSpecialBookingBodyContactEmailMax)
-        .optional(),
-      phone: zod
-        .string()
-        .max(syncGhlSpecialBookingBodyContactPhoneMax)
-        .optional(),
-    })
-    .optional(),
-  vehicle: zod
-    .object({
-      type: zod.enum(["car", "suv", "truck", "van", ""]).optional(),
-      year: zod.union([zod.number(), zod.string()]).nullish(),
-      make: zod
-        .string()
-        .max(syncGhlSpecialBookingBodyVehicleMakeMax)
-        .optional(),
-      model: zod
-        .string()
-        .max(syncGhlSpecialBookingBodyVehicleModelMax)
-        .optional(),
-      colour: zod
-        .string()
-        .max(syncGhlSpecialBookingBodyVehicleColourMax)
-        .optional(),
-    })
-    .optional(),
-  notes: zod.string().max(syncGhlSpecialBookingBodyNotesMax).nullish(),
-});
+export const SyncGhlSpecialBookingBody = zod
+  .object({
+    source: zod.enum(["gohighlevel"]).optional(),
+    locationId: zod.string().min(1).max(syncGhlSpecialBookingBodyLocationIdMax),
+    appointmentId: zod
+      .string()
+      .min(1)
+      .max(syncGhlSpecialBookingBodyAppointmentIdMax),
+    calendarId: zod.string().min(1).max(syncGhlSpecialBookingBodyCalendarIdMax),
+    appointmentStatus: zod.enum(["new", "confirmed", "cancelled", "canceled"]),
+    startTime: zod
+      .string()
+      .max(syncGhlSpecialBookingBodyStartTimeMax)
+      .optional()
+      .describe(
+        "ISO 8601 or GHL English month\/day AM-PM timestamp, optionally prefixed by a weekday. Explicit ISO offsets are preserved; offset-free and GHL local values use America\/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.",
+      ),
+    endTime: zod
+      .string()
+      .max(syncGhlSpecialBookingBodyEndTimeMax)
+      .optional()
+      .describe(
+        "ISO 8601 or GHL English month\/day AM-PM timestamp, optionally prefixed by a weekday. Explicit ISO offsets are preserved; offset-free and GHL local values use America\/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.",
+      ),
+    eventUpdatedAt: zod
+      .string()
+      .max(syncGhlSpecialBookingBodyEventUpdatedAtMax)
+      .optional()
+      .describe(
+        "Optional source appointment last-updated ISO or GHL English month\/day AM-PM timestamp for rejecting out-of-order deliveries. Offset-free and GHL local values use America\/Halifax with daylight-saving rules. Must not be a retry's current time.",
+      ),
+    contact: zod
+      .object({
+        id: zod.string().max(syncGhlSpecialBookingBodyContactIdMax).optional(),
+        name: zod
+          .string()
+          .max(syncGhlSpecialBookingBodyContactNameMax)
+          .optional(),
+        email: zod
+          .string()
+          .max(syncGhlSpecialBookingBodyContactEmailMax)
+          .optional(),
+        phone: zod
+          .string()
+          .max(syncGhlSpecialBookingBodyContactPhoneMax)
+          .optional(),
+      })
+      .optional()
+      .describe(
+        "Contact ID is required for creation. Unusable optional name\/email\/phone values are ignored; updates preserve existing good values.",
+      ),
+    vehicle: zod
+      .object({
+        type: zod.enum(["car", "suv", "truck", "van", ""]).optional(),
+        year: zod.union([zod.number(), zod.string()]).nullish(),
+        make: zod
+          .string()
+          .max(syncGhlSpecialBookingBodyVehicleMakeMax)
+          .optional(),
+        model: zod
+          .string()
+          .max(syncGhlSpecialBookingBodyVehicleModelMax)
+          .optional(),
+        colour: zod
+          .string()
+          .max(syncGhlSpecialBookingBodyVehicleColourMax)
+          .optional(),
+      })
+      .optional()
+      .describe(
+        "Unusable optional vehicle fields are ignored. Missing or unknown type uses a known existing type or defaults to car; invalid years are omitted rather than inferred.",
+      ),
+    notes: zod.string().max(syncGhlSpecialBookingBodyNotesMax).nullish(),
+  })
+  .describe(
+    "GHL webhook intake is normalized before validation. Unusable optional customer\/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start\/end times remain mandatory for creation.",
+  );
 
 export const SyncGhlSpecialBookingResponse = zod.object({
   success: zod.boolean(),

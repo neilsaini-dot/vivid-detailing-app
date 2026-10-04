@@ -1135,6 +1135,838 @@ export const AdminDeleteBookingDraftParams = zod.object({
   id: zod.coerce.string(),
 });
 
+export const adminListCalendarBookingConversionsQueryMonthRegExp = new RegExp(
+  "^\\d{4}-(0[1-9]|1[0-2])$",
+);
+
+export const AdminListCalendarBookingConversionsQueryParams = zod.object({
+  month: zod.coerce
+    .string()
+    .regex(adminListCalendarBookingConversionsQueryMonthRegExp),
+});
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewCustomerNameMax = 200;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewCustomerEmailMax = 254;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewCustomerPhoneMax = 50;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewVehicleMakeMax = 100;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewVehicleModelMax = 100;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewVehicleColourMax = 100;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewNotesMax = 4000;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewServiceNameMax = 300;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewStartTimeMax = 50;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewEndTimeMax = 50;
+
+export const adminListCalendarBookingConversionsResponseEventsItemReviewTotalEstimateMin = 0;
+export const adminListCalendarBookingConversionsResponseEventsItemReviewTotalEstimateMax = 1000000;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewCustomerNameMax = 200;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewCustomerEmailMax = 254;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewCustomerPhoneMax = 50;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewVehicleMakeMax = 100;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewVehicleModelMax = 100;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewVehicleColourMax = 100;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewNotesMax = 4000;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewServiceNameMax = 300;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewStartTimeMax = 50;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewEndTimeMax = 50;
+
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewTotalEstimateMin = 0;
+export const adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewTotalEstimateMax = 1000000;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewCustomerNameMax = 200;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewCustomerEmailMax = 254;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewCustomerPhoneMax = 50;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewVehicleMakeMax = 100;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewVehicleModelMax = 100;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewVehicleColourMax = 100;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewNotesMax = 4000;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewServiceNameMax = 300;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewStartTimeMax = 50;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewEndTimeMax = 50;
+
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewTotalEstimateMin = 0;
+export const adminListCalendarBookingConversionsResponseConvertedItemReviewTotalEstimateMax = 1000000;
+
+export const AdminListCalendarBookingConversionsResponse = zod.object({
+  month: zod.string(),
+  calendarId: zod.string(),
+  events: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      description: zod.string().nullable(),
+      location: zod.string().nullable(),
+      htmlUrl: zod.string().nullable(),
+      start: zod.string().nullable(),
+      end: zod.string().nullable(),
+      allDay: zod.boolean(),
+      bookingId: zod.string().nullable(),
+      review: zod
+        .object({
+          customer: zod.object({
+            name: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseEventsItemReviewCustomerNameMax,
+              ),
+            email: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseEventsItemReviewCustomerEmailMax,
+              ),
+            phone: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseEventsItemReviewCustomerPhoneMax,
+              ),
+          }),
+          vehicle: zod.object({
+            type: zod
+              .union([
+                zod.literal("car"),
+                zod.literal("suv"),
+                zod.literal("truck"),
+                zod.literal("van"),
+                zod.literal(null),
+              ])
+              .nullable(),
+            year: zod.number().nullable(),
+            make: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseEventsItemReviewVehicleMakeMax,
+              ),
+            model: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseEventsItemReviewVehicleModelMax,
+              ),
+            colour: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseEventsItemReviewVehicleColourMax,
+              ),
+          }),
+          notes: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseEventsItemReviewNotesMax,
+            ),
+          serviceName: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseEventsItemReviewServiceNameMax,
+            ),
+          startTime: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseEventsItemReviewStartTimeMax,
+            ),
+          endTime: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseEventsItemReviewEndTimeMax,
+            ),
+          totalEstimate: zod
+            .number()
+            .min(
+              adminListCalendarBookingConversionsResponseEventsItemReviewTotalEstimateMin,
+            )
+            .max(
+              adminListCalendarBookingConversionsResponseEventsItemReviewTotalEstimateMax,
+            )
+            .nullable(),
+          confirmedCalendarOnly: zod.boolean(),
+        })
+        .nullable(),
+      reviewLocked: zod.boolean(),
+      conversionState: zod.enum([
+        "review",
+        "processing",
+        "failed",
+        "converted",
+      ]),
+      webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+      lastError: zod.string().nullable(),
+      convertedAt: zod.string().nullable(),
+    }),
+  ),
+  needsSourceReview: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      description: zod.string().nullable(),
+      location: zod.string().nullable(),
+      htmlUrl: zod.string().nullable(),
+      start: zod.string().nullable(),
+      end: zod.string().nullable(),
+      allDay: zod.boolean(),
+      bookingId: zod.string().nullable(),
+      review: zod
+        .object({
+          customer: zod.object({
+            name: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewCustomerNameMax,
+              ),
+            email: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewCustomerEmailMax,
+              ),
+            phone: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewCustomerPhoneMax,
+              ),
+          }),
+          vehicle: zod.object({
+            type: zod
+              .union([
+                zod.literal("car"),
+                zod.literal("suv"),
+                zod.literal("truck"),
+                zod.literal("van"),
+                zod.literal(null),
+              ])
+              .nullable(),
+            year: zod.number().nullable(),
+            make: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewVehicleMakeMax,
+              ),
+            model: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewVehicleModelMax,
+              ),
+            colour: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewVehicleColourMax,
+              ),
+          }),
+          notes: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewNotesMax,
+            ),
+          serviceName: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewServiceNameMax,
+            ),
+          startTime: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewStartTimeMax,
+            ),
+          endTime: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewEndTimeMax,
+            ),
+          totalEstimate: zod
+            .number()
+            .min(
+              adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewTotalEstimateMin,
+            )
+            .max(
+              adminListCalendarBookingConversionsResponseNeedsSourceReviewItemReviewTotalEstimateMax,
+            )
+            .nullable(),
+          confirmedCalendarOnly: zod.boolean(),
+        })
+        .nullable(),
+      reviewLocked: zod.boolean(),
+      conversionState: zod.enum([
+        "review",
+        "processing",
+        "failed",
+        "converted",
+      ]),
+      webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+      lastError: zod.string().nullable(),
+      convertedAt: zod.string().nullable(),
+    }),
+  ),
+  converted: zod.array(
+    zod.object({
+      id: zod.string(),
+      title: zod.string(),
+      description: zod.string().nullable(),
+      location: zod.string().nullable(),
+      htmlUrl: zod.string().nullable(),
+      start: zod.string().nullable(),
+      end: zod.string().nullable(),
+      allDay: zod.boolean(),
+      bookingId: zod.string().nullable(),
+      review: zod
+        .object({
+          customer: zod.object({
+            name: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseConvertedItemReviewCustomerNameMax,
+              ),
+            email: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseConvertedItemReviewCustomerEmailMax,
+              ),
+            phone: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseConvertedItemReviewCustomerPhoneMax,
+              ),
+          }),
+          vehicle: zod.object({
+            type: zod
+              .union([
+                zod.literal("car"),
+                zod.literal("suv"),
+                zod.literal("truck"),
+                zod.literal("van"),
+                zod.literal(null),
+              ])
+              .nullable(),
+            year: zod.number().nullable(),
+            make: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseConvertedItemReviewVehicleMakeMax,
+              ),
+            model: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseConvertedItemReviewVehicleModelMax,
+              ),
+            colour: zod
+              .string()
+              .max(
+                adminListCalendarBookingConversionsResponseConvertedItemReviewVehicleColourMax,
+              ),
+          }),
+          notes: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseConvertedItemReviewNotesMax,
+            ),
+          serviceName: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseConvertedItemReviewServiceNameMax,
+            ),
+          startTime: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseConvertedItemReviewStartTimeMax,
+            ),
+          endTime: zod
+            .string()
+            .max(
+              adminListCalendarBookingConversionsResponseConvertedItemReviewEndTimeMax,
+            ),
+          totalEstimate: zod
+            .number()
+            .min(
+              adminListCalendarBookingConversionsResponseConvertedItemReviewTotalEstimateMin,
+            )
+            .max(
+              adminListCalendarBookingConversionsResponseConvertedItemReviewTotalEstimateMax,
+            )
+            .nullable(),
+          confirmedCalendarOnly: zod.boolean(),
+        })
+        .nullable(),
+      reviewLocked: zod.boolean(),
+      conversionState: zod.enum([
+        "review",
+        "processing",
+        "failed",
+        "converted",
+      ]),
+      webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+      lastError: zod.string().nullable(),
+      convertedAt: zod.string().nullable(),
+    }),
+  ),
+});
+
+export const adminSaveCalendarBookingConversionPathIdMax = 1024;
+
+export const AdminSaveCalendarBookingConversionParams = zod.object({
+  id: zod.coerce
+    .string()
+    .min(1)
+    .max(adminSaveCalendarBookingConversionPathIdMax),
+});
+
+export const adminSaveCalendarBookingConversionBodyCustomerNameMax = 200;
+
+export const adminSaveCalendarBookingConversionBodyCustomerEmailMax = 254;
+
+export const adminSaveCalendarBookingConversionBodyCustomerPhoneMax = 50;
+
+export const adminSaveCalendarBookingConversionBodyVehicleMakeMax = 100;
+
+export const adminSaveCalendarBookingConversionBodyVehicleModelMax = 100;
+
+export const adminSaveCalendarBookingConversionBodyVehicleColourMax = 100;
+
+export const adminSaveCalendarBookingConversionBodyNotesMax = 4000;
+
+export const adminSaveCalendarBookingConversionBodyServiceNameMax = 300;
+
+export const adminSaveCalendarBookingConversionBodyStartTimeMax = 50;
+
+export const adminSaveCalendarBookingConversionBodyEndTimeMax = 50;
+
+export const adminSaveCalendarBookingConversionBodyTotalEstimateMin = 0;
+export const adminSaveCalendarBookingConversionBodyTotalEstimateMax = 1000000;
+
+export const AdminSaveCalendarBookingConversionBody = zod.object({
+  customer: zod.object({
+    name: zod
+      .string()
+      .max(adminSaveCalendarBookingConversionBodyCustomerNameMax),
+    email: zod
+      .string()
+      .max(adminSaveCalendarBookingConversionBodyCustomerEmailMax),
+    phone: zod
+      .string()
+      .max(adminSaveCalendarBookingConversionBodyCustomerPhoneMax),
+  }),
+  vehicle: zod.object({
+    type: zod
+      .union([
+        zod.literal("car"),
+        zod.literal("suv"),
+        zod.literal("truck"),
+        zod.literal("van"),
+        zod.literal(null),
+      ])
+      .nullable(),
+    year: zod.number().nullable(),
+    make: zod
+      .string()
+      .max(adminSaveCalendarBookingConversionBodyVehicleMakeMax),
+    model: zod
+      .string()
+      .max(adminSaveCalendarBookingConversionBodyVehicleModelMax),
+    colour: zod
+      .string()
+      .max(adminSaveCalendarBookingConversionBodyVehicleColourMax),
+  }),
+  notes: zod.string().max(adminSaveCalendarBookingConversionBodyNotesMax),
+  serviceName: zod
+    .string()
+    .max(adminSaveCalendarBookingConversionBodyServiceNameMax),
+  startTime: zod
+    .string()
+    .max(adminSaveCalendarBookingConversionBodyStartTimeMax),
+  endTime: zod.string().max(adminSaveCalendarBookingConversionBodyEndTimeMax),
+  totalEstimate: zod
+    .number()
+    .min(adminSaveCalendarBookingConversionBodyTotalEstimateMin)
+    .max(adminSaveCalendarBookingConversionBodyTotalEstimateMax)
+    .nullable(),
+  confirmedCalendarOnly: zod.boolean(),
+});
+
+export const adminSaveCalendarBookingConversionResponseReviewCustomerNameMax = 200;
+
+export const adminSaveCalendarBookingConversionResponseReviewCustomerEmailMax = 254;
+
+export const adminSaveCalendarBookingConversionResponseReviewCustomerPhoneMax = 50;
+
+export const adminSaveCalendarBookingConversionResponseReviewVehicleMakeMax = 100;
+
+export const adminSaveCalendarBookingConversionResponseReviewVehicleModelMax = 100;
+
+export const adminSaveCalendarBookingConversionResponseReviewVehicleColourMax = 100;
+
+export const adminSaveCalendarBookingConversionResponseReviewNotesMax = 4000;
+
+export const adminSaveCalendarBookingConversionResponseReviewServiceNameMax = 300;
+
+export const adminSaveCalendarBookingConversionResponseReviewStartTimeMax = 50;
+
+export const adminSaveCalendarBookingConversionResponseReviewEndTimeMax = 50;
+
+export const adminSaveCalendarBookingConversionResponseReviewTotalEstimateMin = 0;
+export const adminSaveCalendarBookingConversionResponseReviewTotalEstimateMax = 1000000;
+
+export const AdminSaveCalendarBookingConversionResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullable(),
+  location: zod.string().nullable(),
+  htmlUrl: zod.string().nullable(),
+  start: zod.string().nullable(),
+  end: zod.string().nullable(),
+  allDay: zod.boolean(),
+  bookingId: zod.string().nullable(),
+  review: zod
+    .object({
+      customer: zod.object({
+        name: zod
+          .string()
+          .max(adminSaveCalendarBookingConversionResponseReviewCustomerNameMax),
+        email: zod
+          .string()
+          .max(
+            adminSaveCalendarBookingConversionResponseReviewCustomerEmailMax,
+          ),
+        phone: zod
+          .string()
+          .max(
+            adminSaveCalendarBookingConversionResponseReviewCustomerPhoneMax,
+          ),
+      }),
+      vehicle: zod.object({
+        type: zod
+          .union([
+            zod.literal("car"),
+            zod.literal("suv"),
+            zod.literal("truck"),
+            zod.literal("van"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        year: zod.number().nullable(),
+        make: zod
+          .string()
+          .max(adminSaveCalendarBookingConversionResponseReviewVehicleMakeMax),
+        model: zod
+          .string()
+          .max(adminSaveCalendarBookingConversionResponseReviewVehicleModelMax),
+        colour: zod
+          .string()
+          .max(
+            adminSaveCalendarBookingConversionResponseReviewVehicleColourMax,
+          ),
+      }),
+      notes: zod
+        .string()
+        .max(adminSaveCalendarBookingConversionResponseReviewNotesMax),
+      serviceName: zod
+        .string()
+        .max(adminSaveCalendarBookingConversionResponseReviewServiceNameMax),
+      startTime: zod
+        .string()
+        .max(adminSaveCalendarBookingConversionResponseReviewStartTimeMax),
+      endTime: zod
+        .string()
+        .max(adminSaveCalendarBookingConversionResponseReviewEndTimeMax),
+      totalEstimate: zod
+        .number()
+        .min(adminSaveCalendarBookingConversionResponseReviewTotalEstimateMin)
+        .max(adminSaveCalendarBookingConversionResponseReviewTotalEstimateMax)
+        .nullable(),
+      confirmedCalendarOnly: zod.boolean(),
+    })
+    .nullable(),
+  reviewLocked: zod.boolean(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  lastError: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+});
+
+export const adminConvertCalendarBookingPathIdMax = 1024;
+
+export const AdminConvertCalendarBookingParams = zod.object({
+  id: zod.coerce.string().min(1).max(adminConvertCalendarBookingPathIdMax),
+});
+
+export const adminConvertCalendarBookingBodyCustomerNameMax = 200;
+
+export const adminConvertCalendarBookingBodyCustomerEmailMax = 254;
+
+export const adminConvertCalendarBookingBodyCustomerPhoneMax = 50;
+
+export const adminConvertCalendarBookingBodyVehicleMakeMax = 100;
+
+export const adminConvertCalendarBookingBodyVehicleModelMax = 100;
+
+export const adminConvertCalendarBookingBodyVehicleColourMax = 100;
+
+export const adminConvertCalendarBookingBodyNotesMax = 4000;
+
+export const adminConvertCalendarBookingBodyServiceNameMax = 300;
+
+export const adminConvertCalendarBookingBodyStartTimeMax = 50;
+
+export const adminConvertCalendarBookingBodyEndTimeMax = 50;
+
+export const adminConvertCalendarBookingBodyTotalEstimateMin = 0;
+export const adminConvertCalendarBookingBodyTotalEstimateMax = 1000000;
+
+export const AdminConvertCalendarBookingBody = zod.object({
+  customer: zod.object({
+    name: zod.string().max(adminConvertCalendarBookingBodyCustomerNameMax),
+    email: zod.string().max(adminConvertCalendarBookingBodyCustomerEmailMax),
+    phone: zod.string().max(adminConvertCalendarBookingBodyCustomerPhoneMax),
+  }),
+  vehicle: zod.object({
+    type: zod
+      .union([
+        zod.literal("car"),
+        zod.literal("suv"),
+        zod.literal("truck"),
+        zod.literal("van"),
+        zod.literal(null),
+      ])
+      .nullable(),
+    year: zod.number().nullable(),
+    make: zod.string().max(adminConvertCalendarBookingBodyVehicleMakeMax),
+    model: zod.string().max(adminConvertCalendarBookingBodyVehicleModelMax),
+    colour: zod.string().max(adminConvertCalendarBookingBodyVehicleColourMax),
+  }),
+  notes: zod.string().max(adminConvertCalendarBookingBodyNotesMax),
+  serviceName: zod.string().max(adminConvertCalendarBookingBodyServiceNameMax),
+  startTime: zod.string().max(adminConvertCalendarBookingBodyStartTimeMax),
+  endTime: zod.string().max(adminConvertCalendarBookingBodyEndTimeMax),
+  totalEstimate: zod
+    .number()
+    .min(adminConvertCalendarBookingBodyTotalEstimateMin)
+    .max(adminConvertCalendarBookingBodyTotalEstimateMax)
+    .nullable(),
+  confirmedCalendarOnly: zod.boolean(),
+});
+
+export const adminConvertCalendarBookingResponseReviewCustomerNameMax = 200;
+
+export const adminConvertCalendarBookingResponseReviewCustomerEmailMax = 254;
+
+export const adminConvertCalendarBookingResponseReviewCustomerPhoneMax = 50;
+
+export const adminConvertCalendarBookingResponseReviewVehicleMakeMax = 100;
+
+export const adminConvertCalendarBookingResponseReviewVehicleModelMax = 100;
+
+export const adminConvertCalendarBookingResponseReviewVehicleColourMax = 100;
+
+export const adminConvertCalendarBookingResponseReviewNotesMax = 4000;
+
+export const adminConvertCalendarBookingResponseReviewServiceNameMax = 300;
+
+export const adminConvertCalendarBookingResponseReviewStartTimeMax = 50;
+
+export const adminConvertCalendarBookingResponseReviewEndTimeMax = 50;
+
+export const adminConvertCalendarBookingResponseReviewTotalEstimateMin = 0;
+export const adminConvertCalendarBookingResponseReviewTotalEstimateMax = 1000000;
+
+export const AdminConvertCalendarBookingResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullable(),
+  location: zod.string().nullable(),
+  htmlUrl: zod.string().nullable(),
+  start: zod.string().nullable(),
+  end: zod.string().nullable(),
+  allDay: zod.boolean(),
+  bookingId: zod.string().nullable(),
+  review: zod
+    .object({
+      customer: zod.object({
+        name: zod
+          .string()
+          .max(adminConvertCalendarBookingResponseReviewCustomerNameMax),
+        email: zod
+          .string()
+          .max(adminConvertCalendarBookingResponseReviewCustomerEmailMax),
+        phone: zod
+          .string()
+          .max(adminConvertCalendarBookingResponseReviewCustomerPhoneMax),
+      }),
+      vehicle: zod.object({
+        type: zod
+          .union([
+            zod.literal("car"),
+            zod.literal("suv"),
+            zod.literal("truck"),
+            zod.literal("van"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        year: zod.number().nullable(),
+        make: zod
+          .string()
+          .max(adminConvertCalendarBookingResponseReviewVehicleMakeMax),
+        model: zod
+          .string()
+          .max(adminConvertCalendarBookingResponseReviewVehicleModelMax),
+        colour: zod
+          .string()
+          .max(adminConvertCalendarBookingResponseReviewVehicleColourMax),
+      }),
+      notes: zod
+        .string()
+        .max(adminConvertCalendarBookingResponseReviewNotesMax),
+      serviceName: zod
+        .string()
+        .max(adminConvertCalendarBookingResponseReviewServiceNameMax),
+      startTime: zod
+        .string()
+        .max(adminConvertCalendarBookingResponseReviewStartTimeMax),
+      endTime: zod
+        .string()
+        .max(adminConvertCalendarBookingResponseReviewEndTimeMax),
+      totalEstimate: zod
+        .number()
+        .min(adminConvertCalendarBookingResponseReviewTotalEstimateMin)
+        .max(adminConvertCalendarBookingResponseReviewTotalEstimateMax)
+        .nullable(),
+      confirmedCalendarOnly: zod.boolean(),
+    })
+    .nullable(),
+  reviewLocked: zod.boolean(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  lastError: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+});
+
+export const adminVerifyCalendarBookingWebhookPathIdMax = 1024;
+
+export const AdminVerifyCalendarBookingWebhookParams = zod.object({
+  id: zod.coerce
+    .string()
+    .min(1)
+    .max(adminVerifyCalendarBookingWebhookPathIdMax),
+});
+
+export const AdminVerifyCalendarBookingWebhookBody = zod.object({
+  verifiedInGhl: zod.boolean(),
+  delivered: zod.boolean(),
+});
+
+export const adminVerifyCalendarBookingWebhookResponseReviewCustomerNameMax = 200;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewCustomerEmailMax = 254;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewCustomerPhoneMax = 50;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewVehicleMakeMax = 100;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewVehicleModelMax = 100;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewVehicleColourMax = 100;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewNotesMax = 4000;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewServiceNameMax = 300;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewStartTimeMax = 50;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewEndTimeMax = 50;
+
+export const adminVerifyCalendarBookingWebhookResponseReviewTotalEstimateMin = 0;
+export const adminVerifyCalendarBookingWebhookResponseReviewTotalEstimateMax = 1000000;
+
+export const AdminVerifyCalendarBookingWebhookResponse = zod.object({
+  id: zod.string(),
+  title: zod.string(),
+  description: zod.string().nullable(),
+  location: zod.string().nullable(),
+  htmlUrl: zod.string().nullable(),
+  start: zod.string().nullable(),
+  end: zod.string().nullable(),
+  allDay: zod.boolean(),
+  bookingId: zod.string().nullable(),
+  review: zod
+    .object({
+      customer: zod.object({
+        name: zod
+          .string()
+          .max(adminVerifyCalendarBookingWebhookResponseReviewCustomerNameMax),
+        email: zod
+          .string()
+          .max(adminVerifyCalendarBookingWebhookResponseReviewCustomerEmailMax),
+        phone: zod
+          .string()
+          .max(adminVerifyCalendarBookingWebhookResponseReviewCustomerPhoneMax),
+      }),
+      vehicle: zod.object({
+        type: zod
+          .union([
+            zod.literal("car"),
+            zod.literal("suv"),
+            zod.literal("truck"),
+            zod.literal("van"),
+            zod.literal(null),
+          ])
+          .nullable(),
+        year: zod.number().nullable(),
+        make: zod
+          .string()
+          .max(adminVerifyCalendarBookingWebhookResponseReviewVehicleMakeMax),
+        model: zod
+          .string()
+          .max(adminVerifyCalendarBookingWebhookResponseReviewVehicleModelMax),
+        colour: zod
+          .string()
+          .max(adminVerifyCalendarBookingWebhookResponseReviewVehicleColourMax),
+      }),
+      notes: zod
+        .string()
+        .max(adminVerifyCalendarBookingWebhookResponseReviewNotesMax),
+      serviceName: zod
+        .string()
+        .max(adminVerifyCalendarBookingWebhookResponseReviewServiceNameMax),
+      startTime: zod
+        .string()
+        .max(adminVerifyCalendarBookingWebhookResponseReviewStartTimeMax),
+      endTime: zod
+        .string()
+        .max(adminVerifyCalendarBookingWebhookResponseReviewEndTimeMax),
+      totalEstimate: zod
+        .number()
+        .min(adminVerifyCalendarBookingWebhookResponseReviewTotalEstimateMin)
+        .max(adminVerifyCalendarBookingWebhookResponseReviewTotalEstimateMax)
+        .nullable(),
+      confirmedCalendarOnly: zod.boolean(),
+    })
+    .nullable(),
+  reviewLocked: zod.boolean(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  lastError: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+});
+
 /**
  * @summary List imported special appointments awaiting review or already converted
  */

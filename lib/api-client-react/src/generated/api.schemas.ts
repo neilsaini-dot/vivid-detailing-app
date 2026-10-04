@@ -5,6 +5,107 @@
  * Vivid Detailing API
  * OpenAPI spec version: 0.1.0
  */
+export interface CalendarWebhookVerification {
+  verifiedInGhl: boolean;
+  delivered: boolean;
+}
+
+export type CalendarBookingReviewCustomer = {
+  /** @maxLength 200 */
+  name: string;
+  /** @maxLength 254 */
+  email: string;
+  /** @maxLength 50 */
+  phone: string;
+};
+
+export type CalendarBookingReviewVehicleType =
+  | (typeof CalendarBookingReviewVehicleType)[keyof typeof CalendarBookingReviewVehicleType]
+  | null;
+
+export const CalendarBookingReviewVehicleType = {
+  car: "car",
+  suv: "suv",
+  truck: "truck",
+  van: "van",
+} as const;
+
+export type CalendarBookingReviewVehicle = {
+  type: CalendarBookingReviewVehicleType;
+  year: number | null;
+  /** @maxLength 100 */
+  make: string;
+  /** @maxLength 100 */
+  model: string;
+  /** @maxLength 100 */
+  colour: string;
+};
+
+export interface CalendarBookingReview {
+  customer: CalendarBookingReviewCustomer;
+  vehicle: CalendarBookingReviewVehicle;
+  /** @maxLength 4000 */
+  notes: string;
+  /** @maxLength 300 */
+  serviceName: string;
+  /** @maxLength 50 */
+  startTime: string;
+  /** @maxLength 50 */
+  endTime: string;
+  /**
+   * @minimum 0
+   * @maximum 1000000
+   */
+  totalEstimate: number | null;
+  confirmedCalendarOnly: boolean;
+}
+
+export type CalendarConversionEventConversionState =
+  (typeof CalendarConversionEventConversionState)[keyof typeof CalendarConversionEventConversionState];
+
+export const CalendarConversionEventConversionState = {
+  review: "review",
+  processing: "processing",
+  failed: "failed",
+  converted: "converted",
+} as const;
+
+export type CalendarConversionEventWebhookState =
+  (typeof CalendarConversionEventWebhookState)[keyof typeof CalendarConversionEventWebhookState];
+
+export const CalendarConversionEventWebhookState = {
+  pending: "pending",
+  sending: "sending",
+  sent: "sent",
+  uncertain: "uncertain",
+} as const;
+
+export interface CalendarConversionEvent {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  htmlUrl: string | null;
+  start: string | null;
+  end: string | null;
+  allDay: boolean;
+  bookingId: string | null;
+  review: CalendarBookingReview | null;
+  reviewLocked: boolean;
+  conversionState: CalendarConversionEventConversionState;
+  webhookState: CalendarConversionEventWebhookState;
+  lastError: string | null;
+  convertedAt: string | null;
+}
+
+export interface CalendarBookingConversionsList {
+  month: string;
+  calendarId: string;
+  events: CalendarConversionEvent[];
+  needsSourceReview: CalendarConversionEvent[];
+  converted: CalendarConversionEvent[];
+}
+
 export type AiBookingReviewBodyCustomer = {
   /** @maxLength 200 */
   name: string;
@@ -980,6 +1081,13 @@ export type CreateBookingDraft201 = {
 
 export type CompleteBookingDraftBody = {
   bookingId: string;
+};
+
+export type AdminListCalendarBookingConversionsParams = {
+  /**
+   * @pattern ^\d{4}-(0[1-9]|1[0-2])$
+   */
+  month: string;
 };
 
 export type AdminCheckAiBookingOrigin200 = {

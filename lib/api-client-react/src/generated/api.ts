@@ -23,6 +23,7 @@ import type {
   AdminCheckAiBookingOrigin200,
   AdminCreateBookingBody,
   AdminListBookingsParams,
+  AdminListCalendarBookingConversionsParams,
   AdminListReviewsParams,
   AdminResolveAiBookingWebhookBody,
   AdminSearchCustomersParams,
@@ -36,6 +37,10 @@ import type {
   Booking,
   BookingDraft,
   CalendarAvailability,
+  CalendarBookingConversionsList,
+  CalendarBookingReview,
+  CalendarConversionEvent,
+  CalendarWebhookVerification,
   CaptureLeadBody,
   CheckReview200,
   CheckReviewParams,
@@ -3038,6 +3043,369 @@ export const useAdminDeleteBookingDraft = <
   TContext
 > => {
   return useMutation(getAdminDeleteBookingDraftMutationOptions(options));
+};
+
+export const getAdminListCalendarBookingConversionsUrl = (
+  params: AdminListCalendarBookingConversionsParams,
+) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/admin/calendar-booking-conversions?${stringifiedParams}`
+    : `/api/admin/calendar-booking-conversions`;
+};
+
+export const adminListCalendarBookingConversions = async (
+  params: AdminListCalendarBookingConversionsParams,
+  options?: RequestInit,
+): Promise<CalendarBookingConversionsList> => {
+  return customFetch<CalendarBookingConversionsList>(
+    getAdminListCalendarBookingConversionsUrl(params),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAdminListCalendarBookingConversionsQueryKey = (
+  params?: AdminListCalendarBookingConversionsParams,
+) => {
+  return [
+    `/api/admin/calendar-booking-conversions`,
+    ...(params ? [params] : []),
+  ] as const;
+};
+
+export const getAdminListCalendarBookingConversionsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListCalendarBookingConversions>>,
+  TError = ErrorType<void>,
+>(
+  params: AdminListCalendarBookingConversionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListCalendarBookingConversions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ??
+    getAdminListCalendarBookingConversionsQueryKey(params);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListCalendarBookingConversions>>
+  > = ({ signal }) =>
+    adminListCalendarBookingConversions(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListCalendarBookingConversions>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListCalendarBookingConversionsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListCalendarBookingConversions>>
+>;
+export type AdminListCalendarBookingConversionsQueryError = ErrorType<void>;
+
+export function useAdminListCalendarBookingConversions<
+  TData = Awaited<ReturnType<typeof adminListCalendarBookingConversions>>,
+  TError = ErrorType<void>,
+>(
+  params: AdminListCalendarBookingConversionsParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminListCalendarBookingConversions>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListCalendarBookingConversionsQueryOptions(
+    params,
+    options,
+  );
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+export const getAdminSaveCalendarBookingConversionUrl = (id: string) => {
+  return `/api/admin/calendar-booking-conversions/${id}`;
+};
+
+export const adminSaveCalendarBookingConversion = async (
+  id: string,
+  calendarBookingReview: CalendarBookingReview,
+  options?: RequestInit,
+): Promise<CalendarConversionEvent> => {
+  return customFetch<CalendarConversionEvent>(
+    getAdminSaveCalendarBookingConversionUrl(id),
+    {
+      ...options,
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(calendarBookingReview),
+    },
+  );
+};
+
+export const getAdminSaveCalendarBookingConversionMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSaveCalendarBookingConversion>>,
+    TError,
+    { id: string; data: BodyType<CalendarBookingReview> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminSaveCalendarBookingConversion>>,
+  TError,
+  { id: string; data: BodyType<CalendarBookingReview> },
+  TContext
+> => {
+  const mutationKey = ["adminSaveCalendarBookingConversion"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminSaveCalendarBookingConversion>>,
+    { id: string; data: BodyType<CalendarBookingReview> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminSaveCalendarBookingConversion(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminSaveCalendarBookingConversionMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminSaveCalendarBookingConversion>>
+>;
+export type AdminSaveCalendarBookingConversionMutationBody =
+  BodyType<CalendarBookingReview>;
+export type AdminSaveCalendarBookingConversionMutationError =
+  ErrorType<unknown>;
+
+export const useAdminSaveCalendarBookingConversion = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSaveCalendarBookingConversion>>,
+    TError,
+    { id: string; data: BodyType<CalendarBookingReview> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminSaveCalendarBookingConversion>>,
+  TError,
+  { id: string; data: BodyType<CalendarBookingReview> },
+  TContext
+> => {
+  return useMutation(
+    getAdminSaveCalendarBookingConversionMutationOptions(options),
+  );
+};
+
+export const getAdminConvertCalendarBookingUrl = (id: string) => {
+  return `/api/admin/calendar-booking-conversions/${id}/convert`;
+};
+
+export const adminConvertCalendarBooking = async (
+  id: string,
+  calendarBookingReview: CalendarBookingReview,
+  options?: RequestInit,
+): Promise<CalendarConversionEvent> => {
+  return customFetch<CalendarConversionEvent>(
+    getAdminConvertCalendarBookingUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(calendarBookingReview),
+    },
+  );
+};
+
+export const getAdminConvertCalendarBookingMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminConvertCalendarBooking>>,
+    TError,
+    { id: string; data: BodyType<CalendarBookingReview> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminConvertCalendarBooking>>,
+  TError,
+  { id: string; data: BodyType<CalendarBookingReview> },
+  TContext
+> => {
+  const mutationKey = ["adminConvertCalendarBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminConvertCalendarBooking>>,
+    { id: string; data: BodyType<CalendarBookingReview> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminConvertCalendarBooking(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminConvertCalendarBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminConvertCalendarBooking>>
+>;
+export type AdminConvertCalendarBookingMutationBody =
+  BodyType<CalendarBookingReview>;
+export type AdminConvertCalendarBookingMutationError = ErrorType<unknown>;
+
+export const useAdminConvertCalendarBooking = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminConvertCalendarBooking>>,
+    TError,
+    { id: string; data: BodyType<CalendarBookingReview> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminConvertCalendarBooking>>,
+  TError,
+  { id: string; data: BodyType<CalendarBookingReview> },
+  TContext
+> => {
+  return useMutation(getAdminConvertCalendarBookingMutationOptions(options));
+};
+
+export const getAdminVerifyCalendarBookingWebhookUrl = (id: string) => {
+  return `/api/admin/calendar-booking-conversions/${id}/verify-webhook`;
+};
+
+export const adminVerifyCalendarBookingWebhook = async (
+  id: string,
+  calendarWebhookVerification: CalendarWebhookVerification,
+  options?: RequestInit,
+): Promise<CalendarConversionEvent> => {
+  return customFetch<CalendarConversionEvent>(
+    getAdminVerifyCalendarBookingWebhookUrl(id),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(calendarWebhookVerification),
+    },
+  );
+};
+
+export const getAdminVerifyCalendarBookingWebhookMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminVerifyCalendarBookingWebhook>>,
+    TError,
+    { id: string; data: BodyType<CalendarWebhookVerification> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminVerifyCalendarBookingWebhook>>,
+  TError,
+  { id: string; data: BodyType<CalendarWebhookVerification> },
+  TContext
+> => {
+  const mutationKey = ["adminVerifyCalendarBookingWebhook"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminVerifyCalendarBookingWebhook>>,
+    { id: string; data: BodyType<CalendarWebhookVerification> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminVerifyCalendarBookingWebhook(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminVerifyCalendarBookingWebhookMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminVerifyCalendarBookingWebhook>>
+>;
+export type AdminVerifyCalendarBookingWebhookMutationBody =
+  BodyType<CalendarWebhookVerification>;
+export type AdminVerifyCalendarBookingWebhookMutationError = ErrorType<unknown>;
+
+export const useAdminVerifyCalendarBookingWebhook = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminVerifyCalendarBookingWebhook>>,
+    TError,
+    { id: string; data: BodyType<CalendarWebhookVerification> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminVerifyCalendarBookingWebhook>>,
+  TError,
+  { id: string; data: BodyType<CalendarWebhookVerification> },
+  TContext
+> => {
+  return useMutation(
+    getAdminVerifyCalendarBookingWebhookMutationOptions(options),
+  );
 };
 
 /**

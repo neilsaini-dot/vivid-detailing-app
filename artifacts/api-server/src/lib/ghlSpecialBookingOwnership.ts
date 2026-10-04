@@ -37,3 +37,15 @@ export async function isAiConvertedBooking(bookingId: string): Promise<boolean> 
     throw cause;
   }
 }
+
+export async function hasPendingCalendarConversion(bookingId: string): Promise<boolean> {
+  try {
+    const [conversion] = await db.select({ state: aiBookingConversionsTable.state, origin: aiBookingConversionsTable.botOrigin })
+      .from(aiBookingConversionsTable).where(eq(aiBookingConversionsTable.bookingId, bookingId));
+    return conversion?.origin === "google_calendar" && conversion.state !== "converted";
+  } catch (cause) {
+    const code = cause as { code?: string; cause?: { code?: string } };
+    if (code.code === "42P01" || code.cause?.code === "42P01") return false;
+    throw cause;
+  }
+}

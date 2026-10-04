@@ -14,6 +14,7 @@ import authRouter from "./auth";
 import reviewsRouter from "./reviews";
 import ghlSpecialsRouter from "./ghl-specials";
 import aiBookingsRouter from "./ai-bookings";
+import calendarBookingConversionsRouter from "./calendar-booking-conversions";
 
 const router: IRouter = Router();
 
@@ -32,5 +33,6 @@ router.use(authRouter);
 router.use(reviewsRouter);
 router.use(ghlSpecialsRouter);
 router.use(aiBookingsRouter);
+router.use(calendarBookingConversionsRouter);
 
 export default router;

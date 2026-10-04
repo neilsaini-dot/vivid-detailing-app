@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CalendarBookingsSection } from "@/components/admin/calendar-bookings-section";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { AlertTriangle, RefreshCw, CheckCircle2, Sparkles, ExternalLink } from "lucide-react";
@@ -280,20 +281,16 @@ export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: st
     qc.invalidateQueries({ predicate: q => typeof q.queryKey[0] === "string" && /calendar|admin\/bookings/.test(q.queryKey[0] as string) });
   };
 
-  if (isLoading) return <div className="space-y-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>;
-  if (error) {
-    const unavailable = (error as any)?.status === 503;
-    return (
+  const unavailable = (error as any)?.status === 503;
+  const ghlContent = isLoading ? <div className="space-y-3">{[0, 1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
+    : error ? (
       <div className="border border-border bg-card rounded-lg p-8 text-center space-y-3" data-testid="state-ai-error">
         <AlertTriangle className="h-6 w-6 mx-auto text-amber-500" />
         <p className="font-semibold">{unavailable ? "SQL setup needed" : "Couldn't load AI bookings"}</p>
-          <p className="text-sm text-muted-foreground">{unavailable ? "Run the latest scripts/migrate-ai-booking-conversions.sql in Supabase, even if you ran an earlier version, then retry." : errMessage(error).message}</p>
+        <p className="text-sm text-muted-foreground">{unavailable ? "Run the latest scripts/migrate-ai-booking-conversions.sql in Supabase, even if you ran an earlier version, then retry." : errMessage(error).message}</p>
         <Button variant="outline" onClick={() => refetch()} data-testid="button-retry-ai">Retry</Button>
       </div>
-    );
-  }
-
-  return (
+    ) : (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /><p className="text-sm text-muted-foreground">HighLevel bookings, including manual, chat and voice bookings. Convert creates the app Google event, deletes the HighLevel appointment, then sends confirmation.</p></div>
@@ -332,6 +329,14 @@ export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: st
         }}
         onOpenBooking={() => { if (selected) { setSelectedId(null); onOpenBooking(selected.id); } }}
       />
+    </div>
+    );
+
+  return (
+    <div className="space-y-8">
+      <h2 className="text-xl font-semibold" data-testid="heading-manual-booking-conversions">Manual Booking Conversions</h2>
+      {ghlContent}
+      <CalendarBookingsSection onOpenBooking={onOpenBooking} />
     </div>
   );
 }

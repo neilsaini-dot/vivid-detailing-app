@@ -80,7 +80,7 @@ export async function rememberAiBotOrigin(id: string, origin: BotOrigin) {
   await db.insert(aiBookingConversionsTable).values({ bookingId: id, botOrigin: origin })
     .onConflictDoNothing({ target: aiBookingConversionsTable.bookingId });
 }
-function validateReview(body: Review, converting: boolean): Review {
+export function validateReview(body: Review, converting: boolean): Review {
   const clean = {
     customer: { name: body.customer.name.trim(), email: body.customer.email.trim().toLowerCase(), phone: body.customer.phone.trim() },
     vehicle: { ...body.vehicle, make: body.vehicle.make.trim(), model: body.vehicle.model.trim(), colour: body.vehicle.colour.trim() },

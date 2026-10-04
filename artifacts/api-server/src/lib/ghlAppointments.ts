@@ -80,6 +80,49 @@ export async function deleteGhlAppointment(identity: GhlAppointmentIdentity, set
   if (result?.succeeded !== true) throw new GhlAppointmentApiError(424, "GHL did not confirm appointment deletion. Check and delete it manually.");
 }
 
+export interface GhlCalendarEvent {
+  id: string;
+  startTime: string;
+  endTime?: string;
+  title?: string;
+  googleEventId?: string;
+  externalCalendarEventId?: string;
+  iCalUID?: string;
+}
+
+/** Read every calendar in the configured location, not only specials/intake mappings. */
+export async function listGhlCalendarEvents(start: Date, end: Date, settings: Config = config()): Promise<GhlCalendarEvent[]> {
+  const get = async (path: string) => {
+    const response = await (settings.fetcher ?? fetch)(`${API}${path}`, options(settings, "GET"));
+    if (!response.ok) throw new GhlAppointmentApiError(424,
+      `HighLevel calendar source verification failed (HTTP ${response.status}). Check calendars.readonly and calendars/events.readonly permissions.`);
+    return response.json() as Promise<Record<string, unknown>>;
+  };
+  const data = await get(`/calendars/?${new URLSearchParams({ locationId: settings.locationId })}`);
+  if (!Array.isArray(data.calendars)) throw new GhlAppointmentApiError(424, "HighLevel did not return a complete calendar list.");
+  const ids = data.calendars.map(calendar => (calendar as { id?: string }).id);
+  if (ids.some(id => !id)) throw new GhlAppointmentApiError(424, "HighLevel returned an invalid calendar identity.");
+  const events: GhlCalendarEvent[] = [];
+  for (let offset = 0; offset < ids.length; offset += 4) {
+    const batch = await Promise.all(ids.slice(offset, offset + 4).map(async calendarId => {
+      const payload = await get(`/calendars/events?${new URLSearchParams({
+        locationId: settings.locationId, calendarId: calendarId!,
+        startTime: String(start.getTime()), endTime: String(end.getTime()),
+      })}`);
+      if (!Array.isArray(payload.events) || payload.nextPageToken || payload.nextPage) {
+        throw new GhlAppointmentApiError(424, "HighLevel did not return a complete appointment list. Source verification cannot proceed.");
+      }
+      const rows = payload.events as GhlCalendarEvent[];
+      if (rows.some(event => !event.id || !event.startTime || !Number.isFinite(new Date(event.startTime).getTime()))) {
+        throw new GhlAppointmentApiError(424, "HighLevel returned appointments without valid identities or times.");
+      }
+      return rows;
+    }));
+    events.push(...batch.flat());
+  }
+  return events;
+}
+
 export async function inspectAppointmentLookup(identity: GhlAppointmentIdentity, settings: Config = config()) {
   checkLocation(identity, settings);
   const response = await (settings.fetcher ?? fetch)(

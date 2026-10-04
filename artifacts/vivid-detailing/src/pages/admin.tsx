@@ -2943,7 +2943,7 @@ function AdminDashboard() {
             <TabsTrigger value="promos">Seasonal</TabsTrigger>
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
             <TabsTrigger value="supplies">Supplies</TabsTrigger>
-            <TabsTrigger value="ai-bookings" data-testid="tab-ai-bookings">AI Bookings</TabsTrigger>
+            <TabsTrigger value="ai-bookings" data-testid="tab-ai-bookings">Manual Booking Conversions</TabsTrigger>
           </TabsList>
         </div>
 

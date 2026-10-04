@@ -5,13 +5,13 @@ import {
   AdminResolveAiBookingWebhookParams, AdminResolveAiBookingWebhookBody, AdminResolveAiBookingWebhookResponse,
 } from "@workspace/api-zod";
 import { AiConversionError, readAiBookings, saveAiBooking, convertAiBooking, resolveAiWebhook } from "../lib/aiBookingConversion";
-import { syncAiBookingCalendar } from "../lib/aiBookingCalendarSync";
+import { GhlAppointmentApiError } from "../lib/ghlAppointments";
 
-const defaults = { readAiBookings, saveAiBooking, convertAiBooking, resolveAiWebhook, syncAiBookingCalendar };
+const defaults = { readAiBookings, saveAiBooking, convertAiBooking, resolveAiWebhook };
 function handleError(req: Request, res: Response, cause: unknown) {
-  if (cause instanceof AiConversionError) { res.status(cause.status).json({ error: cause.message }); return; }
+  if (cause instanceof AiConversionError || cause instanceof GhlAppointmentApiError) { res.status(cause.status).json({ error: cause.message }); return; }
   const failure = cause as { code?: string; cause?: { code?: string } };
-  if (failure.code === "42P01" || failure.cause?.code === "42P01") {
+  if (["42P01", "42703"].includes(failure.code ?? "") || ["42P01", "42703"].includes(failure.cause?.code ?? "")) {
     res.status(503).json({ error: "AI conversion setup is required. Run scripts/migrate-ai-booking-conversions.sql in the existing Supabase database." });
     return;
   }
@@ -40,7 +40,6 @@ router.post("/admin/ai-bookings/:id/convert", async (req, res): Promise<void> =>
   if (!params.success || !body.success) { res.status(422).json({ error: "Invalid review details." }); return; }
   try {
     await services.convertAiBooking(params.data.id, body.data);
-    await services.syncAiBookingCalendar(params.data.id).catch(() => req.log.warn("AI booking converted but final calendar reconciliation could not be confirmed"));
     res.json(AdminConvertAiBookingResponse.parse((await services.readAiBookings()).find(b => b.id === params.data.id)));
   } catch (cause) { handleError(req, res, cause); }
 });

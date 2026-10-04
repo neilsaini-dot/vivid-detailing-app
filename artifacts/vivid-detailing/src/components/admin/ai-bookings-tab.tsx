@@ -34,6 +34,7 @@ function StateBadges({ b }: { b: AiBooking }) {
     <div className="flex flex-wrap gap-1.5">
       <Badge variant="outline" className={cls} data-testid={`status-conversion-${b.id}`}>{conv}</Badge>
       <Badge variant="outline" className={whCls} data-testid={`status-webhook-${b.id}`}>{wh}</Badge>
+      {b.requiresGhlCleanup && <Badge variant="outline" className="text-amber-500 border-amber-500/30" data-testid={`status-ghl-cleanup-${b.id}`}>Delete GHL manually</Badge>}
     </div>
   );
 }
@@ -43,7 +44,7 @@ function Row({ b, onAction, actionLabel }: { b: AiBooking; onAction: () => void;
     <div className="bg-card border border-border rounded-lg p-4 grid gap-3 md:grid-cols-[1.1fr_1.2fr_1.3fr_auto_1.2fr_auto] md:items-center" data-testid={`row-ai-booking-${b.id}`}>
       <div>
         <p className="font-semibold text-sm">{specialLabel(b.special)}</p>
-        <p className="text-xs text-muted-foreground capitalize">{b.status} in GHL</p>
+        <p className="text-xs text-muted-foreground capitalize">{b.status} · {b.conversionState === "converted" ? "App owned" : b.botOrigin === "voice_bot" ? "Voice bot" : "Chat bot"}</p>
       </div>
       <div className="text-sm min-w-0">
         <p className="font-medium truncate">{b.customer.name || "Name missing"}</p>
@@ -118,12 +119,12 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
   const typeOk = ["car", "suv", "truck", "van"].includes(form.type);
   const converted = booking.conversionState === "converted";
   const needsVerify = booking.webhookState === "uncertain" || booking.webhookState === "sending" || booking.conversionState === "processing";
-  const frozen = booking.webhookState !== "pending" || booking.conversionState === "processing";
+   const frozen = !!booking.calendarEventId || booking.webhookState !== "pending" || booking.conversionState === "processing";
   const lockFields = converted || frozen;
   const webhookLocked = booking.webhookState === "uncertain" || booking.webhookState === "sending";
-  const canConvert = !busy && !converted && !webhookLocked && booking.conversionState !== "processing" && !!form.name.trim() && digits.length >= 7 && !phoneBad && typeOk && !yearBad && !emailBad;
-  const canSave = !busy && !converted && !frozen && typeOk && !yearBad && !emailBad;
-  const retry = booking.webhookState === "sent" && !converted;
+  const canConvert = isActive(booking) && !busy && !converted && !webhookLocked && booking.conversionState !== "processing" && !!form.name.trim() && digits.length >= 7 && !phoneBad && typeOk && !yearBad && !emailBad;
+  const canSave = !busy && !converted && !frozen && typeOk && !yearBad && !emailBad && (!form.phone.trim() || (digits.length >= 7 && !phoneBad));
+  const retry = booking.conversionState === "failed" && !converted;
 
   const body = (): AiBookingReviewBody => frozen ? bodyOf(toForm(booking)) : bodyOf(form);
   const bodyOf = (form: Form): AiBookingReviewBody => ({
@@ -163,10 +164,18 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
           <div className="bg-card border border-border rounded-lg p-4 grid grid-cols-2 gap-y-1.5 text-sm">
             <span className="text-muted-foreground">GHL appointment</span><span data-testid="text-ghl-schedule">{fmtHalifax(booking.appointmentAt)}</span>
             <span className="text-muted-foreground">Ends</span><span>{fmtHalifax(booking.appointmentEndAt)}</span>
-            <span className="text-muted-foreground">Booking ID</span><span className="font-mono text-xs break-all select-all" data-testid="text-ghl-id">{booking.ghlAppointmentId}</span>
+            <span className="text-muted-foreground">App booking ID</span><span className="font-mono text-xs break-all select-all">{booking.id}</span>
+            <span className="text-muted-foreground">Original GHL ID</span><span className="font-mono text-xs break-all select-all" data-testid="text-ghl-id">{booking.ghlAppointmentId}</span>
             <span className="text-muted-foreground">Price</span><span className="font-semibold">{money(booking.totalEstimate)}</span>
-            <p className="col-span-2 text-xs text-muted-foreground pt-2">Schedule is managed in GoHighLevel. Reschedule there.</p>
+            <p className="col-span-2 text-xs text-muted-foreground pt-2">{converted ? "This booking is app-owned. Reschedule or cancel it in the usual Bookings tab." : "Before conversion, schedule changes are made in GoHighLevel. Conversion transfers ownership to the app."}</p>
           </div>
+          {booking.requiresGhlCleanup && (
+            <div className="border border-amber-500/30 bg-amber-500/10 text-amber-500 rounded-lg p-3 text-sm" data-testid="alert-ghl-cleanup">
+              <p className="font-semibold">Delete the original GHL appointment manually</p>
+              <p>{booking.ghlDeleteError || "The API delete was not confirmed."}</p>
+              <p className="text-xs mt-1">The app booking and its Google event are kept. Delete the original appointment using the GHL ID above; do not cancel it.</p>
+            </div>
+          )}
 
           {webhookLocked && (
             <div className="flex gap-2 border border-amber-500/30 bg-amber-500/10 text-amber-500 rounded-lg p-3 text-sm" data-testid="alert-webhook-uncertain">
@@ -181,7 +190,7 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
                 <input type="checkbox" className="mt-1" checked={checked} onChange={e => setChecked(e.target.checked)} data-testid="checkbox-verified-ghl" />
                 <span>I checked the booking-confirmed automation history in GoHighLevel for this customer.</span>
               </label>
-              <p className="text-xs text-amber-500">Do not mark "not delivered" without checking. A wrong answer sends a duplicate automation to the customer. The server refuses verification until 2 minutes after a conversion starts.</p>
+              <p className="text-xs text-amber-500">Do not mark "not delivered" without checking. A wrong answer may send a duplicate confirmation. In-progress requests have a 2-minute safety wait before verification.</p>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" disabled={!checked || busy} onClick={() => verify(true)} data-testid="button-mark-delivered">
                   {resolve.isPending ? "Saving…" : "Mark delivered"}</Button>
@@ -191,7 +200,7 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
           )}
           {retry && (
             <div className="border border-border bg-card rounded-lg p-3 text-sm text-muted-foreground" data-testid="alert-calendar-retry">
-              The confirmation webhook already went out. Retrying only creates the missing Google Calendar event.
+              Retrying resumes unfinished steps only. A recorded Google event, completed GHL delete, and acknowledged webhook are not repeated.
             </div>
           )}
           {lastError && (
@@ -227,7 +236,7 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
               {save.isPending ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving…</> : "Save details"}
             </Button>
             <Button disabled={!canConvert} onClick={() => run("convert")} data-testid="button-convert-ai">
-              {convert.isPending ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Converting…</> : retry ? "Retry calendar event" : "Convert to booking"}
+              {convert.isPending ? <><RefreshCw className="h-3.5 w-3.5 mr-1.5 animate-spin" />Converting…</> : retry ? "Resume conversion" : "Convert to booking"}
             </Button>
             {converted && <Button variant="ghost" onClick={onOpenBooking} data-testid="button-open-booking-sheet">Open booking</Button>}
           </div>
@@ -265,7 +274,7 @@ export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: st
       <div className="border border-border bg-card rounded-lg p-8 text-center space-y-3" data-testid="state-ai-error">
         <AlertTriangle className="h-6 w-6 mx-auto text-amber-500" />
         <p className="font-semibold">{unavailable ? "SQL setup needed" : "Couldn't load AI bookings"}</p>
-        <p className="text-sm text-muted-foreground">{unavailable ? "The AI bookings tables aren't available yet. Run the SQL setup, then retry. Nothing is shown because we can't tell what's waiting." : errMessage(error).message}</p>
+          <p className="text-sm text-muted-foreground">{unavailable ? "Run the latest scripts/migrate-ai-booking-conversions.sql in Supabase, even if you ran an earlier version, then retry." : errMessage(error).message}</p>
         <Button variant="outline" onClick={() => refetch()} data-testid="button-retry-ai">Retry</Button>
       </div>
     );
@@ -274,18 +283,20 @@ export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: st
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /><p className="text-sm text-muted-foreground">Specials imported from GoHighLevel. Schedules are managed there.</p></div>
+        <div className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /><p className="text-sm text-muted-foreground">Chat and voice-bot specials only. Convert creates the app Google event, deletes the GHL appointment, then sends confirmation.</p></div>
         <Button size="sm" variant="ghost" onClick={() => refetch()} disabled={isFetching} data-testid="button-refresh-ai"><RefreshCw className={`h-3.5 w-3.5 mr-1.5 ${isFetching ? "animate-spin" : ""}`} />Refresh</Button>
       </div>
-      <Section title="Review queue" items={queue} empty="Nothing waiting. New AI specials appear here automatically." actionLabel="Review" onAction={b => setSelectedId(b.id)} />
+      <Section title="Review queue" hint="Only explicit chat/voice-bot origins are included. Unknown origins are excluded; bot-specific webhook intake can supply bookingOrigin." items={queue} empty="No verified bot bookings waiting. App and Google-origin appointments do not appear here." actionLabel="Review" onAction={b => setSelectedId(b.id)} />
       <Section title="Converted history" items={history} empty="No converted specials yet." actionLabel="Details" onAction={b => setSelectedId(b.id)} />
       {history.length > 0 && (
         <div className="grid gap-2 md:grid-cols-2">
           {history.map(b => (
             <div key={b.id} className="text-xs text-muted-foreground bg-card border border-border rounded-lg p-3 space-y-1" data-testid={`receipt-${b.id}`}>
               <p className="text-foreground font-medium flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-green-500" />{b.customer.name || "Customer"} · {fmtHalifax(b.convertedAt)}</p>
-              <p>Google event: <span className="font-mono">{b.calendarEventId ?? "not created"}</span></p>
+              <p>Google event: <span className="font-mono break-all">{b.calendarEventId ?? "not created"}</span></p>
               <p>Delivery: {b.webhookState}</p>
+              <p>Original GHL appointment: {b.ghlDeleteState}</p>
+              {b.requiresGhlCleanup && <p className="text-amber-500" data-testid={`receipt-ghl-cleanup-${b.id}`}>Manual delete required · <span className="font-mono break-all select-all">{b.ghlAppointmentId}</span></p>}
               <Button size="sm" variant="ghost" className="h-7 px-2 text-xs" onClick={() => onOpenBooking(b.id)} data-testid={`button-open-booking-${b.id}`}><ExternalLink className="h-3 w-3 mr-1" />Open booking</Button>
             </div>
           ))}
@@ -300,7 +311,10 @@ export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: st
         onSaved={b => { patch(b); invalidate(); toast({ title: "Details saved" }); }}
         onConverted={b => {
           patch(b); invalidate();
-          if (b.conversionState === "converted") { setSelectedId(null); toast({ title: "Converted to booking", description: "Confirmation sent and Google event created." }); }
+          if (b.conversionState === "converted") { setSelectedId(null); toast({
+            title: b.requiresGhlCleanup ? "Converted — GHL cleanup required" : "Converted to booking",
+            description: b.requiresGhlCleanup ? "App Google event created and confirmation sent. Delete the original GHL appointment manually." : "App Google event created, original GHL appointment deleted, and confirmation sent.",
+          }); }
           else toast({ variant: "destructive", title: "Conversion incomplete", description: b.lastError ?? "Review the error and retry." });
         }}
         onOpenBooking={() => { if (selected) { setSelectedId(null); onOpenBooking(selected.id); } }}

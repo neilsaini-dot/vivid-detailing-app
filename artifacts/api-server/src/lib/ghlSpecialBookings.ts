@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
   db, bookingsTable, bookingItemsTable, customersTable, vehiclesTable,
-  serviceHistoryTable, loyaltyActivityTable, ghlSpecialAppointmentsTable,
+  serviceHistoryTable, loyaltyActivityTable, ghlSpecialAppointmentsTable, aiBookingConversionsTable,
 } from "@workspace/db";
 import { SyncGhlSpecialBookingBody } from "@workspace/api-zod";
 import {
@@ -38,6 +38,10 @@ function validOptionalYear(raw: unknown): boolean {
 export function normaliseSpecialInput(raw: unknown, ignoredFields: string[] = []): unknown {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return raw;
   const body = { ...raw } as Record<string, unknown>;
+  if (body.bookingOrigin !== undefined && body.bookingOrigin !== "chat_bot" && body.bookingOrigin !== "voice_bot") {
+    delete body.bookingOrigin;
+    ignoredFields.push("bookingOrigin");
+  }
   if (typeof body.appointmentStatus === "string") {
     body.appointmentStatus = body.appointmentStatus.trim().toLowerCase();
   }
@@ -287,6 +291,16 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
     const [booking] = mapping?.bookingId
       ? await tx.select().from(bookingsTable).where(eq(bookingsTable.id, mapping.bookingId)).limit(1).for("update")
       : [];
+    if (booking?.createdByAdmin) {
+      // Claiming conversion transfers ownership. Deleting the original GHL
+      // appointment may send late cancellation/status callbacks; ignore them.
+      const [conversion] = await tx.select({
+        state: aiBookingConversionsTable.state, calendarEventId: aiBookingConversionsTable.calendarEventId,
+      }).from(aiBookingConversionsTable).where(eq(aiBookingConversionsTable.bookingId, booking.id));
+      if (conversion?.state === "processing" || conversion?.state === "converted" || conversion?.calendarEventId) {
+        return response("ignored", special, booking, "appointment_transferred_to_app");
+      }
+    }
     if (mapping && mapping.calendarId !== input.calendarId) {
       throw new SpecialSyncError(409, "calendar_changed", "An existing appointment cannot move between special calendars; cancel it and create a new appointment.");
     }

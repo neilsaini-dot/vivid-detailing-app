@@ -8,12 +8,21 @@ import { db, pool, bookingsTable, customersTable, vehiclesTable, aiBookingConver
 import { SyncGhlSpecialBookingBody } from "@workspace/api-zod";
 import { syncSpecialAppointment } from "../src/lib/ghlSpecialBookings";
 import { SPECIAL_CALENDARS } from "../src/lib/ghlSpecialsConfig";
-import { convertAiBooking, saveAiBooking, readAiBookings, resolveAiWebhook, AiConversionError, aiCalendarEventId } from "../src/lib/aiBookingConversion";
+import { convertAiBooking as convertAiBookingReal, saveAiBooking, readAiBookings as readAiBookingsReal, resolveAiWebhook, AiConversionError, aiCalendarEventId } from "../src/lib/aiBookingConversion";
+import { appointmentOrigin, deleteGhlAppointment, getAppointmentOrigin } from "../src/lib/ghlAppointments";
+import { isGhlSpecialBooking } from "../src/lib/ghlSpecialBookingOwnership";
 import { GhlConversionDeliveryError } from "../src/lib/ghl";
 import { createAiBookingsRouter } from "../src/routes/ai-bookings";
+import { createGhlSpecialBookingHandler } from "../src/routes/ghl-specials";
 
 after(async () => { await pool.end(); });
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+const readAiBookings = (database: Pick<typeof db, "select"> = db) => readAiBookingsReal(database, async () => "chat_bot");
+const convertAiBooking = (id: string, body: Parameters<typeof convertAiBookingReal>[1], database: Parameters<typeof convertAiBookingReal>[2],
+  effects: Partial<NonNullable<Parameters<typeof convertAiBookingReal>[3]>>) => convertAiBookingReal(id, body, database, {
+    webhook: async () => {}, calendar: async () => "synthetic-calendar",
+    origin: async () => "chat_bot", deleteAppointment: async () => {}, ...effects,
+  });
 async function rollback(fn: (tx: Tx) => Promise<void>) {
   const stop = new Error("intentional rollback");
   try { await db.transaction(async tx => { await fn(tx); throw stop; }); }
@@ -58,6 +67,7 @@ test("review enriches the same booking without external effects; conversion send
           calendars++;
           assert.equal(event.id, aiCalendarEventId(id));
           assert.equal(event.bookingId, id);
+          assert.equal(event.calendarId, "contact@vividpei.com");
           assert.equal(event.startIso, "2027-01-12T13:00:00.000Z");
           assert.equal(event.durationHours, 6);
           return event.id;
@@ -97,21 +107,24 @@ test("review reprices vehicle types, preserves enriched data on GHL updates, and
   });
 });
 
-test("calendar failure retries only calendar; a sent webhook locks reviewed data", async () => {
+test("calendar failure preserves GHL and sends no webhook; retry resumes the ordered conversion", async () => {
   await rollback(async tx => {
     const { id } = await imported(tx);
-    let hooks = 0, calendars = 0;
-    const effects = { webhook: async () => { hooks++; }, calendar: async () => { calendars++; return calendars === 1 ? null : "synthetic-calendar"; } };
+    let hooks = 0, calendars = 0, deletes = 0;
+    const effects = { webhook: async () => { hooks++; }, deleteAppointment: async () => { deletes++; },
+      calendar: async () => { calendars++; return calendars === 1 ? null : "synthetic-calendar"; } };
     await assert.rejects(() => convertAiBooking(id, review(), tx, effects), e => e instanceof AiConversionError && e.status === 502);
     let row = (await readAiBookings(tx)).find(b => b.id === id)!;
     assert.equal(row.conversionState, "failed");
-    assert.equal(row.webhookState, "sent");
-    await assert.rejects(() => convertAiBooking(id, { ...review(), notes: "different" }, tx, effects), AiConversionError);
+    assert.equal(row.webhookState, "pending");
+    assert.equal(hooks, 0);
+    assert.equal(deletes, 0);
     await convertAiBooking(id, review(), tx, effects);
     row = (await readAiBookings(tx)).find(b => b.id === id)!;
     assert.equal(row.conversionState, "converted");
     assert.equal(hooks, 1);
     assert.equal(calendars, 2);
+    assert.equal(deletes, 1);
   });
 });
 
@@ -201,7 +214,6 @@ test("real HTTP routes list, save, convert, validate, and return the existing bo
       saveAiBooking: (id, body) => saveAiBooking(id, body, tx),
       convertAiBooking: (id, body) => convertAiBooking(id, body, tx, effects),
       resolveAiWebhook: (id, checked, delivered) => resolveAiWebhook(id, checked, delivered, tx),
-      syncAiBookingCalendar: async () => {},
     }));
     const server = app.listen(0, "127.0.0.1");
     await new Promise<void>(resolve => server.once("listening", resolve));
@@ -222,4 +234,171 @@ test("real HTTP routes list, save, convert, validate, and return the existing bo
       assert.equal(hooks, 1);
     } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
   });
+});
+
+test("conversion creates a new contact@ event, deletes GHL, confirms, then transfers scheduling ownership", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx);
+    await tx.update(bookingsTable).set({ calendarEventId: "old-ghl-google-mirror" }).where(eq(bookingsTable.id, id));
+    const steps: string[] = [];
+    assert.equal(await isGhlSpecialBooking(id, tx, true), true);
+    const effects = {
+      calendar: async (event: any) => {
+        steps.push("google");
+        assert.equal(event.calendarId, "contact@vividpei.com");
+        assert.ok(event.summary.startsWith("Vivid Detailing - Synthetic AI Review - "));
+        assert.ok(event.description.includes(`Booking ID: ${id}`));
+        return event.id;
+      },
+      deleteAppointment: async (identity: any) => {
+        steps.push("delete");
+        assert.equal(identity.appointmentId, input.appointmentId);
+        const [receipt] = await tx.select().from(aiBookingConversionsTable).where(eq(aiBookingConversionsTable.bookingId, id));
+        assert.equal(receipt.calendarEventId, aiCalendarEventId(id));
+        assert.equal(receipt.webhookState, "pending");
+        const callback = await syncSpecialAppointment({ ...input, appointmentStatus: "cancelled" }, tx);
+        assert.equal(callback.action, "ignored");
+        assert.equal(callback.status, "pending");
+      },
+      webhook: async () => {
+        steps.push("confirmation");
+        const [receipt] = await tx.select().from(aiBookingConversionsTable).where(eq(aiBookingConversionsTable.bookingId, id));
+        assert.equal(receipt.ghlDeleteState, "deleted");
+        assert.equal(receipt.state, "processing");
+      },
+    };
+    await convertAiBooking(id, review(), tx, effects);
+    assert.deepEqual(steps, ["google", "delete", "confirmation"]);
+    const row = (await readAiBookings(tx)).find(b => b.id === id)!;
+    assert.equal(row.conversionState, "converted");
+    assert.equal(row.ghlDeleteState, "deleted");
+    assert.equal(row.requiresGhlCleanup, false);
+    assert.equal(row.calendarEventId, aiCalendarEventId(id));
+    assert.equal(await isGhlSpecialBooking(id, tx, true), false);
+    const late = await syncSpecialAppointment({ ...input, startTime: "2027-01-14T09:00:00-04:00",
+      endTime: "2027-01-14T15:00:00-04:00" }, tx);
+    assert.equal(late.action, "ignored");
+    assert.equal((await readAiBookings(tx)).find(b => b.id === id)!.appointmentAt, "2027-01-12T13:00:00.000Z");
+    await convertAiBooking(id, review(), tx, effects);
+    assert.deepEqual(steps, ["google", "delete", "confirmation"]);
+  });
+});
+
+test("failed GHL deletion keeps the converted booking and an explicit manual-cleanup flag", async () => {
+  await rollback(async tx => {
+    const { id } = await imported(tx);
+    const steps: string[] = [];
+    const effects = {
+      calendar: async () => { steps.push("google"); return aiCalendarEventId(id); },
+      deleteAppointment: async () => { steps.push("delete"); throw new Error("Synthetic API delete failed"); },
+      webhook: async () => { steps.push("confirmation"); },
+    };
+    await convertAiBooking(id, review(), tx, effects);
+    const row = (await readAiBookings(tx)).find(b => b.id === id)!;
+    assert.equal(row.conversionState, "converted");
+    assert.equal(row.requiresGhlCleanup, true);
+    assert.equal(row.ghlDeleteState, "failed");
+    assert.equal(row.ghlDeleteError, "Synthetic API delete failed");
+    assert.equal(await isGhlSpecialBooking(id, tx, true), false);
+    await convertAiBooking(id, review(), tx, effects);
+    assert.deepEqual(steps, ["google", "delete", "confirmation"]);
+  });
+});
+
+test("confirmation retry never recreates Google or repeats the successful GHL delete", async () => {
+  await rollback(async tx => {
+    const { id } = await imported(tx);
+    let calendars = 0, deletes = 0, confirmations = 0;
+    const effects = {
+      calendar: async () => { calendars++; return aiCalendarEventId(id); },
+      deleteAppointment: async () => { deletes++; },
+      webhook: async () => { if (++confirmations === 1) throw new GhlConversionDeliveryError(false, "Synthetic rejection"); },
+    };
+    await assert.rejects(() => convertAiBooking(id, review(), tx, effects), AiConversionError);
+    await assert.rejects(() => saveAiBooking(id, { ...review(), notes: "changed after handover" }, tx), AiConversionError);
+    await convertAiBooking(id, review(), tx, effects);
+    assert.deepEqual([calendars, deletes, confirmations], [1, 1, 2]);
+  });
+});
+
+test("AI queue includes chat/voice only, excluding Google, app, and unverified appointments", async () => {
+  await rollback(async tx => {
+    const origins = ["chat_bot", "voice_bot", "google", "app", "unknown"] as const;
+    const ids = new Map<string, typeof origins[number]>();
+    const rows = [];
+    for (const origin of origins) {
+      const row = await imported(tx);
+      ids.set(row.input.appointmentId, origin);
+      rows.push(row);
+    }
+    const queue = await readAiBookingsReal(tx, async identity => ids.get(identity.appointmentId) ?? "unknown");
+    const fixtureIds = new Set(rows.map(row => row.id));
+    assert.deepEqual(queue.filter(row => fixtureIds.has(row.id)).map(row => row.botOrigin).sort(), ["chat_bot", "voice_bot"]);
+    let effects = 0;
+    await assert.rejects(() => convertAiBookingReal(rows[2].id, review(), tx, {
+      origin: async () => "google",
+      calendar: async () => { effects++; return "bad"; },
+      deleteAppointment: async () => { effects++; },
+      webhook: async () => { effects++; },
+    }), AiConversionError);
+    assert.equal(effects, 0);
+  });
+});
+
+test("GHL origin requires explicit bot metadata; Google overrides a bot intake marker", async () => {
+  assert.equal(appointmentOrigin({ createdBy: { source: "Conversation AI" } }), "chat_bot");
+  assert.equal(appointmentOrigin({ createdBy: { channel: "voice_ai" } }), "voice_bot");
+  assert.equal(appointmentOrigin({ source: "api" }), "unknown");
+  assert.equal(appointmentOrigin({ source: "vivid-app" }), "app");
+  const identity = { appointmentId: "fixture-event", calendarId: "fixture-calendar", locationId: "fixture-location" };
+  assert.equal(await getAppointmentOrigin(identity, "chat_bot", {
+    token: "fixture-token", locationId: identity.locationId,
+    fetcher: async () => new Response(JSON.stringify({ event: { id: identity.appointmentId, calendarId: identity.calendarId, createdBy: { source: "Google Calendar" } } })),
+  }), "google");
+});
+
+test("GHL deletion uses exact DELETE endpoint/version, never cancellation, and rejects unconfirmed deletes", async () => {
+  const identity = { appointmentId: "fixture-event", calendarId: "fixture-calendar", locationId: "fixture-location" };
+  let requests = 0;
+  await deleteGhlAppointment(identity, {
+    token: "fixture-token", locationId: identity.locationId,
+    fetcher: async (url, init) => {
+      requests++;
+      assert.equal(url, "https://services.leadconnectorhq.com/calendars/events/fixture-event");
+      assert.equal(init?.method, "DELETE");
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get("Version"), "2021-04-15");
+      assert.equal(headers.get("Authorization"), "Bearer fixture-token");
+      assert.equal(init?.body, "{}");
+      return new Response(JSON.stringify({ succeeded: true }), { status: 201 });
+    },
+  });
+  assert.equal(requests, 1);
+  await deleteGhlAppointment(identity, { token: "fixture-token", locationId: identity.locationId,
+    fetcher: async () => new Response(null, { status: 404 }) });
+  await assert.rejects(() => deleteGhlAppointment(identity, { token: "fixture-token", locationId: identity.locationId,
+    fetcher: async () => new Response(JSON.stringify({ succeeded: false }), { status: 201 }) }));
+});
+
+test("Google-origin appointment callbacks are acknowledged without importing another booking", async () => {
+  let imported = 0;
+  const app = express();
+  app.use(express.json());
+  app.post("/probe", createGhlSpecialBookingHandler(
+    () => ({ locationId: "fixture-location", secret: "fixture-secret" }),
+    async () => { imported++; throw new Error("Must not import Google events"); },
+    async () => "google", () => true,
+  ));
+  const server = app.listen(0, "127.0.0.1");
+  await new Promise<void>(resolve => server.once("listening", resolve));
+  try {
+    const { port } = server.address() as { port: number };
+    const res = await fetch(`http://127.0.0.1:${port}/probe`, { method: "POST", headers: {
+      "Content-Type": "application/json", Authorization: "Bearer fixture-secret",
+    }, body: JSON.stringify({ locationId: "fixture-location", appointmentId: "fixture-event",
+      calendarId: SPECIAL_CALENDARS.detailing, appointmentStatus: "new", bookingOrigin: "chat_bot" }) });
+    assert.equal(res.status, 200);
+    assert.equal(imported, 0);
+    assert.equal((await res.json() as { action: string }).action, "ignored");
+  } finally { await new Promise<void>(resolve => server.close(() => resolve())); }
 });

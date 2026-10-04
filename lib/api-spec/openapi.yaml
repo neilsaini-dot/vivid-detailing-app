@@ -25,7 +25,7 @@ paths:
       operationId: syncGhlSpecialBooking
       tags: [bookings]
       summary: Import a dedicated GoHighLevel special appointment
-      description: Authenticated workflow receiver. Creates or updates one booking per location and appointment; scheduling remains owned by GoHighLevel.
+      description: Authenticated workflow receiver. Creates or updates one booking per location and appointment. Scheduling belongs to GHL before conversion; app/Google-origin imports and callbacks for app-owned converted bookings are ignored.
       security:
         - GhlSpecialsBearer: []
       requestBody:
@@ -1331,7 +1331,7 @@ components:
           maxLength: 4000
     AiBooking:
       type: object
-      required: [id, special, ghlAppointmentId, status, appointmentAt, appointmentEndAt, totalEstimate, customer, vehicle, notes, conversionState, webhookState, calendarEventId, convertedAt, lastError]
+      required: [id, special, ghlAppointmentId, status, appointmentAt, appointmentEndAt, totalEstimate, customer, vehicle, notes, conversionState, webhookState, calendarEventId, convertedAt, lastError, botOrigin, ghlDeleteState, ghlDeleteError, requiresGhlCleanup]
       properties:
         id:
           type: string
@@ -1401,11 +1401,27 @@ components:
         lastError:
           type: string
           nullable: true
+        botOrigin:
+          type: string
+          nullable: true
+          enum: [chat_bot, voice_bot]
+        ghlDeleteState:
+          type: string
+          enum: [pending, deleting, deleted, failed]
+        ghlDeleteError:
+          type: string
+          nullable: true
+        requiresGhlCleanup:
+          type: boolean
     GhlSpecialAppointmentInput:
       type: object
       description: GHL webhook intake is normalized before validation. Unusable optional customer/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start/end times remain mandatory for creation.
       required: [locationId, appointmentId, calendarId, appointmentStatus]
       properties:
+        bookingOrigin:
+          type: string
+          enum: [chat_bot, voice_bot]
+          description: Set only by the authenticated chat/voice-bot booking workflow, not a generic appointment or Google-sync workflow.
         source:
           type: string
           enum: [gohighlevel]

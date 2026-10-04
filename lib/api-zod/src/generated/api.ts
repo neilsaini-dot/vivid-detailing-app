@@ -8,7 +8,7 @@
 import * as zod from "zod";
 
 /**
- * Authenticated workflow receiver. Creates or updates one booking per location and appointment; scheduling remains owned by GoHighLevel.
+ * Authenticated workflow receiver. Creates or updates one booking per location and appointment. Scheduling belongs to GHL before conversion; app/Google-origin imports and callbacks for app-owned converted bookings are ignored.
  * @summary Import a dedicated GoHighLevel special appointment
  */
 export const syncGhlSpecialBookingBodyLocationIdMax = 100;
@@ -41,6 +41,12 @@ export const syncGhlSpecialBookingBodyNotesMax = 4000;
 
 export const SyncGhlSpecialBookingBody = zod
   .object({
+    bookingOrigin: zod
+      .enum(["chat_bot", "voice_bot"])
+      .optional()
+      .describe(
+        "Set only by the authenticated chat\/voice-bot booking workflow, not a generic appointment or Google-sync workflow.",
+      ),
     source: zod.enum(["gohighlevel"]).optional(),
     locationId: zod.string().min(1).max(syncGhlSpecialBookingBodyLocationIdMax),
     appointmentId: zod
@@ -1151,6 +1157,10 @@ export const AdminListAiBookingsResponseItem = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
+  ghlDeleteError: zod.string().nullable(),
+  requiresGhlCleanup: zod.boolean(),
 });
 export const AdminListAiBookingsResponse = zod.array(
   AdminListAiBookingsResponseItem,
@@ -1219,6 +1229,10 @@ export const AdminSaveAiBookingResponse = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
+  ghlDeleteError: zod.string().nullable(),
+  requiresGhlCleanup: zod.boolean(),
 });
 
 /**
@@ -1284,6 +1298,10 @@ export const AdminConvertAiBookingResponse = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
+  ghlDeleteError: zod.string().nullable(),
+  requiresGhlCleanup: zod.boolean(),
 });
 
 /**
@@ -1324,6 +1342,10 @@ export const AdminResolveAiBookingWebhookResponse = zod.object({
   calendarEventId: zod.string().nullable(),
   convertedAt: zod.string().nullable(),
   lastError: zod.string().nullable(),
+  botOrigin: zod.enum(["chat_bot", "voice_bot"]).nullable(),
+  ghlDeleteState: zod.enum(["pending", "deleting", "deleted", "failed"]),
+  ghlDeleteError: zod.string().nullable(),
+  requiresGhlCleanup: zod.boolean(),
 });
 
 /**

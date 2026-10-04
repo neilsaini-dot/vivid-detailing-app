@@ -41,7 +41,7 @@ import { createCalendarEvent, updateCalendarEvent, deleteCalendarEvent, findCale
 import { googleFetch } from "../lib/googleAuth";
 import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
-import { isGhlSpecialBooking, GHL_SCHEDULING_MESSAGE } from "../lib/ghlSpecialBookingOwnership";
+import { isGhlSpecialBooking, isAiConvertedBooking, GHL_SCHEDULING_MESSAGE } from "../lib/ghlSpecialBookingOwnership";
 
 const router = Router();
 
@@ -835,6 +835,10 @@ router.post("/admin/bookings/:id/sync-to-drive", async (req, res) => {
 router.post("/admin/bookings/:id/resync", async (req, res) => {
   try {
     const { id } = AdminUpdateBookingParams.parse(req.params);
+    if (await isAiConvertedBooking(id)) {
+      res.status(409).json({ error: "This AI booking is already converted. Confirmation and its Google event must not be recreated. Resolve any original GHL cleanup manually." });
+      return;
+    }
     if (await isGhlSpecialBooking(id)) {
       res.status(409).json({ error: "This appointment already exists in GoHighLevel. Retry its GoHighLevel sync workflow instead of creating duplicate events." });
       return;

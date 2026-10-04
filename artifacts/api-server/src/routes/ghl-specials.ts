@@ -3,7 +3,8 @@ import type { ZodIssue } from "zod";
 import { SyncGhlSpecialBookingBody, SyncGhlSpecialBookingResponse } from "@workspace/api-zod";
 import { getSpecialsConfig, validSpecialsToken, specialForCalendar, type SpecialsConfig } from "../lib/ghlSpecialsConfig";
 import { normaliseSpecialInput, specialTimestampDiagnostics, SpecialSyncError, syncSpecialAppointment } from "../lib/ghlSpecialBookings";
-import { syncAiBookingCalendar } from "../lib/aiBookingCalendarSync";
+import { rememberAiBotOrigin } from "../lib/aiBookingConversion";
+import { getAppointmentOrigin } from "../lib/ghlAppointments";
 
 const router = Router();
 
@@ -32,6 +33,8 @@ function validationReason(issue: ZodIssue): string {
 export function createGhlSpecialBookingHandler(
   configProvider: () => SpecialsConfig | null = getSpecialsConfig,
   sync = syncSpecialAppointment,
+  originResolver = getAppointmentOrigin,
+  verifyOrigins = () => Boolean(process.env.GHL_PRIVATE_TOKEN && process.env.GHL_LOCATION_ID),
 ): RequestHandler {
  return async (req, res): Promise<void> => {
   const config = configProvider();
@@ -72,9 +75,24 @@ export function createGhlSpecialBookingHandler(
       `GHL special-bookings ignored unusable optional intake fields: ${ignoredFields.join(", ")}`);
   }
   try {
+    if (verifyOrigins()
+      && parsed.data.appointmentStatus !== "cancelled" && parsed.data.appointmentStatus !== "canceled") {
+      const origin = await originResolver({
+        locationId: parsed.data.locationId, appointmentId: parsed.data.appointmentId,
+        calendarId: parsed.data.calendarId, externalContactId: parsed.data.contact?.id,
+      }, parsed.data.bookingOrigin);
+      if (origin === "google" || origin === "app") {
+        res.status(200).json(SyncGhlSpecialBookingResponse.parse({
+          success: true, action: "ignored", bookingId: null,
+          special: specialForCalendar(parsed.data.calendarId), status: "ignored", totalEstimate: null,
+          reason: "app_or_google_origin",
+        }));
+        return;
+      }
+    }
     const result = await sync(parsed.data);
-    if (result.bookingId && ["updated", "cancelled", "duplicate"].includes(result.action)) {
-      await syncAiBookingCalendar(result.bookingId).catch(() => req.log.warn("Converted AI booking calendar sync could not be confirmed"));
+    if (result.bookingId && parsed.data.bookingOrigin) {
+      await rememberAiBotOrigin(result.bookingId, parsed.data.bookingOrigin);
     }
     res.status(result.action === "created" ? 201 : 200).json(SyncGhlSpecialBookingResponse.parse(result));
   } catch (error) {

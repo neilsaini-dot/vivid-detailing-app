@@ -9,6 +9,7 @@ import { specialForCalendar, SPECIAL_NAMES } from "./ghlSpecialsConfig";
 import { repriceSpecialBooking, syncSpecialLoyalty } from "./ghlSpecialIntake";
 import { sendGhlConversionConfirmed, GhlConversionDeliveryError, type GhlBookingConfirmedPayload } from "./ghl";
 import { createCalendarEvent, type CalendarEventInput } from "./googleCalendar";
+import { getAppointmentOrigin, deleteGhlAppointment, type BotOrigin, type AppointmentOrigin, type GhlAppointmentIdentity } from "./ghlAppointments";
 
 type Database = Pick<typeof db, "transaction">;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -18,7 +19,11 @@ export class AiConversionError extends Error {
 }
 function error(status: number, message: string): never { throw new AiConversionError(status, message); }
 
-export async function readAiBookings(database: Pick<typeof db, "select"> = db) {
+type OriginResolver = (identity: GhlAppointmentIdentity, trustedOrigin?: BotOrigin | null) => Promise<AppointmentOrigin>;
+const botOrigin = (value: string | null | undefined): BotOrigin | null =>
+  value === "chat_bot" || value === "voice_bot" ? value : null;
+
+export async function readAiBookings(database: Pick<typeof db, "select"> = db, originResolver: OriginResolver = getAppointmentOrigin) {
   const rows = await database.select({
     booking: bookingsTable, mapping: ghlSpecialAppointmentsTable,
     customer: customersTable, vehicle: vehiclesTable, conversion: aiBookingConversionsTable,
@@ -27,9 +32,16 @@ export async function readAiBookings(database: Pick<typeof db, "select"> = db) {
     .leftJoin(customersTable, eq(bookingsTable.customerId, customersTable.id))
     .leftJoin(vehiclesTable, eq(bookingsTable.vehicleId, vehiclesTable.id))
     .leftJoin(aiBookingConversionsTable, eq(bookingsTable.id, aiBookingConversionsTable.bookingId));
-  return rows.flatMap(({ booking, mapping, customer, vehicle, conversion }) => {
+  const result = [];
+  // Bound API concurrency instead of issuing one burst per admin poll.
+  for (let index = 0; index < rows.length; index += 4) {
+  const batch = await Promise.all(rows.slice(index, index + 4).map(async ({ booking, mapping, customer, vehicle, conversion }) => {
     const special = specialForCalendar(mapping.calendarId);
     if (!special) return [];
+    const recordedOrigin = botOrigin(conversion?.botOrigin);
+    const origin = conversion?.state === "converted" || (conversion?.calendarEventId && recordedOrigin)
+      ? recordedOrigin : await originResolver(mapping, recordedOrigin);
+    if (conversion?.state !== "converted" && origin !== "chat_bot" && origin !== "voice_bot") return [];
     return [{
       id: booking.id, special, ghlAppointmentId: mapping.appointmentId, status: booking.status,
       appointmentAt: booking.appointmentAt?.toISOString() ?? null,
@@ -40,12 +52,23 @@ export async function readAiBookings(database: Pick<typeof db, "select"> = db) {
         model: vehicle?.model ?? null, colour: vehicle?.colour ?? null },
       notes: booking.notes, conversionState: conversion?.state ?? "review",
       webhookState: conversion?.webhookState ?? "pending",
-      calendarEventId: conversion?.calendarEventId ?? booking.calendarEventId,
+      calendarEventId: conversion?.calendarEventId ?? (conversion?.state === "converted" ? booking.calendarEventId : null),
       convertedAt: conversion?.convertedAt?.toISOString() ?? null, lastError: conversion?.lastError ?? null,
+      botOrigin: botOrigin(origin), ghlDeleteState: conversion?.ghlDeleteState ?? "pending",
+      ghlDeleteError: conversion?.ghlDeleteError ?? null,
+      requiresGhlCleanup: conversion?.ghlDeleteState === "failed"
+        || (conversion?.state === "converted" && conversion.ghlDeleteState !== "deleted"),
     }];
-  }).sort((a, b) => (b.appointmentAt ?? "").localeCompare(a.appointmentAt ?? ""));
+  }));
+  result.push(...batch.flat());
+  }
+  return result.sort((a, b) => (b.appointmentAt ?? "").localeCompare(a.appointmentAt ?? ""));
 }
 
+export async function rememberAiBotOrigin(id: string, origin: BotOrigin) {
+  await db.insert(aiBookingConversionsTable).values({ bookingId: id, botOrigin: origin })
+    .onConflictDoNothing({ target: aiBookingConversionsTable.bookingId });
+}
 function validateReview(body: Review, converting: boolean): Review {
   const clean = {
     customer: { name: body.customer.name.trim(), email: body.customer.email.trim().toLowerCase(), phone: body.customer.phone.trim() },
@@ -90,11 +113,11 @@ async function saveReview(tx: Tx, id: string, body: Review, converting: boolean)
   const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, locked.booking.customerId)).for("update");
   const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, locked.booking.vehicleId)).for("update");
   if (!customer || !vehicle) error(409, "The linked customer or vehicle no longer exists.");
-  if (locked.conversion?.webhookState === "sent") {
+  if (locked.conversion?.webhookState === "sent" || locked.conversion?.calendarEventId) {
     const current = { customer: { name: customer.name ?? "", email: customer.email ?? "", phone: customer.phone ?? "" },
       vehicle: { type: vehicle.type, year: vehicle.year, make: vehicle.make ?? "", model: vehicle.model ?? "", colour: vehicle.colour ?? "" },
       notes: locked.booking.notes ?? "" };
-    if (JSON.stringify(clean) !== JSON.stringify(current)) error(409, "The webhook was already sent. Retry the calendar step without changing details.");
+    if (JSON.stringify(clean) !== JSON.stringify(current)) error(409, "Conversion has already started. Resume its unfinished steps without changing details.");
     return locked;
   }
   await tx.update(customersTable).set({
@@ -131,7 +154,7 @@ export async function resolveAiWebhook(id: string, verifiedInGhl: boolean, deliv
     }
     await tx.update(aiBookingConversionsTable).set({
       state: "failed", webhookState: delivered ? "sent" : "pending",
-      lastError: delivered ? "Staff verified the webhook was delivered. Retry to finish Google Calendar only."
+      lastError: delivered ? "Staff verified the webhook was delivered. Resume the unfinished conversion steps without resending confirmation."
         : "Staff verified the webhook was not delivered. Conversion can be retried.",
     }).where(eq(aiBookingConversionsTable.bookingId, id));
   });
@@ -144,13 +167,21 @@ export function aiCalendarEventId(id: string) {
 type Effects = {
   webhook: (payload: GhlBookingConfirmedPayload, key: string) => Promise<void>;
   calendar: (input: CalendarEventInput) => Promise<string | null>;
+  origin: OriginResolver;
+  deleteAppointment: (identity: GhlAppointmentIdentity) => Promise<void>;
 };
-const defaultEffects: Effects = { webhook: sendGhlConversionConfirmed, calendar: createCalendarEvent };
+const defaultEffects: Effects = { webhook: sendGhlConversionConfirmed, calendar: createCalendarEvent,
+  origin: getAppointmentOrigin, deleteAppointment: deleteGhlAppointment };
 
 export async function convertAiBooking(id: string, body: Review, database: Database = db, effects: Effects = defaultEffects) {
   const prepared = await database.transaction(async tx => {
     const { booking, mapping, conversion } = await saveReview(tx, id, body, true);
     if (conversion?.state === "converted") return null;
+    const verifiedOrigin = conversion?.calendarEventId && botOrigin(conversion.botOrigin)
+      ? botOrigin(conversion.botOrigin) : await effects.origin(mapping, botOrigin(conversion?.botOrigin));
+    if (verifiedOrigin !== "chat_bot" && verifiedOrigin !== "voice_bot") {
+      error(422, "Only verified chat/voice-bot appointments can be converted. Do not convert app or Google-origin appointments.");
+    }
     if (!booking.appointmentAt || !mapping.appointmentEndAt || mapping.appointmentEndAt <= booking.appointmentAt) {
       error(422, "A valid appointment start and end are required. Correct the appointment in GHL first.");
     }
@@ -188,15 +219,18 @@ export async function convertAiBooking(id: string, body: Review, database: Datab
     };
     const calendar: CalendarEventInput = {
       id: aiCalendarEventId(id), bookingId: id,
+      calendarId: "contact@vividpei.com",
       summary: `Vivid Detailing - ${customer.name} - ${services.join(", ") || "Appointment"}`,
       description, startIso: booking.appointmentAt.toISOString(),
       durationHours: (mapping.appointmentEndAt.getTime() - booking.appointmentAt.getTime()) / 3600000,
     };
     await tx.insert(aiBookingConversionsTable).values({
-      bookingId: id, state: "processing", webhookState: conversion?.webhookState ?? "pending", claimedAt: new Date(), lastError: null,
+      bookingId: id, state: "processing", botOrigin: verifiedOrigin,
+      webhookState: conversion?.webhookState ?? "pending", claimedAt: new Date(), lastError: null,
     }).onConflictDoUpdate({ target: aiBookingConversionsTable.bookingId,
-      set: { state: "processing", claimedAt: new Date(), lastError: null } });
-    return { payload, calendar, webhookSent: conversion?.webhookState === "sent", calendarId: booking.calendarEventId };
+      set: { state: "processing", botOrigin: verifiedOrigin, claimedAt: new Date(), lastError: null } });
+    return { payload, calendar, mapping, webhookSent: conversion?.webhookState === "sent",
+      calendarId: conversion?.calendarEventId, deleteState: conversion?.ghlDeleteState ?? "pending" };
   });
   if (!prepared) return;
   const update = async (values: Partial<typeof aiBookingConversionsTable.$inferInsert>) => {
@@ -205,6 +239,29 @@ export async function convertAiBooking(id: string, body: Review, database: Datab
     });
   };
   try {
+    // 1. Create a NEW app-owned event, not the Google mirror of the GHL event.
+    const calendarId = prepared.calendarId ?? await effects.calendar(prepared.calendar);
+    if (!calendarId) {
+      await update({ state: "failed", lastError: "Google Calendar event could not be confirmed. No GHL deletion or confirmation webhook was attempted." });
+      error(502, "Google Calendar failed. The GHL appointment was kept and no confirmation webhook was sent.");
+    }
+    await database.transaction(async tx => {
+      await tx.update(bookingsTable).set({ calendarEventId: calendarId }).where(eq(bookingsTable.id, id));
+      await tx.update(aiBookingConversionsTable).set({ calendarEventId: calendarId }).where(eq(aiBookingConversionsTable.bookingId, id));
+    });
+    // 2. Delete, never cancel. A failed delete is a manual-cleanup warning,
+    // not a reason to discard the app booking or suppress its confirmation.
+    if (!["deleted", "failed"].includes(prepared.deleteState)) {
+      await update({ ghlDeleteState: "deleting", ghlDeleteError: null });
+      try {
+        await effects.deleteAppointment(prepared.mapping);
+        await update({ ghlDeleteState: "deleted", ghlDeleteError: null });
+      } catch (cause) {
+        await update({ ghlDeleteState: "failed", ghlDeleteError: cause instanceof Error
+          ? cause.message : "GHL deletion could not be confirmed. Delete the original appointment manually." });
+      }
+    }
+    // 3. Send the same confirmation as a native booking.
     if (!prepared.webhookSent) {
       await update({ webhookState: "sending" });
       try { await effects.webhook(prepared.payload, `ai-conversion:${id}`); }
@@ -216,11 +273,7 @@ export async function convertAiBooking(id: string, body: Review, database: Datab
       }
       await update({ webhookState: "sent" });
     }
-    const calendarId = prepared.calendarId ?? await effects.calendar(prepared.calendar);
-    if (!calendarId) {
-      await update({ state: "failed", lastError: "Webhook sent, but Google Calendar could not be confirmed. Retry conversion to finish the calendar step only." });
-      error(502, "Webhook sent. Google Calendar failed; retry will only finish the calendar step.");
-    }
+    // 4. Final receipt. Repeated conversion requests become a no-op.
     await database.transaction(async tx => {
       await tx.update(bookingsTable).set({ calendarEventId: calendarId }).where(eq(bookingsTable.id, id));
       await tx.update(aiBookingConversionsTable).set({

@@ -8,6 +8,12 @@ const SHOP_EMAIL = "contact@vividpei.com";
 const SHOP_OPEN_HOUR = 9;
 const LATEST_START_HOUR = 16;
 const MAX_BOOKINGS_PER_DAY = 3;
+function eventCalendarBase(eventId: string) {
+  // The deterministic namespace used by AI conversion is explicitly stored
+  // in contact@, even if the OAuth user's primary calendar is different.
+  return /^ai[0-9a-f]{64}$/.test(eventId)
+    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(SHOP_EMAIL)}` : CAL_BASE;
+}
 
 export interface CalendarEventInput {
   summary: string;
@@ -16,10 +22,13 @@ export interface CalendarEventInput {
   durationHours: number;
   id?: string;
   bookingId?: string;
+  calendarId?: string;
 }
 
 /** Creates a Google Calendar event and returns the event ID (or null on failure). */
 export async function createCalendarEvent(input: CalendarEventInput): Promise<string | null> {
+  const calendarBase = input.calendarId
+    ? `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(input.calendarId)}` : CAL_BASE;
   const startDate = new Date(input.startIso);
   const endDate = new Date(startDate.getTime() + input.durationHours * 60 * 60 * 1000);
 
@@ -35,20 +44,20 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
   });
 
   try {
-    const res = await googleFetch(`${CAL_BASE}/events`, {
+    const res = await googleFetch(`${calendarBase}/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
       signal: AbortSignal.timeout(20000),
     });
     if (res.status === 409 && input.id && input.bookingId) {
-      const existing = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(input.id)}`);
+      const existing = await googleFetch(`${calendarBase}/events/${encodeURIComponent(input.id)}`, { signal: AbortSignal.timeout(20000) });
       if (!existing.ok) return null;
       const event = await existing.json() as { id?: string; status?: string; extendedProperties?: { private?: { bookingId?: string } } };
       if (event.status === "cancelled" || event.extendedProperties?.private?.bookingId !== input.bookingId) return null;
       const patch = JSON.parse(body);
       delete patch.id;
-      const updated = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(input.id)}`, {
+      const updated = await googleFetch(`${calendarBase}/events/${encodeURIComponent(input.id)}`, {
         method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
         signal: AbortSignal.timeout(20000),
       });
@@ -81,7 +90,7 @@ export async function updateCalendarEvent(eventId: string, input: Pick<CalendarE
   });
 
   try {
-    const res = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(eventId)}`, {
+    const res = await googleFetch(`${eventCalendarBase(eventId)}/events/${encodeURIComponent(eventId)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body,
@@ -103,7 +112,7 @@ export async function updateCalendarEvent(eventId: string, input: Pick<CalendarE
 /** Deletes a Google Calendar event by ID. */
 export async function deleteCalendarEvent(eventId: string): Promise<boolean> {
   try {
-    const res = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(eventId)}`, {
+    const res = await googleFetch(`${eventCalendarBase(eventId)}/events/${encodeURIComponent(eventId)}`, {
       method: "DELETE",
       signal: AbortSignal.timeout(20000),
     });

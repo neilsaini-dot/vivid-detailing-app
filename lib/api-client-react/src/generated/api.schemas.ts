@@ -84,6 +84,25 @@ export const AiBookingWebhookState = {
   uncertain: "uncertain",
 } as const;
 
+export type AiBookingBotOrigin =
+  | (typeof AiBookingBotOrigin)[keyof typeof AiBookingBotOrigin]
+  | null;
+
+export const AiBookingBotOrigin = {
+  chat_bot: "chat_bot",
+  voice_bot: "voice_bot",
+} as const;
+
+export type AiBookingGhlDeleteState =
+  (typeof AiBookingGhlDeleteState)[keyof typeof AiBookingGhlDeleteState];
+
+export const AiBookingGhlDeleteState = {
+  pending: "pending",
+  deleting: "deleting",
+  deleted: "deleted",
+  failed: "failed",
+} as const;
+
 export interface AiBooking {
   id: string;
   special: AiBookingSpecial;
@@ -100,7 +119,22 @@ export interface AiBooking {
   calendarEventId: string | null;
   convertedAt: string | null;
   lastError: string | null;
+  botOrigin: AiBookingBotOrigin;
+  ghlDeleteState: AiBookingGhlDeleteState;
+  ghlDeleteError: string | null;
+  requiresGhlCleanup: boolean;
 }
+
+/**
+ * Set only by the authenticated chat/voice-bot booking workflow, not a generic appointment or Google-sync workflow.
+ */
+export type GhlSpecialAppointmentInputBookingOrigin =
+  (typeof GhlSpecialAppointmentInputBookingOrigin)[keyof typeof GhlSpecialAppointmentInputBookingOrigin];
+
+export const GhlSpecialAppointmentInputBookingOrigin = {
+  chat_bot: "chat_bot",
+  voice_bot: "voice_bot",
+} as const;
 
 export type GhlSpecialAppointmentInputSource =
   (typeof GhlSpecialAppointmentInputSource)[keyof typeof GhlSpecialAppointmentInputSource];
@@ -163,6 +197,8 @@ export interface GhlSpecialVehicleInput {
  * GHL webhook intake is normalized before validation. Unusable optional customer/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start/end times remain mandatory for creation.
  */
 export interface GhlSpecialAppointmentInput {
+  /** Set only by the authenticated chat/voice-bot booking workflow, not a generic appointment or Google-sync workflow. */
+  bookingOrigin?: GhlSpecialAppointmentInputBookingOrigin;
   source?: GhlSpecialAppointmentInputSource;
   /**
    * @minLength 1

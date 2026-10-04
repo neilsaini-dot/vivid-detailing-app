@@ -10,4 +10,9 @@ CREATE TABLE IF NOT EXISTS ai_booking_conversions (
   converted_at TIMESTAMPTZ,
   last_error TEXT
 );
+-- Also upgrades an installation that ran the earlier setup.
+ALTER TABLE ai_booking_conversions ADD COLUMN IF NOT EXISTS bot_origin TEXT;
+ALTER TABLE ai_booking_conversions ADD COLUMN IF NOT EXISTS ghl_delete_state TEXT NOT NULL DEFAULT 'pending'
+  CHECK (ghl_delete_state IN ('pending', 'deleting', 'deleted', 'failed'));
+ALTER TABLE ai_booking_conversions ADD COLUMN IF NOT EXISTS ghl_delete_error TEXT;
 COMMIT;

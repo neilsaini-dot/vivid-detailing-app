@@ -89,7 +89,7 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Authenticated workflow receiver. Creates or updates one booking per location and appointment; scheduling remains owned by GoHighLevel.
+ * Authenticated workflow receiver. Creates or updates one booking per location and appointment. Scheduling belongs to GHL before conversion; app/Google-origin imports and callbacks for app-owned converted bookings are ignored.
  * @summary Import a dedicated GoHighLevel special appointment
  */
 export const getSyncGhlSpecialBookingUrl = () => {

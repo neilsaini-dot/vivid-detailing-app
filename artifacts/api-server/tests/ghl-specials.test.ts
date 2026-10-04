@@ -12,7 +12,7 @@ import {
   SPECIAL_CALENDARS, specialPriceCents, validSpecialsToken, type SpecialVehicleType,
 } from "../src/lib/ghlSpecialsConfig";
 import {
-  syncSpecialAppointment, parseSpecialDate, normaliseSpecialInput, SpecialSyncError,
+  syncSpecialAppointment, parseSpecialDate, normaliseSpecialInput, specialTimestampDiagnostics, SpecialSyncError,
 } from "../src/lib/ghlSpecialBookings";
 import { createGhlSpecialBookingHandler } from "../src/routes/ghl-specials";
 import { finishPendingSpecialPrice, specialVehicleNotes } from "../src/lib/ghlSpecialIntake";
@@ -357,6 +357,22 @@ test("in-progress/completed jobs and existing notes survive status-only deliveri
   });
 });
 
+test("timestamp diagnostics expose dates and known GHL tags but redact unrelated input", () => {
+  for (const raw of ["2026-10-10 09:00:00", "10/10/2026 09:00 AM", '"2026-10-10T09:00:00-03:00"', "{{appointment.start_time}}"]) {
+    assert.equal(specialTimestampDiagnostics(raw).rawValue, raw);
+  }
+  for (const raw of ["private-customer-value", "secret-value", { token: "private-token" }, 123456]) {
+    const diagnostic = specialTimestampDiagnostics(raw);
+    assert.equal(diagnostic.rawValue, "[redacted non-date value]");
+    assert.doesNotMatch(JSON.stringify(diagnostic), /private|secret|token/);
+  }
+  assert.equal(specialTimestampDiagnostics(null).rawType, "null");
+  assert.equal(specialTimestampDiagnostics(undefined).rawType, "undefined");
+  assert.equal(specialTimestampDiagnostics(" 2026-10-10 09:00:00 ").rawLength, 21);
+  assert.equal(specialTimestampDiagnostics(" 2026-10-10 09:00:00 ").trimmedLength, 19);
+  assert.equal(specialTimestampDiagnostics("{{appointment.start_time}}").unresolvedMergeTag, true);
+});
+
 test("timezone handling and normalized input", () => {
   assert.equal(parseSpecialDate("2027-07-12T09:00:00-03:00", "startTime")?.toISOString(), "2027-07-12T12:00:00.000Z");
   assert.equal(parseSpecialDate("2027-01-12T09:00:00-04:00", "startTime")?.toISOString(), "2027-01-12T13:00:00.000Z");
@@ -481,6 +497,24 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
       assert.match(String(warnings.at(-1)?.[1]), /vehicle.type: expected one of "car", "suv", "truck", "van", ""/);
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(privateValue));
       assert.doesNotMatch(JSON.stringify(warnings), new RegExp(secret));
+      for (const field of ["startTime", "endTime"] as const) {
+        const raw = `{{appointment.${field === "startTime" ? "start_time" : "end_time"}}}`;
+        const response = await send({ ...fixture(), [field]: raw });
+        assert.equal(response.status, 422);
+        const warning = warnings.at(-1)!;
+        assert.match(String(warning[1]), new RegExp(`${field} must be an ISO 8601 timestamp`));
+        assert.match(String(warning[1]), /timestamp diagnostics/);
+        const metadata = warning[0] as { timestamps: Record<string, { rawValue: string }> };
+        assert.equal(metadata.timestamps[field].rawValue, raw);
+        assert.ok(metadata.timestamps.startTime);
+        assert.ok(metadata.timestamps.endTime);
+      }
+      const warningCount = warnings.length;
+      assert.equal((await send({ ...fixture(), startTime: privateValue, endTime: secret })).status, 422);
+      const protectedWarnings = warnings.slice(warningCount);
+      assert.doesNotMatch(JSON.stringify(protectedWarnings), new RegExp(privateValue));
+      assert.doesNotMatch(JSON.stringify(protectedWarnings), new RegExp(secret));
+      assert.match(JSON.stringify(protectedWarnings), /redacted non-date value/);
       for (const appointmentStatus of [undefined, null, "", " \t "]) {
         const response = await send({ ...fixture(), appointmentStatus });
         assert.equal(response.status, 201);

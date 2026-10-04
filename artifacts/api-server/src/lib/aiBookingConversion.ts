@@ -11,7 +11,7 @@ import { sendGhlConversionConfirmed, GhlConversionDeliveryError, type GhlBooking
 import { createCalendarEvent, type CalendarEventInput } from "./googleCalendar";
 import { getAppointmentOrigin, deleteGhlAppointment, type BotOrigin, type AppointmentOrigin, type GhlAppointmentIdentity } from "./ghlAppointments";
 import { type ConversionOrigin } from "./ghlAppointments";
-import { hasAppOwnedAppointment } from "./ghlSpecialBookings";
+import { hasAppOwnedAppointment, syncSpecialAppointment } from "./ghlSpecialBookings";
 
 type Database = Pick<typeof db, "transaction">;
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
@@ -25,7 +25,7 @@ type OriginResolver = (identity: GhlAppointmentIdentity, trustedOrigin?: Convers
 const botOrigin = (value: string | null | undefined): ConversionOrigin | null =>
   value === "chat_bot" || value === "voice_bot" || value === "highlevel" ? value : null;
 
-export async function readAiBookings(database: Pick<typeof db, "select"> = db, originResolver: OriginResolver = getAppointmentOrigin) {
+export async function readAiBookings(database: Pick<typeof db, "select" | "transaction"> = db, originResolver: OriginResolver = getAppointmentOrigin) {
   const rows = await database.select({
     booking: bookingsTable, mapping: ghlSpecialAppointmentsTable,
     customer: customersTable, vehicle: vehiclesTable, conversion: aiBookingConversionsTable,
@@ -47,13 +47,34 @@ export async function readAiBookings(database: Pick<typeof db, "select"> = db, o
     if (row.conversion?.calendarEventId || row.conversion?.state === "converted"
       || !await hasAppOwnedAppointment(database, row.booking)) eligibleRows.push(row);
   }
-  const batch = await Promise.all(eligibleRows.map(async ({ booking, mapping, customer, vehicle, conversion, serviceName }) => {
-    const special = specialForCalendar(mapping.calendarId) ?? "highlevel_booking";
+  const batch = await Promise.all(eligibleRows.map(async row => {
+    const { mapping, conversion } = row;
     const recordedOrigin = botOrigin(conversion?.botOrigin);
     const origin = conversion?.state === "converted" || (conversion?.calendarEventId && recordedOrigin)
       ? recordedOrigin : await originResolver(mapping, recordedOrigin);
-    if (conversion?.state !== "converted" && !botOrigin(origin)) return [];
-    return [{
+    return { ...row, origin };
+  }));
+  for (const { booking, mapping, customer, vehicle, conversion, serviceName, origin } of batch) {
+    const special = specialForCalendar(mapping.calendarId) ?? "highlevel_booking";
+    if (origin === "deleted") {
+      await database.transaction(async tx => {
+        // Use the same identity lock as intake and conversion. A conversion
+        // may claim ownership while the external lookup is in flight.
+        const current = await lockBooking(tx, booking.id);
+        if (!["pending", "confirmed"].includes(current.booking.status)
+          || current.mapping.fingerprint !== mapping.fingerprint
+          || current.conversion?.state === "processing" || current.conversion?.state === "converted"
+          || current.conversion?.calendarEventId || await hasAppOwnedAppointment(tx, current.booking)) return;
+        await syncSpecialAppointment({
+          locationId: current.mapping.locationId, appointmentId: current.mapping.appointmentId,
+          calendarId: current.mapping.calendarId, appointmentStatus: "cancelled",
+          ...(current.mapping.externalContactId ? { contact: { id: current.mapping.externalContactId } } : {}),
+        }, tx);
+      });
+      continue;
+    }
+    if (conversion?.state !== "converted" && !botOrigin(origin)) continue;
+    result.push({
       id: booking.id, special, serviceName: serviceName ?? "HighLevel Booking", ghlAppointmentId: mapping.appointmentId, status: booking.status,
       appointmentAt: booking.appointmentAt?.toISOString() ?? null,
       appointmentEndAt: mapping.appointmentEndAt?.toISOString() ?? null,
@@ -69,11 +90,23 @@ export async function readAiBookings(database: Pick<typeof db, "select"> = db, o
       ghlDeleteError: conversion?.ghlDeleteError ?? null,
       requiresGhlCleanup: conversion?.ghlDeleteState === "failed"
         || (conversion?.state === "converted" && conversion.ghlDeleteState !== "deleted"),
-    }];
-  }));
-  result.push(...batch.flat());
+    });
+  }
   }
   return result.sort((a, b) => (b.appointmentAt ?? "").localeCompare(a.appointmentAt ?? ""));
+}
+
+let scheduledRefresh: Promise<unknown> | undefined;
+let scheduledRefreshAt = 0;
+export async function refreshGhlScheduledStatuses() {
+  // The importer is optional in local/native-only environments. Never interpret
+  // missing credentials as proof that an appointment has been deleted.
+  if (!process.env.GHL_PRIVATE_TOKEN || !process.env.GHL_LOCATION_ID) return;
+  if (!scheduledRefresh || Date.now() - scheduledRefreshAt >= 30000) {
+    scheduledRefreshAt = Date.now();
+    scheduledRefresh = readAiBookings();
+  }
+  await scheduledRefresh;
 }
 
 export async function rememberAiBotOrigin(id: string, origin: BotOrigin) {

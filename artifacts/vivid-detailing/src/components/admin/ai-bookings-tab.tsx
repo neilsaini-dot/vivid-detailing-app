@@ -263,9 +263,12 @@ function ReviewSheet({ booking, onClose, onSaved, onConverted, onOpenBooking, on
 export function AiBookingsTab({ onOpenBooking }: { onOpenBooking: (bookingId: string) => void }) {
   const qc = useQueryClient();
   const { toast } = useToast();
-  const { data, isLoading, error, refetch, isFetching } = useAdminListAiBookings({
+  const { data, dataUpdatedAt, isLoading, error, refetch, isFetching } = useAdminListAiBookings({
     query: { queryKey: getAdminListAiBookingsQueryKey(), refetchInterval: 30_000, refetchOnWindowFocus: true, refetchOnMount: "always", retry: false },
   });
+  useEffect(() => {
+    if (dataUpdatedAt) qc.invalidateQueries({ queryKey: getAdminListBookingsQueryKey({}) });
+  }, [dataUpdatedAt, qc]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const list = useMemo(() => data ?? [], [data]);
   const queue = list.filter(b => b.conversionState !== "converted" && isActive(b));

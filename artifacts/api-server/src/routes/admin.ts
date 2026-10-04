@@ -42,6 +42,7 @@ import { googleFetch } from "../lib/googleAuth";
 import { downloadFile } from "../lib/supabaseStorage";
 import { syncPhotosToGoogleDrive } from "../lib/googleDrive";
 import { isGhlSpecialBooking, isAiConvertedBooking, hasPendingCalendarConversion, GHL_SCHEDULING_MESSAGE } from "../lib/ghlSpecialBookingOwnership";
+import { refreshGhlScheduledStatuses } from "../lib/aiBookingConversion";
 
 const router = Router();
 
@@ -279,6 +280,14 @@ router.patch("/admin/add-ons/:id", async (req, res) => {
 router.get("/admin/bookings", async (req, res) => {
   try {
     const query = AdminListBookingsQueryParams.parse(req.query);
+    try {
+      await refreshGhlScheduledStatuses();
+    } catch (cause) {
+      // Keep ordinary app bookings available during a provider outage, without
+      // treating unsuccessful source lookups as cancellations.
+      res.setHeader("X-GHL-Reconciliation", "unavailable");
+      req.log.warn({ errorName: cause instanceof Error ? cause.name : "UnknownError" }, "HighLevel status reconciliation unavailable; existing statuses retained");
+    }
 
     let bookings = await db
       .select()

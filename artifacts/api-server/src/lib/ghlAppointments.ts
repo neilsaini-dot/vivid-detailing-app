@@ -1,6 +1,6 @@
 export type BotOrigin = "chat_bot" | "voice_bot";
 export type ConversionOrigin = BotOrigin | "highlevel";
-export type AppointmentOrigin = ConversionOrigin | "google" | "app" | "unknown";
+export type AppointmentOrigin = ConversionOrigin | "google" | "app" | "unknown" | "deleted";
 export interface GhlAppointmentIdentity {
   locationId: string;
   appointmentId: string;
@@ -44,13 +44,13 @@ export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, tru
   checkLocation(identity, settings);
   const response = await (settings.fetcher ?? fetch)(
     `${API}/calendars/events/appointments/${encodeURIComponent(identity.appointmentId)}`, options(settings, "GET"));
-  if (response.status === 404 || response.status === 410) return "unknown";
+  if (response.status === 404 || response.status === 410) return "deleted";
   if (!response.ok) throw new GhlAppointmentApiError(424, `GHL appointment origin could not be verified (HTTP ${response.status}). Check calendars/events.readonly permission.`);
   const payload = await response.json() as { event?: Record<string, unknown>; appointment?: Record<string, unknown> };
   const event = payload.event ?? payload.appointment;
   // Some historical lookups succeed without returning an event. As with a
   // 404, its identity/provenance cannot be verified: never trust a bot marker.
-  if (!event || event.deleted === true) return "unknown";
+  if (!event) return "unknown";
   if (!event || event.id !== identity.appointmentId || event.calendarId !== identity.calendarId
     || (event.locationId && event.locationId !== identity.locationId)
     || (event.contactId && identity.externalContactId && event.contactId !== identity.externalContactId)) {
@@ -63,6 +63,7 @@ export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, tru
     ].filter(Boolean);
     throw new GhlAppointmentApiError(409, `GHL appointment ${identity.appointmentId} identity could not be verified: ${mismatches.join(", ")} mismatch.`);
   }
+  if (event.deleted === true || ["cancelled", "canceled"].includes(normalized(event.appointmentStatus))) return "deleted";
   const origin = appointmentOrigin(event);
   // A matching, live GHL appointment is eligible without AI/bot metadata.
   // Explicit Google/app origins still win over any supplied intake marker.

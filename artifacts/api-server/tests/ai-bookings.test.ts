@@ -17,7 +17,7 @@ import { createGhlSpecialBookingHandler } from "../src/routes/ghl-specials";
 
 after(async () => { await pool.end(); });
 type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
-const readAiBookings = (database: Pick<typeof db, "select"> = db) => readAiBookingsReal(database, async () => "chat_bot");
+const readAiBookings = (database: Pick<typeof db, "select" | "transaction"> = db) => readAiBookingsReal(database, async () => "chat_bot");
 const convertAiBooking = (id: string, body: Parameters<typeof convertAiBookingReal>[1], database: Parameters<typeof convertAiBookingReal>[2],
   effects: Partial<NonNullable<Parameters<typeof convertAiBookingReal>[3]>>) => convertAiBookingReal(id, body, database, {
     webhook: async () => {}, calendar: async () => "synthetic-calendar",
@@ -32,6 +32,93 @@ const review = () => ({
   customer: { name: "Synthetic AI Review", email: "synthetic@example.invalid", phone: "+19025550123" },
   vehicle: { type: "car" as const, year: 2020, make: "Test", model: "Fixture", colour: "Blue" },
   notes: "Synthetic test only",
+});
+
+test("authoritative GHL deletion cancels unconverted pending/confirmed bookings and records the cancellation", async () => {
+  await rollback(async tx => {
+    for (const status of ["pending", "confirmed"] as const) {
+      const { id, input } = await imported(tx, true);
+      await tx.update(bookingsTable).set({ status }).where(eq(bookingsTable.id, id));
+      const result = await readAiBookingsReal(tx, async identity => identity.appointmentId === input.appointmentId ? "deleted" : "unknown");
+      assert.equal(result.some(row => row.id === id), false);
+      assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, "cancelled");
+      assert.equal((await tx.select().from(ghlSpecialAppointmentsTable).where(eq(ghlSpecialAppointmentsTable.bookingId, id)))[0].externalStatus, "cancelled");
+      await syncSpecialAppointment(input, tx);
+      assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, "cancelled");
+    }
+  });
+});
+
+test("unknown or unavailable lookups never cancel an imported appointment", async () => {
+  await rollback(async tx => {
+    const { id } = await imported(tx);
+    await readAiBookingsReal(tx, async () => "unknown");
+    await assert.rejects(() => readAiBookingsReal(tx, async () => { throw new Error("Synthetic timeout"); }));
+    assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, "pending");
+  });
+});
+
+test("deletion does not cancel started jobs or converted app bookings", async () => {
+  await rollback(async tx => {
+    for (const status of ["in_progress", "completed"] as const) {
+      const { id } = await imported(tx);
+      await tx.update(bookingsTable).set({ status }).where(eq(bookingsTable.id, id));
+      await readAiBookingsReal(tx, async () => "deleted");
+      assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, status);
+    }
+    const { id } = await imported(tx);
+    await convertAiBooking(id, review(), tx, {});
+    const before = (await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status;
+    await readAiBookingsReal(tx, async () => "deleted");
+    assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, before);
+  });
+});
+
+test("conversion ownership claimed during lookup prevents stale deletion from cancelling the booking", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx);
+    await readAiBookingsReal(tx, async identity => {
+      if (identity.appointmentId !== input.appointmentId) return "unknown";
+      await tx.insert(aiBookingConversionsTable).values({ bookingId: id, botOrigin: "highlevel", state: "processing" });
+      return "deleted";
+    });
+    assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, "pending");
+  });
+});
+
+test("newer intake received during lookup prevents stale deletion from overwriting that appointment", async () => {
+  await rollback(async tx => {
+    const { id, input } = await imported(tx);
+    await readAiBookingsReal(tx, async identity => {
+      if (identity.appointmentId !== input.appointmentId) return "unknown";
+      await syncSpecialAppointment({ ...input, startTime: "2027-01-13T09:00:00-04:00", endTime: "2027-01-13T15:00:00-04:00" }, tx);
+      return "deleted";
+    });
+    assert.equal((await tx.select().from(bookingsTable).where(eq(bookingsTable.id, id)))[0].status, "pending");
+  });
+});
+
+test("GHL lookup distinguishes authoritative deletion from an empty or denied lookup", async () => {
+  const identity = { locationId: "synthetic-location", calendarId: "synthetic-calendar", appointmentId: "synthetic-appointment" };
+  for (const status of [404, 410]) assert.equal(await getAppointmentOrigin(identity, null, {
+    token: "synthetic-token", locationId: identity.locationId, fetcher: async () => new Response(null, { status }),
+  }), "deleted");
+  assert.equal(await getAppointmentOrigin(identity, null, {
+    token: "synthetic-token", locationId: identity.locationId, fetcher: async () => Response.json({ event: null }),
+  }), "unknown");
+  for (const status of [401, 403, 429, 500]) await assert.rejects(() => getAppointmentOrigin(identity, null, {
+    token: "synthetic-token", locationId: identity.locationId, fetcher: async () => new Response(null, { status }),
+  }));
+  for (const deletion of [{ appointmentStatus: "cancelled" }, { deleted: true }]) {
+    assert.equal(await getAppointmentOrigin(identity, null, {
+      token: "synthetic-token", locationId: identity.locationId,
+      fetcher: async () => Response.json({ event: { id: identity.appointmentId, calendarId: identity.calendarId, ...deletion } }),
+    }), "deleted");
+  }
+  await assert.rejects(() => getAppointmentOrigin(identity, null, {
+    token: "synthetic-token", locationId: identity.locationId,
+    fetcher: async () => Response.json({ event: { id: identity.appointmentId, calendarId: "wrong-calendar", deleted: true } }),
+  }));
 });
 async function imported(tx: Pick<typeof db, "transaction">, ceramic = false, calendarId?: string) {
   const input = SyncGhlSpecialBookingBody.parse({

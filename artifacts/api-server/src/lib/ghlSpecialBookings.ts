@@ -66,6 +66,29 @@ export function normaliseSpecialInput(raw: unknown): unknown {
   return body;
 }
 
+// Timestamp fields can contain unresolved merge tags or unrelated input.
+// Expose bounded date-like text only; never log arbitrary customer text/objects.
+export function specialTimestampDiagnostics(raw: unknown) {
+  if (typeof raw !== "string") {
+    return { rawType: raw === null ? "null" : typeof raw, rawValue: raw == null ? null : "[redacted non-date value]" };
+  }
+  const trimmed = raw.trim();
+  const dateLike = /^["']?(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})[Tt\s]/.test(trimmed)
+    && /^[0-9TtZz:+\-./\sAPMapm"']+$/.test(trimmed);
+  const knownTimeTag = /^\{\{\s*appointment\.(?:start_time|end_time)\s*\}\}$/.test(trimmed);
+  const expose = dateLike || knownTimeTag;
+  return {
+    rawType: "string",
+    rawValue: expose ? raw.slice(0, 100) : "[redacted non-date value]",
+    rawLength: raw.length,
+    trimmedLength: trimmed.length,
+    redacted: !expose,
+    unresolvedMergeTag: /^\{\{[^{}]*\}\}$/.test(trimmed),
+    formatShape: trimmed.slice(0, 100).replace(/[A-Za-z]/g, "a").replace(/[0-9]/g, "9")
+      .replace(/[^a9:/+.\- T"'{}]/g, "?"),
+  };
+}
+
 export function parseSpecialDate(value: string | undefined, name: string): Date | undefined {
   if (value === undefined || value === "") return undefined;
   value = value.trim();

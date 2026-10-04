@@ -2,7 +2,7 @@ import { Router, type RequestHandler } from "express";
 import type { ZodIssue } from "zod";
 import { SyncGhlSpecialBookingBody, SyncGhlSpecialBookingResponse } from "@workspace/api-zod";
 import { getSpecialsConfig, validSpecialsToken, specialForCalendar, type SpecialsConfig } from "../lib/ghlSpecialsConfig";
-import { normaliseSpecialInput, SpecialSyncError, syncSpecialAppointment } from "../lib/ghlSpecialBookings";
+import { normaliseSpecialInput, specialTimestampDiagnostics, SpecialSyncError, syncSpecialAppointment } from "../lib/ghlSpecialBookings";
 
 const router = Router();
 
@@ -70,12 +70,19 @@ export function createGhlSpecialBookingHandler(
     res.status(result.action === "created" ? 201 : 200).json(SyncGhlSpecialBookingResponse.parse(result));
   } catch (error) {
     if (error instanceof SpecialSyncError) {
-      // These messages are application-defined rules, never payload values.
+      // Include both timestamps when either fails. Safe diagnostics are also
+      // in the primary message because Railway may hide structured properties.
+      const timestamps = /^(startTime|endTime|eventUpdatedAt)\b/.test(error.message)
+        ? {
+          startTime: specialTimestampDiagnostics(req.body?.startTime),
+          endTime: specialTimestampDiagnostics(req.body?.endTime),
+        } : undefined;
       req.log.warn({
         statusCode: error.status,
         code: error.code,
         reason: error.message,
-      }, `GHL special-bookings sync rejected (${error.status}): ${error.message}`);
+        ...(timestamps ? { timestamps } : {}),
+      }, `GHL special-bookings sync rejected (${error.status}): ${error.message}${timestamps ? `; timestamp diagnostics: ${JSON.stringify(timestamps)}` : ""}`);
       res.status(error.status).json({ error: error.message, code: error.code });
       return;
     }

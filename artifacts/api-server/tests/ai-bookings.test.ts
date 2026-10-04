@@ -359,6 +359,10 @@ test("GHL origin requires explicit bot metadata; Google overrides a bot intake m
     token: "fixture-token", locationId: identity.locationId,
     fetcher: async () => new Response(JSON.stringify({ event: { id: identity.appointmentId, calendarId: "wrong-calendar", createdBy: { source: "Conversation AI" } } })),
   }), /calendar ID mismatch/);
+  assert.equal(await getAppointmentOrigin(identity, "chat_bot", {
+    token: "fixture-token", locationId: identity.locationId,
+    fetcher: async () => new Response(JSON.stringify({ event: null })),
+  }), "unknown");
 });
 
 test("GHL deletion uses exact DELETE endpoint/version, never cancellation, and rejects unconfirmed deletes", async () => {

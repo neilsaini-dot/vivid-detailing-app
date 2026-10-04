@@ -47,6 +47,9 @@ export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, tru
   if (!response.ok) throw new GhlAppointmentApiError(424, `GHL appointment origin could not be verified (HTTP ${response.status}). Check calendars/events.readonly permission.`);
   const payload = await response.json() as { event?: Record<string, unknown> };
   const event = payload.event;
+  // Some historical lookups succeed without returning an event. As with a
+  // 404, its identity/provenance cannot be verified: never trust a bot marker.
+  if (!event) return "unknown";
   if (!event || event.id !== identity.appointmentId || event.calendarId !== identity.calendarId
     || (event.locationId && event.locationId !== identity.locationId)
     || (event.contactId && identity.externalContactId && event.contactId !== identity.externalContactId)) {

@@ -3,6 +3,7 @@ import type { ZodIssue } from "zod";
 import { SyncGhlSpecialBookingBody, SyncGhlSpecialBookingResponse } from "@workspace/api-zod";
 import { getSpecialsConfig, validSpecialsToken, specialForCalendar, type SpecialsConfig } from "../lib/ghlSpecialsConfig";
 import { normaliseSpecialInput, specialTimestampDiagnostics, SpecialSyncError, syncSpecialAppointment } from "../lib/ghlSpecialBookings";
+import { syncAiBookingCalendar } from "../lib/aiBookingCalendarSync";
 
 const router = Router();
 
@@ -72,6 +73,9 @@ export function createGhlSpecialBookingHandler(
   }
   try {
     const result = await sync(parsed.data);
+    if (result.bookingId && ["updated", "cancelled", "duplicate"].includes(result.action)) {
+      await syncAiBookingCalendar(result.bookingId).catch(() => req.log.warn("Converted AI booking calendar sync could not be confirmed"));
+    }
     res.status(result.action === "created" ? 201 : 200).json(SyncGhlSpecialBookingResponse.parse(result));
   } catch (error) {
     if (error instanceof SpecialSyncError) {

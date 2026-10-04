@@ -347,6 +347,22 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
         await saveMapping(booking.id);
         return response("ignored", special, booking, "job_already_started");
       }
+      // Once staff have reviewed an AI booking, later intake must not overwrite
+      // their corrected customer/vehicle details or special pricing.
+      if (booking.createdByAdmin) {
+        const mergedStart = start ?? booking.appointmentAt;
+        const mergedEnd = end ?? mapping?.appointmentEndAt;
+        if (mergedStart && mergedEnd && mergedEnd <= mergedStart) {
+          fail("The appointment end must be later than its start. Send both dates when rescheduling.");
+        }
+        const [updated] = await tx.update(bookingsTable).set({
+          ...(start ? { appointmentAt: start } : {}),
+          status: booking.status === "confirmed" && status === "new" ? "confirmed"
+            : status === "confirmed" ? "confirmed" : "pending",
+        }).where(eq(bookingsTable.id, booking.id)).returning();
+        await saveMapping(booking.id);
+        return response("updated", special, updated);
+      }
       if (input.contact) {
         const contactId = input.contact.id || mapping?.externalContactId || booking.ghlContactId;
         if (contactId) await matchCustomer(tx, { ...input.contact, id: contactId });

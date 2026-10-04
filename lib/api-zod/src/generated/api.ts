@@ -1123,6 +1123,210 @@ export const AdminDeleteBookingDraftParams = zod.object({
 });
 
 /**
+ * @summary List imported special appointments awaiting review or already converted
+ */
+export const AdminListAiBookingsResponseItem = zod.object({
+  id: zod.string(),
+  special: zod.enum(["ceramic_special", "detailing_special"]),
+  ghlAppointmentId: zod.string(),
+  status: zod.string(),
+  appointmentAt: zod.string().nullable(),
+  appointmentEndAt: zod.string().nullable(),
+  totalEstimate: zod.number().nullable(),
+  customer: zod.object({
+    name: zod.string().nullable(),
+    email: zod.string().nullable(),
+    phone: zod.string().nullable(),
+  }),
+  vehicle: zod.object({
+    type: zod.string().nullable(),
+    year: zod.number().nullable(),
+    make: zod.string().nullable(),
+    model: zod.string().nullable(),
+    colour: zod.string().nullable(),
+  }),
+  notes: zod.string().nullable(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  calendarEventId: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+  lastError: zod.string().nullable(),
+});
+export const AdminListAiBookingsResponse = zod.array(
+  AdminListAiBookingsResponseItem,
+);
+
+/**
+ * @summary Save reviewed customer and vehicle details without sending automations
+ */
+export const AdminSaveAiBookingParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const adminSaveAiBookingBodyCustomerNameMax = 200;
+
+export const adminSaveAiBookingBodyCustomerEmailMax = 254;
+
+export const adminSaveAiBookingBodyCustomerPhoneMax = 50;
+
+export const adminSaveAiBookingBodyVehicleMakeMax = 100;
+
+export const adminSaveAiBookingBodyVehicleModelMax = 100;
+
+export const adminSaveAiBookingBodyVehicleColourMax = 100;
+
+export const adminSaveAiBookingBodyNotesMax = 4000;
+
+export const AdminSaveAiBookingBody = zod.object({
+  customer: zod.object({
+    name: zod.string().max(adminSaveAiBookingBodyCustomerNameMax),
+    email: zod.string().max(adminSaveAiBookingBodyCustomerEmailMax),
+    phone: zod.string().max(adminSaveAiBookingBodyCustomerPhoneMax),
+  }),
+  vehicle: zod.object({
+    type: zod.enum(["car", "suv", "truck", "van"]),
+    year: zod.number().nullable(),
+    make: zod.string().max(adminSaveAiBookingBodyVehicleMakeMax),
+    model: zod.string().max(adminSaveAiBookingBodyVehicleModelMax),
+    colour: zod.string().max(adminSaveAiBookingBodyVehicleColourMax),
+  }),
+  notes: zod.string().max(adminSaveAiBookingBodyNotesMax),
+});
+
+export const AdminSaveAiBookingResponse = zod.object({
+  id: zod.string(),
+  special: zod.enum(["ceramic_special", "detailing_special"]),
+  ghlAppointmentId: zod.string(),
+  status: zod.string(),
+  appointmentAt: zod.string().nullable(),
+  appointmentEndAt: zod.string().nullable(),
+  totalEstimate: zod.number().nullable(),
+  customer: zod.object({
+    name: zod.string().nullable(),
+    email: zod.string().nullable(),
+    phone: zod.string().nullable(),
+  }),
+  vehicle: zod.object({
+    type: zod.string().nullable(),
+    year: zod.number().nullable(),
+    make: zod.string().nullable(),
+    model: zod.string().nullable(),
+    colour: zod.string().nullable(),
+  }),
+  notes: zod.string().nullable(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  calendarEventId: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+  lastError: zod.string().nullable(),
+});
+
+/**
+ * @summary Save reviewed details and send native booking webhook and Google Calendar event
+ */
+export const AdminConvertAiBookingParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const adminConvertAiBookingBodyCustomerNameMax = 200;
+
+export const adminConvertAiBookingBodyCustomerEmailMax = 254;
+
+export const adminConvertAiBookingBodyCustomerPhoneMax = 50;
+
+export const adminConvertAiBookingBodyVehicleMakeMax = 100;
+
+export const adminConvertAiBookingBodyVehicleModelMax = 100;
+
+export const adminConvertAiBookingBodyVehicleColourMax = 100;
+
+export const adminConvertAiBookingBodyNotesMax = 4000;
+
+export const AdminConvertAiBookingBody = zod.object({
+  customer: zod.object({
+    name: zod.string().max(adminConvertAiBookingBodyCustomerNameMax),
+    email: zod.string().max(adminConvertAiBookingBodyCustomerEmailMax),
+    phone: zod.string().max(adminConvertAiBookingBodyCustomerPhoneMax),
+  }),
+  vehicle: zod.object({
+    type: zod.enum(["car", "suv", "truck", "van"]),
+    year: zod.number().nullable(),
+    make: zod.string().max(adminConvertAiBookingBodyVehicleMakeMax),
+    model: zod.string().max(adminConvertAiBookingBodyVehicleModelMax),
+    colour: zod.string().max(adminConvertAiBookingBodyVehicleColourMax),
+  }),
+  notes: zod.string().max(adminConvertAiBookingBodyNotesMax),
+});
+
+export const AdminConvertAiBookingResponse = zod.object({
+  id: zod.string(),
+  special: zod.enum(["ceramic_special", "detailing_special"]),
+  ghlAppointmentId: zod.string(),
+  status: zod.string(),
+  appointmentAt: zod.string().nullable(),
+  appointmentEndAt: zod.string().nullable(),
+  totalEstimate: zod.number().nullable(),
+  customer: zod.object({
+    name: zod.string().nullable(),
+    email: zod.string().nullable(),
+    phone: zod.string().nullable(),
+  }),
+  vehicle: zod.object({
+    type: zod.string().nullable(),
+    year: zod.number().nullable(),
+    make: zod.string().nullable(),
+    model: zod.string().nullable(),
+    colour: zod.string().nullable(),
+  }),
+  notes: zod.string().nullable(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  calendarEventId: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+  lastError: zod.string().nullable(),
+});
+
+/**
+ * @summary Record staff verification of an uncertain webhook delivery before resuming conversion
+ */
+export const AdminResolveAiBookingWebhookParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const AdminResolveAiBookingWebhookBody = zod.object({
+  verifiedInGhl: zod.boolean(),
+  delivered: zod.boolean(),
+});
+
+export const AdminResolveAiBookingWebhookResponse = zod.object({
+  id: zod.string(),
+  special: zod.enum(["ceramic_special", "detailing_special"]),
+  ghlAppointmentId: zod.string(),
+  status: zod.string(),
+  appointmentAt: zod.string().nullable(),
+  appointmentEndAt: zod.string().nullable(),
+  totalEstimate: zod.number().nullable(),
+  customer: zod.object({
+    name: zod.string().nullable(),
+    email: zod.string().nullable(),
+    phone: zod.string().nullable(),
+  }),
+  vehicle: zod.object({
+    type: zod.string().nullable(),
+    year: zod.number().nullable(),
+    make: zod.string().nullable(),
+    model: zod.string().nullable(),
+    colour: zod.string().nullable(),
+  }),
+  notes: zod.string().nullable(),
+  conversionState: zod.enum(["review", "processing", "failed", "converted"]),
+  webhookState: zod.enum(["pending", "sending", "sent", "uncertain"]),
+  calendarEventId: zod.string().nullable(),
+  convertedAt: zod.string().nullable(),
+  lastError: zod.string().nullable(),
+});
+
+/**
  * @summary List bookings with optional filters
  */
 export const AdminListBookingsQueryParams = zod.object({

@@ -262,3 +262,29 @@ export async function sendGhlBookingConfirmed(payload: GhlBookingConfirmedPayloa
     logger.error({ err }, "Failed to send GHL booking-confirmed webhook");
   }
 }
+
+export class GhlConversionDeliveryError extends Error {
+  constructor(public uncertain: boolean, message: string) { super(message); }
+}
+
+// Unlike the ordinary fire-and-forget path, conversion needs a real receipt.
+export async function sendGhlConversionConfirmed(payload: GhlBookingConfirmedPayload, key: string): Promise<void> {
+  const url = GHL_BOOKING_CONFIRMED_WEBHOOK_URL || GHL_WEBHOOK_URL;
+  if (!url) throw new GhlConversionDeliveryError(false, "Booking-confirmed webhook is not configured.");
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "Idempotency-Key": key },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(20000),
+    });
+  } catch {
+    throw new GhlConversionDeliveryError(true, "Webhook delivery could not be verified. Check GHL automation history before retrying.");
+  }
+  if (!response.ok) {
+    throw new GhlConversionDeliveryError(response.status >= 500 || response.status === 408,
+      `Booking-confirmed webhook returned HTTP ${response.status}. Check GHL automation history before retrying.`);
+  }
+  logger.info({ event: payload.event, label: "ai_conversion" }, "GHL booking-confirmed webhook accepted");
+}

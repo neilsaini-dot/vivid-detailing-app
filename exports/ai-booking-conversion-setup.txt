@@ -1,0 +1,42 @@
+AI BOOKINGS — VIVID DETAILING
+
+Production setup (one time):
+1. Open the existing Supabase project's SQL Editor.
+2. Run scripts/migrate-ai-booking-conversions.sql from this repository.
+   It adds only ai_booking_conversions. It does not alter booking data,
+   GHL mappings, prices, or existing tables.
+3. Open Admin > AI Bookings.
+
+Day-to-day use:
+1. Open Review & Convert on an imported ceramic or detailing special.
+2. Fill in the customer's name/phone and correct the vehicle information.
+   Email, vehicle year/descriptions, and notes can be left blank.
+3. Save details stores the edits without sending any automations.
+4. Convert to booking sends the usual booking_confirmed webhook and
+   creates a Google Calendar event. The existing booking ID is retained.
+5. The row moves to Converted history. Open booking uses the usual
+   inspection, pickup, completion, and customer portal flow.
+
+Pricing:
+Changing vehicle type recalculates the applicable special price, while
+preserving existing extras and staff price overrides. Ceramic stays at
+$995 before HST. No client-supplied total is accepted during conversion.
+
+Retries:
+- A successful conversion cannot re-send the booking-confirmed webhook.
+- If Google Calendar fails after the webhook succeeds, Retry calendar event
+  completes only that step.
+- If webhook delivery is uncertain, check the booking-confirmed workflow's
+  execution history in GHL using the booking ID. In the review sheet,
+  confirm you checked GHL, then mark whether it actually delivered.
+- Never mark "not delivered" without checking; that could resend an automation.
+- Interrupted in-progress requests have a two-minute safety wait before
+  staff can record verification.
+
+Appointment ownership:
+The original GHL appointment link is preserved. Continue to reschedule or
+cancel it in GHL. Those notifications update the booking and the app-created
+Google event. Later GHL intake does not overwrite staff-reviewed details.
+
+Without the production SQL setup, AI Bookings explicitly shows a setup
+message. Existing native booking pages and GHL imports continue unchanged.

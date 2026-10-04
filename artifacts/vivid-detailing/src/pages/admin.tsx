@@ -41,6 +41,7 @@ import {
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AiBookingsTab } from "@/components/admin/ai-bookings-tab";
 import { useDebounce } from "@/hooks/use-debounce";
 
 export default function AdminPanel() {
@@ -2942,6 +2943,7 @@ function AdminDashboard() {
             <TabsTrigger value="promos">Seasonal</TabsTrigger>
             <TabsTrigger value="reviews">Reviews</TabsTrigger>
             <TabsTrigger value="supplies">Supplies</TabsTrigger>
+            <TabsTrigger value="ai-bookings" data-testid="tab-ai-bookings">AI Bookings</TabsTrigger>
           </TabsList>
         </div>
 
@@ -3594,6 +3596,10 @@ function AdminDashboard() {
               )}
             </DialogContent>
           </Dialog>
+        </TabsContent>
+
+        <TabsContent value="ai-bookings">
+          <AiBookingsTab onOpenBooking={(id) => { handleTabChange("bookings"); setSelectedBookingId(id); }} />
         </TabsContent>
 
         <TabsContent value="supplies">

@@ -14,6 +14,8 @@ export interface CalendarEventInput {
   description: string;
   startIso: string;
   durationHours: number;
+  id?: string;
+  bookingId?: string;
 }
 
 /** Creates a Google Calendar event and returns the event ID (or null on failure). */
@@ -22,6 +24,8 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
   const endDate = new Date(startDate.getTime() + input.durationHours * 60 * 60 * 1000);
 
   const body = JSON.stringify({
+    ...(input.id ? { id: input.id } : {}),
+    ...(input.bookingId ? { extendedProperties: { private: { bookingId: input.bookingId } } } : {}),
     summary: input.summary,
     description: input.description,
     start: { dateTime: startDate.toISOString(), timeZone: "America/Halifax" },
@@ -35,7 +39,21 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body,
+      signal: AbortSignal.timeout(20000),
     });
+    if (res.status === 409 && input.id && input.bookingId) {
+      const existing = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(input.id)}`);
+      if (!existing.ok) return null;
+      const event = await existing.json() as { id?: string; status?: string; extendedProperties?: { private?: { bookingId?: string } } };
+      if (event.status === "cancelled" || event.extendedProperties?.private?.bookingId !== input.bookingId) return null;
+      const patch = JSON.parse(body);
+      delete patch.id;
+      const updated = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(input.id)}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+        signal: AbortSignal.timeout(20000),
+      });
+      return updated.ok ? event.id ?? null : null;
+    }
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       logger.warn({ status: res.status, text }, "Google Calendar event creation failed");
@@ -51,7 +69,7 @@ export async function createCalendarEvent(input: CalendarEventInput): Promise<st
 }
 
 /** Updates an existing Google Calendar event's time, summary and description. */
-export async function updateCalendarEvent(eventId: string, input: CalendarEventInput): Promise<void> {
+export async function updateCalendarEvent(eventId: string, input: Pick<CalendarEventInput, "startIso" | "durationHours"> & Partial<Pick<CalendarEventInput, "summary" | "description">>): Promise<boolean> {
   const startDate = new Date(input.startIso);
   const endDate = new Date(startDate.getTime() + input.durationHours * 60 * 60 * 1000);
 
@@ -67,6 +85,7 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body,
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
@@ -74,16 +93,19 @@ export async function updateCalendarEvent(eventId: string, input: CalendarEventI
     } else {
       logger.info({ eventId, summary: input.summary }, "Google Calendar event updated");
     }
+    return res.ok;
   } catch (err) {
     logger.error({ err, eventId }, "Failed to update Google Calendar event");
+    return false;
   }
 }
 
 /** Deletes a Google Calendar event by ID. */
-export async function deleteCalendarEvent(eventId: string): Promise<void> {
+export async function deleteCalendarEvent(eventId: string): Promise<boolean> {
   try {
     const res = await googleFetch(`${CAL_BASE}/events/${encodeURIComponent(eventId)}`, {
       method: "DELETE",
+      signal: AbortSignal.timeout(20000),
     });
     if (!res.ok && res.status !== 410) {
       const text = await res.text().catch(() => "");
@@ -91,8 +113,10 @@ export async function deleteCalendarEvent(eventId: string): Promise<void> {
     } else {
       logger.info({ eventId }, "Google Calendar event deleted");
     }
+    return res.ok || res.status === 410 || res.status === 404;
   } catch (err) {
     logger.error({ err, eventId }, "Failed to delete Google Calendar event");
+    return false;
   }
 }
 

@@ -13,6 +13,7 @@ import storageRouter from "./storage";
 import authRouter from "./auth";
 import reviewsRouter from "./reviews";
 import ghlSpecialsRouter from "./ghl-specials";
+import aiBookingsRouter from "./ai-bookings";
 
 const router: IRouter = Router();
 
@@ -30,5 +31,6 @@ router.use(storageRouter);
 router.use(authRouter);
 router.use(reviewsRouter);
 router.use(ghlSpecialsRouter);
+router.use(aiBookingsRouter);
 
 export default router;

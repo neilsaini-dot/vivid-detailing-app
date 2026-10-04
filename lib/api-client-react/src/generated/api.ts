@@ -23,11 +23,14 @@ import type {
   AdminCreateBookingBody,
   AdminListBookingsParams,
   AdminListReviewsParams,
+  AdminResolveAiBookingWebhookBody,
   AdminSearchCustomersParams,
   AdminUpdateAddOnBody,
   AdminUpdateBookingBody,
   AdminUpdateCustomerBody,
   AdminUpdateServiceBody,
+  AiBooking,
+  AiBookingReviewBody,
   AnalyticsData,
   Booking,
   BookingDraft,
@@ -3034,6 +3037,343 @@ export const useAdminDeleteBookingDraft = <
   TContext
 > => {
   return useMutation(getAdminDeleteBookingDraftMutationOptions(options));
+};
+
+/**
+ * @summary List imported special appointments awaiting review or already converted
+ */
+export const getAdminListAiBookingsUrl = () => {
+  return `/api/admin/ai-bookings`;
+};
+
+export const adminListAiBookings = async (
+  options?: RequestInit,
+): Promise<AiBooking[]> => {
+  return customFetch<AiBooking[]>(getAdminListAiBookingsUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getAdminListAiBookingsQueryKey = () => {
+  return [`/api/admin/ai-bookings`] as const;
+};
+
+export const getAdminListAiBookingsQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminListAiBookings>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListAiBookings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getAdminListAiBookingsQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminListAiBookings>>
+  > = ({ signal }) => adminListAiBookings({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminListAiBookings>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminListAiBookingsQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminListAiBookings>>
+>;
+export type AdminListAiBookingsQueryError = ErrorType<void>;
+
+/**
+ * @summary List imported special appointments awaiting review or already converted
+ */
+
+export function useAdminListAiBookings<
+  TData = Awaited<ReturnType<typeof adminListAiBookings>>,
+  TError = ErrorType<void>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof adminListAiBookings>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminListAiBookingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Save reviewed customer and vehicle details without sending automations
+ */
+export const getAdminSaveAiBookingUrl = (id: string) => {
+  return `/api/admin/ai-bookings/${id}`;
+};
+
+export const adminSaveAiBooking = async (
+  id: string,
+  aiBookingReviewBody: AiBookingReviewBody,
+  options?: RequestInit,
+): Promise<AiBooking> => {
+  return customFetch<AiBooking>(getAdminSaveAiBookingUrl(id), {
+    ...options,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(aiBookingReviewBody),
+  });
+};
+
+export const getAdminSaveAiBookingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSaveAiBooking>>,
+    TError,
+    { id: string; data: BodyType<AiBookingReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminSaveAiBooking>>,
+  TError,
+  { id: string; data: BodyType<AiBookingReviewBody> },
+  TContext
+> => {
+  const mutationKey = ["adminSaveAiBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminSaveAiBooking>>,
+    { id: string; data: BodyType<AiBookingReviewBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminSaveAiBooking(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminSaveAiBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminSaveAiBooking>>
+>;
+export type AdminSaveAiBookingMutationBody = BodyType<AiBookingReviewBody>;
+export type AdminSaveAiBookingMutationError = ErrorType<void>;
+
+/**
+ * @summary Save reviewed customer and vehicle details without sending automations
+ */
+export const useAdminSaveAiBooking = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminSaveAiBooking>>,
+    TError,
+    { id: string; data: BodyType<AiBookingReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminSaveAiBooking>>,
+  TError,
+  { id: string; data: BodyType<AiBookingReviewBody> },
+  TContext
+> => {
+  return useMutation(getAdminSaveAiBookingMutationOptions(options));
+};
+
+/**
+ * @summary Save reviewed details and send native booking webhook and Google Calendar event
+ */
+export const getAdminConvertAiBookingUrl = (id: string) => {
+  return `/api/admin/ai-bookings/${id}/convert`;
+};
+
+export const adminConvertAiBooking = async (
+  id: string,
+  aiBookingReviewBody: AiBookingReviewBody,
+  options?: RequestInit,
+): Promise<AiBooking> => {
+  return customFetch<AiBooking>(getAdminConvertAiBookingUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(aiBookingReviewBody),
+  });
+};
+
+export const getAdminConvertAiBookingMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminConvertAiBooking>>,
+    TError,
+    { id: string; data: BodyType<AiBookingReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminConvertAiBooking>>,
+  TError,
+  { id: string; data: BodyType<AiBookingReviewBody> },
+  TContext
+> => {
+  const mutationKey = ["adminConvertAiBooking"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminConvertAiBooking>>,
+    { id: string; data: BodyType<AiBookingReviewBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminConvertAiBooking(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminConvertAiBookingMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminConvertAiBooking>>
+>;
+export type AdminConvertAiBookingMutationBody = BodyType<AiBookingReviewBody>;
+export type AdminConvertAiBookingMutationError = ErrorType<void>;
+
+/**
+ * @summary Save reviewed details and send native booking webhook and Google Calendar event
+ */
+export const useAdminConvertAiBooking = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminConvertAiBooking>>,
+    TError,
+    { id: string; data: BodyType<AiBookingReviewBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminConvertAiBooking>>,
+  TError,
+  { id: string; data: BodyType<AiBookingReviewBody> },
+  TContext
+> => {
+  return useMutation(getAdminConvertAiBookingMutationOptions(options));
+};
+
+/**
+ * @summary Record staff verification of an uncertain webhook delivery before resuming conversion
+ */
+export const getAdminResolveAiBookingWebhookUrl = (id: string) => {
+  return `/api/admin/ai-bookings/${id}/verify-webhook`;
+};
+
+export const adminResolveAiBookingWebhook = async (
+  id: string,
+  adminResolveAiBookingWebhookBody: AdminResolveAiBookingWebhookBody,
+  options?: RequestInit,
+): Promise<AiBooking> => {
+  return customFetch<AiBooking>(getAdminResolveAiBookingWebhookUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(adminResolveAiBookingWebhookBody),
+  });
+};
+
+export const getAdminResolveAiBookingWebhookMutationOptions = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminResolveAiBookingWebhook>>,
+    TError,
+    { id: string; data: BodyType<AdminResolveAiBookingWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof adminResolveAiBookingWebhook>>,
+  TError,
+  { id: string; data: BodyType<AdminResolveAiBookingWebhookBody> },
+  TContext
+> => {
+  const mutationKey = ["adminResolveAiBookingWebhook"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof adminResolveAiBookingWebhook>>,
+    { id: string; data: BodyType<AdminResolveAiBookingWebhookBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return adminResolveAiBookingWebhook(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AdminResolveAiBookingWebhookMutationResult = NonNullable<
+  Awaited<ReturnType<typeof adminResolveAiBookingWebhook>>
+>;
+export type AdminResolveAiBookingWebhookMutationBody =
+  BodyType<AdminResolveAiBookingWebhookBody>;
+export type AdminResolveAiBookingWebhookMutationError = ErrorType<void>;
+
+/**
+ * @summary Record staff verification of an uncertain webhook delivery before resuming conversion
+ */
+export const useAdminResolveAiBookingWebhook = <
+  TError = ErrorType<void>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof adminResolveAiBookingWebhook>>,
+    TError,
+    { id: string; data: BodyType<AdminResolveAiBookingWebhookBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof adminResolveAiBookingWebhook>>,
+  TError,
+  { id: string; data: BodyType<AdminResolveAiBookingWebhookBody> },
+  TContext
+> => {
+  return useMutation(getAdminResolveAiBookingWebhookMutationOptions(options));
 };
 
 /**

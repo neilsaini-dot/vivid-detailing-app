@@ -771,6 +771,119 @@ paths:
         "200":
           description: Deleted
 
+  /admin/ai-bookings:
+    get:
+      operationId: adminListAiBookings
+      tags: [admin]
+      summary: List imported special appointments awaiting review or already converted
+      responses:
+        "200":
+          description: Imported AI bookings with conversion state
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AiBooking"
+        "503":
+          description: Conversion tracking migration has not been applied
+  /admin/ai-bookings/{id}:
+    patch:
+      operationId: adminSaveAiBooking
+      tags: [admin]
+      summary: Save reviewed customer and vehicle details without sending automations
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiBookingReviewBody"
+      responses:
+        "200":
+          description: Saved review
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBooking"
+        "409":
+          description: Booking is no longer editable or conversion is in progress
+        "422":
+          description: Invalid review details
+  /admin/ai-bookings/{id}/convert:
+    post:
+      operationId: adminConvertAiBooking
+      tags: [admin]
+      summary: Save reviewed details and send native booking webhook and Google Calendar event
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiBookingReviewBody"
+      responses:
+        "200":
+          description: Converted booking or safe repeated conversion
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBooking"
+        "409":
+          description: Conversion in progress or webhook delivery outcome requires verification
+        "422":
+          description: Required customer details are incomplete
+        "502":
+          description: Integration delivery failed; completed steps are retained
+        "503":
+          description: Conversion tracking migration has not been applied
+  /admin/ai-bookings/{id}/verify-webhook:
+    post:
+      operationId: adminResolveAiBookingWebhook
+      tags: [admin]
+      summary: Record staff verification of an uncertain webhook delivery before resuming conversion
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verifiedInGhl, delivered]
+              properties:
+                verifiedInGhl:
+                  type: boolean
+                delivered:
+                  type: boolean
+      responses:
+        "200":
+          description: Delivery verification recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiBooking"
+        "409":
+          description: Conversion is still running
+        "422":
+          description: Staff must verify the automation history first
   /admin/bookings:
     get:
       operationId: adminListBookings
@@ -1177,6 +1290,117 @@ components:
       scheme: bearer
       description: Shared GHL_SPECIALS_WEBHOOK_SECRET configured on Railway and in the workflow.
   schemas:
+    AiBookingReviewBody:
+      type: object
+      required: [customer, vehicle, notes]
+      properties:
+        customer:
+          type: object
+          required: [name, email, phone]
+          properties:
+            name:
+              type: string
+              maxLength: 200
+            email:
+              type: string
+              maxLength: 254
+            phone:
+              type: string
+              maxLength: 50
+        vehicle:
+          type: object
+          required: [type, year, make, model, colour]
+          properties:
+            type:
+              type: string
+              enum: [car, suv, truck, van]
+            year:
+              type: integer
+              nullable: true
+            make:
+              type: string
+              maxLength: 100
+            model:
+              type: string
+              maxLength: 100
+            colour:
+              type: string
+              maxLength: 100
+        notes:
+          type: string
+          maxLength: 4000
+    AiBooking:
+      type: object
+      required: [id, special, ghlAppointmentId, status, appointmentAt, appointmentEndAt, totalEstimate, customer, vehicle, notes, conversionState, webhookState, calendarEventId, convertedAt, lastError]
+      properties:
+        id:
+          type: string
+        special:
+          type: string
+          enum: [ceramic_special, detailing_special]
+        ghlAppointmentId:
+          type: string
+        status:
+          type: string
+        appointmentAt:
+          type: string
+          nullable: true
+        appointmentEndAt:
+          type: string
+          nullable: true
+        totalEstimate:
+          type: number
+          nullable: true
+        customer:
+          type: object
+          required: [name, email, phone]
+          properties:
+            name:
+              type: string
+              nullable: true
+            email:
+              type: string
+              nullable: true
+            phone:
+              type: string
+              nullable: true
+        vehicle:
+          type: object
+          required: [type, year, make, model, colour]
+          properties:
+            type:
+              type: string
+              nullable: true
+            year:
+              type: integer
+              nullable: true
+            make:
+              type: string
+              nullable: true
+            model:
+              type: string
+              nullable: true
+            colour:
+              type: string
+              nullable: true
+        notes:
+          type: string
+          nullable: true
+        conversionState:
+          type: string
+          enum: [review, processing, failed, converted]
+        webhookState:
+          type: string
+          enum: [pending, sending, sent, uncertain]
+        calendarEventId:
+          type: string
+          nullable: true
+        convertedAt:
+          type: string
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
     GhlSpecialAppointmentInput:
       type: object
       description: GHL webhook intake is normalized before validation. Unusable optional customer/vehicle details, source metadata, notes, and eventUpdatedAt are ignored instead of blocking the appointment. Appointment identity, approved calendar, explicit status, and valid start/end times remain mandatory for creation.

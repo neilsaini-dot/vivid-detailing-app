@@ -5,6 +5,103 @@
  * Vivid Detailing API
  * OpenAPI spec version: 0.1.0
  */
+export type AiBookingReviewBodyCustomer = {
+  /** @maxLength 200 */
+  name: string;
+  /** @maxLength 254 */
+  email: string;
+  /** @maxLength 50 */
+  phone: string;
+};
+
+export type AiBookingReviewBodyVehicleType =
+  (typeof AiBookingReviewBodyVehicleType)[keyof typeof AiBookingReviewBodyVehicleType];
+
+export const AiBookingReviewBodyVehicleType = {
+  car: "car",
+  suv: "suv",
+  truck: "truck",
+  van: "van",
+} as const;
+
+export type AiBookingReviewBodyVehicle = {
+  type: AiBookingReviewBodyVehicleType;
+  year: number | null;
+  /** @maxLength 100 */
+  make: string;
+  /** @maxLength 100 */
+  model: string;
+  /** @maxLength 100 */
+  colour: string;
+};
+
+export interface AiBookingReviewBody {
+  customer: AiBookingReviewBodyCustomer;
+  vehicle: AiBookingReviewBodyVehicle;
+  /** @maxLength 4000 */
+  notes: string;
+}
+
+export type AiBookingSpecial =
+  (typeof AiBookingSpecial)[keyof typeof AiBookingSpecial];
+
+export const AiBookingSpecial = {
+  ceramic_special: "ceramic_special",
+  detailing_special: "detailing_special",
+} as const;
+
+export type AiBookingCustomer = {
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+};
+
+export type AiBookingVehicle = {
+  type: string | null;
+  year: number | null;
+  make: string | null;
+  model: string | null;
+  colour: string | null;
+};
+
+export type AiBookingConversionState =
+  (typeof AiBookingConversionState)[keyof typeof AiBookingConversionState];
+
+export const AiBookingConversionState = {
+  review: "review",
+  processing: "processing",
+  failed: "failed",
+  converted: "converted",
+} as const;
+
+export type AiBookingWebhookState =
+  (typeof AiBookingWebhookState)[keyof typeof AiBookingWebhookState];
+
+export const AiBookingWebhookState = {
+  pending: "pending",
+  sending: "sending",
+  sent: "sent",
+  uncertain: "uncertain",
+} as const;
+
+export interface AiBooking {
+  id: string;
+  special: AiBookingSpecial;
+  ghlAppointmentId: string;
+  status: string;
+  appointmentAt: string | null;
+  appointmentEndAt: string | null;
+  totalEstimate: number | null;
+  customer: AiBookingCustomer;
+  vehicle: AiBookingVehicle;
+  notes: string | null;
+  conversionState: AiBookingConversionState;
+  webhookState: AiBookingWebhookState;
+  calendarEventId: string | null;
+  convertedAt: string | null;
+  lastError: string | null;
+}
+
 export type GhlSpecialAppointmentInputSource =
   (typeof GhlSpecialAppointmentInputSource)[keyof typeof GhlSpecialAppointmentInputSource];
 
@@ -834,6 +931,11 @@ export type CreateBookingDraft201 = {
 
 export type CompleteBookingDraftBody = {
   bookingId: string;
+};
+
+export type AdminResolveAiBookingWebhookBody = {
+  verifiedInGhl: boolean;
+  delivered: boolean;
 };
 
 export type AdminListBookingsParams = {

@@ -68,18 +68,48 @@ export function normaliseSpecialInput(raw: unknown): unknown {
 
 export function parseSpecialDate(value: string | undefined, name: string): Date | undefined {
   if (value === undefined || value === "") return undefined;
-  // Reject localized/offset-free timestamps rather than silently using the host timezone.
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/i.test(value)) {
-    fail(`${name} must be an ISO 8601 timestamp with Z or an explicit UTC offset.`);
+  value = value.trim();
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?$/i.exec(value);
+  if (!match) {
+    fail(`${name} must be an ISO 8601 timestamp. Times without an offset use America/Halifax.`);
   }
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) fail(`${name} is not a valid date.`);
   // Reject impossible calendar days which JavaScript would otherwise normalize.
-  const [year, month, day] = value.slice(0, 10).split("-").map(Number);
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
   if (month < 1 || month > 12 || day < 1 || day > new Date(Date.UTC(year, month, 0)).getUTCDate()) {
     fail(`${name} is not a valid calendar date.`);
   }
-  return date;
+  if (hour > 23 || minute > 59 || second > 59) fail(`${name} is not a valid time.`);
+  const date = new Date(match[7] ? value : `${value}Z`);
+  if (!Number.isFinite(date.getTime())) fail(`${name} is not a valid date.`);
+  if (match[7]) return date;
+
+  // GHL's offset-free merge fields represent Atlantic wall time, not the
+  // Railway host's timezone. Sample both sides of the date to handle DST.
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Halifax", year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23",
+  });
+  const localParts = (instant: Date) => {
+    const parts = formatter.formatToParts(instant);
+    const get = (key: string) => Number(parts.find(part => part.type === key)!.value);
+    return [get("year"), get("month"), get("day"), get("hour"), get("minute"), get("second")];
+  };
+  const offsets = new Set<number>();
+  for (const delta of [-86400000, 0, 86400000]) {
+    const probe = new Date(date.getTime() + delta);
+    const [y, m, d, h, min, sec] = localParts(probe);
+    const localAsUtc = new Date(0);
+    localAsUtc.setUTCFullYear(y, m - 1, d);
+    localAsUtc.setUTCHours(h, min, sec, 0);
+    offsets.add(localAsUtc.getTime() - Math.floor(probe.getTime() / 1000) * 1000);
+  }
+  const expected = [year, month, day, hour, minute, second];
+  const candidates = [...offsets].map(offset => new Date(date.getTime() - offset))
+    .filter(candidate => localParts(candidate).every((part, i) => part === expected[i]));
+  if (candidates.length !== 1) {
+    fail(`${name} is nonexistent or ambiguous in America/Halifax due to daylight saving. Send an explicit UTC offset.`);
+  }
+  return candidates[0];
 }
 
 function suppliedYear(input: Input): number | undefined {
@@ -289,7 +319,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
       return response("updated", special, updated);
     }
 
-    if (!start || !end) fail("A new active booking requires startTime and endTime with timezone offsets.");
+    if (!start || !end) fail("A new active booking requires valid startTime and endTime.");
     if (!input.contact) fail("A new booking requires customer contact information.");
     const customer = await matchCustomer(tx, input.contact);
     const make = input.vehicle?.make?.trim() || null;

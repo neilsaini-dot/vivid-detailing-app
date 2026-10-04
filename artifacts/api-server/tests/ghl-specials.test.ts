@@ -118,7 +118,7 @@ test("missing identifiers and invalid provided data still roll back", async () =
     for (const overrides of [
       { contact: undefined }, { contact: { id: "" } }, { startTime: undefined },
       { vehicle: { type: "car", year: "abc" } },
-      { startTime: "2027-01-12T09:00:00" }, { endTime: "2027-01-11T09:00:00Z" },
+      { startTime: "2027-01-12 09:00:00" }, { endTime: "2027-01-11T09:00:00Z" },
       { startTime: "2027-02-30T09:00:00Z" },
     ]) {
       const input = fixture(overrides);
@@ -297,6 +297,29 @@ test("timezone handling and normalized input", () => {
   })).vehicle?.type, "suv");
 });
 
+test("offset-free GHL timestamps use Atlantic time in summer and winter", () => {
+  for (const [input, expected] of [
+    ["2026-10-10T09:00:00", "2026-10-10T12:00:00.000Z"],
+    ["2027-01-12T09:00:00", "2027-01-12T13:00:00.000Z"],
+    ["2027-07-12T09:00:00.123", "2027-07-12T12:00:00.123Z"],
+    ["2027-03-14T01:30:00", "2027-03-14T05:30:00.000Z"],
+    ["2027-03-14T03:30:00", "2027-03-14T06:30:00.000Z"],
+    ["2027-11-07T00:30:00", "2027-11-07T03:30:00.000Z"],
+    ["2027-11-07T02:30:00", "2027-11-07T06:30:00.000Z"],
+    ["2027-11-07T01:30:00-03:00", "2027-11-07T04:30:00.000Z"],
+    ["2027-11-07T01:30:00-04:00", "2027-11-07T05:30:00.000Z"],
+    ["2027-07-12T09:00:00Z", "2027-07-12T09:00:00.000Z"],
+  ]) {
+    assert.equal(parseSpecialDate(input, "startTime")?.toISOString(), expected);
+  }
+  for (const input of [
+    "2027-03-14T02:30:00", "2027-11-07T01:30:00",
+    "2027-02-30T09:00:00", "2027-01-12T24:00:00", "2027-01-12T09:60:00",
+  ]) {
+    assert.throws(() => parseSpecialDate(input, "startTime"), SpecialSyncError);
+  }
+});
+
 test("missing appointment status defaults to new without replacing explicit statuses", () => {
   for (const appointmentStatus of [undefined, null, "", " \t\n "]) {
     const input = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
@@ -400,6 +423,30 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
         assert.equal(mapping.externalStatus, "new");
       }
       assert.equal((await send({ ...fixture(), appointmentStatus: "scheduled" })).status, 422);
+      for (const [day, hourUtc] of [["2027-07-12", 12], ["2027-01-12", 13]] as const) {
+        const input = fixture({
+          startTime: `${day}T09:00:00`, endTime: `${day}T15:00:00`,
+          eventUpdatedAt: `${day}T08:00:00`,
+        });
+        const response = await send(input);
+        assert.equal(response.status, 201);
+        const created = await response.json() as { bookingId: string };
+        const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId));
+        assert.equal(booking.appointmentAt?.toISOString(), `${day}T${hourUtc}:00:00.000Z`);
+        const [mapping] = await tx.select().from(ghlSpecialAppointmentsTable)
+          .where(eq(ghlSpecialAppointmentsTable.bookingId, created.bookingId));
+        assert.equal(mapping.appointmentEndAt?.toISOString(), `${day}T${hourUtc + 6}:00:00.000Z`);
+        assert.equal(mapping.externalUpdatedAt?.toISOString(), `${day}T${hourUtc - 1}:00:00.000Z`);
+        assert.equal((await send({
+          ...input, startTime: `${day}T${hourUtc}:00:00Z`,
+          endTime: `${day}T${hourUtc + 6}:00:00Z`, eventUpdatedAt: `${day}T${hourUtc - 1}:00:00Z`,
+        })).status, 200);
+        const mappings = await tx.select().from(ghlSpecialAppointmentsTable).where(and(
+          eq(ghlSpecialAppointmentsTable.locationId, input.locationId),
+          eq(ghlSpecialAppointmentsTable.appointmentId, input.appointmentId),
+        ));
+        assert.equal(mappings.length, 1);
+      }
       assert.equal((await send(fixture({ vehicle: undefined, contact: { id: randomUUID() } }))).status, 201);
       assert.equal((await send({ ...fixture(), contact: { id: randomUUID(), name: null, email: null, phone: null }, vehicle: null })).status, 201);
       assert.equal((await send(fixture({ contact: { id: "" } }))).status, 422);

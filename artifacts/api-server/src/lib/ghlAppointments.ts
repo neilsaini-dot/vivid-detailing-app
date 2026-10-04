@@ -45,11 +45,11 @@ export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, tru
     `${API}/calendars/events/appointments/${encodeURIComponent(identity.appointmentId)}`, options(settings, "GET"));
   if (response.status === 404 || response.status === 410) return "unknown";
   if (!response.ok) throw new GhlAppointmentApiError(424, `GHL appointment origin could not be verified (HTTP ${response.status}). Check calendars/events.readonly permission.`);
-  const payload = await response.json() as { event?: Record<string, unknown> };
-  const event = payload.event;
+  const payload = await response.json() as { event?: Record<string, unknown>; appointment?: Record<string, unknown> };
+  const event = payload.event ?? payload.appointment;
   // Some historical lookups succeed without returning an event. As with a
   // 404, its identity/provenance cannot be verified: never trust a bot marker.
-  if (!event) return "unknown";
+  if (!event || event.deleted === true) return "unknown";
   if (!event || event.id !== identity.appointmentId || event.calendarId !== identity.calendarId
     || (event.locationId && event.locationId !== identity.locationId)
     || (event.contactId && identity.externalContactId && event.contactId !== identity.externalContactId)) {
@@ -91,8 +91,9 @@ export async function inspectAppointmentLookup(identity: GhlAppointmentIdentity,
   });
   // Expose schema keys and a classification, never payload values, contacts,
   // credentials, message bodies, or arbitrary provider error text.
-  const event = payload.event && typeof payload.event === "object"
-    ? payload.event as Record<string, unknown> : null;
+  const candidate = payload.event ?? payload.appointment;
+  const event = candidate && typeof candidate === "object"
+    ? candidate as Record<string, unknown> : null;
   return { httpStatus: response.status, responseFields, eventFound: !!event,
     origin: event ? appointmentOrigin(event) : "unknown" };
 }

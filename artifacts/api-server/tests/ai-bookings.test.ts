@@ -363,6 +363,12 @@ test("GHL origin requires explicit bot metadata; Google overrides a bot intake m
     token: "fixture-token", locationId: identity.locationId,
     fetcher: async () => new Response(JSON.stringify({ event: null })),
   }), "unknown");
+  assert.equal(await getAppointmentOrigin(identity, null, {
+    token: "fixture-token", locationId: identity.locationId,
+    fetcher: async () => new Response(JSON.stringify({ appointment: {
+      id: identity.appointmentId, calendarId: identity.calendarId, createdBy: { source: "Conversation AI" },
+    } })),
+  }), "chat_bot");
 });
 
 test("GHL deletion uses exact DELETE endpoint/version, never cancellation, and rejects unconfirmed deletes", async () => {
@@ -394,7 +400,7 @@ test("origin diagnostics expose structure but never customer data or response va
     fetcher: async () => new Response(JSON.stringify({ appointment: { id: "private-id", contactId: "private-contact" } })),
   });
   assert.deepEqual(result.responseFields, ["appointment", "appointment.id", "appointment.contactId"]);
-  assert.equal(result.eventFound, false);
+  assert.equal(result.eventFound, true);
   assert.ok(!JSON.stringify(result).includes("private-contact"));
   assert.ok(!JSON.stringify(result).includes("private-id"));
 });

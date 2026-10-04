@@ -50,7 +50,14 @@ export async function getAppointmentOrigin(identity: GhlAppointmentIdentity, tru
   if (!event || event.id !== identity.appointmentId || event.calendarId !== identity.calendarId
     || (event.locationId && event.locationId !== identity.locationId)
     || (event.contactId && identity.externalContactId && event.contactId !== identity.externalContactId)) {
-    throw new GhlAppointmentApiError(409, "GHL appointment identity could not be verified.");
+    const mismatches = [
+      !event && "missing event",
+      event && event.id !== identity.appointmentId && "appointment ID",
+      event && event.calendarId !== identity.calendarId && "calendar ID",
+      event?.locationId && event.locationId !== identity.locationId && "location ID",
+      event?.contactId && identity.externalContactId && event.contactId !== identity.externalContactId && "contact ID",
+    ].filter(Boolean);
+    throw new GhlAppointmentApiError(409, `GHL appointment ${identity.appointmentId} identity could not be verified: ${mismatches.join(", ")} mismatch.`);
   }
   const origin = appointmentOrigin(event);
   // Bot-only, authenticated workflow intake may supply an explicit marker

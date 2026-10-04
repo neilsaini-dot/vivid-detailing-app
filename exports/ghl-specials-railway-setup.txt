@@ -152,7 +152,11 @@ Date examples:
   Summer Halifax: 2027-07-12T09:00:00-03:00
   Winter Halifax: 2027-01-12T09:00:00-04:00
   Equivalent UTC timestamps ending in Z are also accepted.
-Do not send locale-formatted dates. Offset-free ISO 8601 timestamps such as
+English GHL dates such as "Friday, October 4, 2026 9:00 AM" are accepted for
+startTime/endTime/eventUpdatedAt and interpreted as Atlantic local time.
+The optional weekday is a display label; the numeric calendar date determines
+the booking date. Noon and midnight are handled correctly.
+Offset-free ISO 8601 timestamps such as
 2026-10-10T09:00:00 use America/Halifax local time, with daylight saving applied
 automatically (-03:00 in summer, -04:00 in winter). Existing Z/offset timestamps
 keep their stated timezone. Nonexistent or ambiguous daylight-saving times must

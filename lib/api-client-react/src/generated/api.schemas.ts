@@ -75,17 +75,17 @@ export interface GhlSpecialAppointmentInput {
   calendarId: string;
   appointmentStatus: GhlSpecialAppointmentInputAppointmentStatus;
   /**
-   * ISO 8601 timestamp. Explicit offsets are preserved; offset-free values use America/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.
+   * ISO 8601 or GHL English month/day AM-PM timestamp, optionally prefixed by a weekday. Explicit ISO offsets are preserved; offset-free and GHL local values use America/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.
    * @maxLength 50
    */
   startTime?: string;
   /**
-   * ISO 8601 timestamp. Explicit offsets are preserved; offset-free values use America/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.
+   * ISO 8601 or GHL English month/day AM-PM timestamp, optionally prefixed by a weekday. Explicit ISO offsets are preserved; offset-free and GHL local values use America/Halifax with daylight-saving rules. Ambiguous or nonexistent local DST times require an explicit offset. Required when creating an active booking.
    * @maxLength 50
    */
   endTime?: string;
   /**
-   * Optional source appointment last-updated ISO timestamp for rejecting out-of-order deliveries. Offset-free values use America/Halifax with daylight-saving rules. Must not be a retry's current time.
+   * Optional source appointment last-updated ISO or GHL English month/day AM-PM timestamp for rejecting out-of-order deliveries. Offset-free and GHL local values use America/Halifax with daylight-saving rules. Must not be a retry's current time.
    * @maxLength 50
    */
   eventUpdatedAt?: string;

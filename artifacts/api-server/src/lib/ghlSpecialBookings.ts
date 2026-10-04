@@ -66,6 +66,12 @@ export function normaliseSpecialInput(raw: unknown): unknown {
   return body;
 }
 
+const GHL_MONTHS = [
+  "january", "february", "march", "april", "may", "june",
+  "july", "august", "september", "october", "november", "december",
+];
+const GHL_LOCAL_TIMESTAMP = /^(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday),\s*)?(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s*(\d{4})\s+(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(AM|PM)$/i;
+
 // Timestamp fields can contain unresolved merge tags or unrelated input.
 // Expose bounded date-like text only; never log arbitrary customer text/objects.
 export function specialTimestampDiagnostics(raw: unknown) {
@@ -76,7 +82,7 @@ export function specialTimestampDiagnostics(raw: unknown) {
   const dateLike = /^["']?(?:\d{4}[-/]\d{1,2}[-/]\d{1,2}|\d{1,2}[-/]\d{1,2}[-/]\d{4})[Tt\s]/.test(trimmed)
     && /^[0-9TtZz:+\-./\sAPMapm"']+$/.test(trimmed);
   const knownTimeTag = /^\{\{\s*appointment\.(?:start_time|end_time)\s*\}\}$/.test(trimmed);
-  const expose = dateLike || knownTimeTag;
+  const expose = dateLike || knownTimeTag || GHL_LOCAL_TIMESTAMP.test(trimmed);
   return {
     rawType: "string",
     rawValue: expose ? raw.slice(0, 100) : "[redacted non-date value]",
@@ -92,9 +98,20 @@ export function specialTimestampDiagnostics(raw: unknown) {
 export function parseSpecialDate(value: string | undefined, name: string): Date | undefined {
   if (value === undefined || value === "") return undefined;
   value = value.trim();
+  const local = GHL_LOCAL_TIMESTAMP.exec(value);
+  if (local) {
+    const hour12 = Number(local[4]);
+    if (hour12 < 1 || hour12 > 12) fail(`${name} is not a valid 12-hour time.`);
+    const month = GHL_MONTHS.indexOf(local[1].toLowerCase()) + 1;
+    const hour = hour12 % 12 + (local[7].toUpperCase() === "PM" ? 12 : 0);
+    const pad = (part: number | string) => String(part).padStart(2, "0");
+    // The numeric calendar date is authoritative; the weekday is a display label.
+    // Convert explicitly, never using the Railway host's locale or timezone.
+    value = `${local[3]}-${pad(month)}-${pad(local[2])}T${pad(hour)}:${local[5]}:${local[6] ?? "00"}`;
+  }
   const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(Z|[+-]\d{2}:\d{2})?$/i.exec(value);
   if (!match) {
-    fail(`${name} must be an ISO 8601 timestamp. Times without an offset use America/Halifax.`);
+    fail(`${name} must be an ISO 8601 timestamp or an English month/day AM-PM timestamp. Times without an offset use America/Halifax.`);
   }
   // Reject impossible calendar days which JavaScript would otherwise normalize.
   const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);

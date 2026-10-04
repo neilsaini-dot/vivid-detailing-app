@@ -358,7 +358,7 @@ test("in-progress/completed jobs and existing notes survive status-only deliveri
 });
 
 test("timestamp diagnostics expose dates and known GHL tags but redact unrelated input", () => {
-  for (const raw of ["2026-10-10 09:00:00", "10/10/2026 09:00 AM", '"2026-10-10T09:00:00-03:00"', "{{appointment.start_time}}"]) {
+  for (const raw of ["2026-10-10 09:00:00", "10/10/2026 09:00 AM", '"2026-10-10T09:00:00-03:00"', "{{appointment.start_time}}", "Friday, October 4, 2026 9:00 AM"]) {
     assert.equal(specialTimestampDiagnostics(raw).rawValue, raw);
   }
   for (const raw of ["private-customer-value", "secret-value", { token: "private-token" }, 123456]) {
@@ -399,6 +399,28 @@ test("offset-free GHL timestamps use Atlantic time in summer and winter", () => 
   for (const input of [
     "2027-03-14T02:30:00", "2027-11-07T01:30:00",
     "2027-02-30T09:00:00", "2027-01-12T24:00:00", "2027-01-12T09:60:00",
+  ]) {
+    assert.throws(() => parseSpecialDate(input, "startTime"), SpecialSyncError);
+  }
+});
+
+test("GHL English month/day AM-PM timestamps use Atlantic time", () => {
+  for (const [input, expected] of [
+    ["Friday, October 4, 2026 9:00 AM", "2026-10-04T12:00:00.000Z"],
+    ["Tuesday, January 12, 2027 9:00 AM", "2027-01-12T13:00:00.000Z"],
+    ["July 12, 2027 3:00 PM", "2027-07-12T18:00:00.000Z"],
+    ["July 12, 2027 12:00 AM", "2027-07-12T03:00:00.000Z"],
+    ["July 12, 2027 12:00 PM", "2027-07-12T15:00:00.000Z"],
+    [" january 12, 2027 9:00:30 am ", "2027-01-12T13:00:30.000Z"],
+  ]) {
+    for (const field of ["startTime", "endTime"]) {
+      assert.equal(parseSpecialDate(input, field)?.toISOString(), expected);
+    }
+  }
+  for (const input of [
+    "February 30, 2027 9:00 AM", "October 4, 2026 0:00 AM",
+    "October 4, 2026 13:00 PM", "October 4, 2026 9:60 AM",
+    "March 14, 2027 2:30 AM", "November 7, 2027 1:30 AM",
   ]) {
     assert.throws(() => parseSpecialDate(input, "startTime"), SpecialSyncError);
   }
@@ -525,6 +547,24 @@ test("HTTP authentication, allowlist, validation, 201/200 responses, and limits"
         assert.equal(mapping.externalStatus, "new");
       }
       assert.equal((await send({ ...fixture(), appointmentStatus: "scheduled" })).status, 422);
+      for (const [startTime, endTime, startUtc, endUtc] of [
+        ["Friday, October 4, 2026 9:00 AM", "Friday, October 4, 2026 3:00 PM", "2026-10-04T12:00:00.000Z", "2026-10-04T18:00:00.000Z"],
+        ["Tuesday, January 12, 2027 9:00 AM", "Tuesday, January 12, 2027 3:00 PM", "2027-01-12T13:00:00.000Z", "2027-01-12T19:00:00.000Z"],
+      ]) {
+        const input = fixture({ startTime, endTime, eventUpdatedAt: startTime });
+        const response = await send(input);
+        assert.equal(response.status, 201);
+        const created = await response.json() as { bookingId: string };
+        const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId));
+        assert.equal(booking.appointmentAt?.toISOString(), startUtc);
+        const [mapping] = await tx.select().from(ghlSpecialAppointmentsTable)
+          .where(eq(ghlSpecialAppointmentsTable.bookingId, created.bookingId));
+        assert.equal(mapping.appointmentEndAt?.toISOString(), endUtc);
+        assert.equal(mapping.externalUpdatedAt?.toISOString(), startUtc);
+        assert.equal((await send({ ...input, startTime: startUtc, endTime: endUtc, eventUpdatedAt: startUtc })).status, 200);
+        const [same] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId));
+        assert.equal(same.appointmentAt?.toISOString(), startUtc);
+      }
       for (const [day, hourUtc] of [["2027-07-12", 12], ["2027-01-12", 13]] as const) {
         const input = fixture({
           startTime: `${day}T09:00:00`, endTime: `${day}T15:00:00`,

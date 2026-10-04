@@ -289,7 +289,9 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
         ...(input.vehicle?.model?.trim() ? { model: input.vehicle.model.trim() } : {}),
         ...(input.vehicle?.colour?.trim() ? { colour: input.vehicle.colour.trim() } : {}),
       };
-      const vehicleType = (input.vehicle?.type || vehicle?.type) as SpecialVehicleType | undefined;
+      // A blank update keeps a known vehicle type. Only a genuinely missing
+      // type defaults to car, as requested by the owner.
+      const vehicleType = (input.vehicle?.type || vehicle?.type || "car") as SpecialVehicleType;
       const vehicleUpdates = {
         ...pendingVehicle,
         type: vehicleType!,
@@ -324,7 +326,7 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
     const customer = await matchCustomer(tx, input.contact);
     const make = input.vehicle?.make?.trim() || null;
     const model = input.vehicle?.model?.trim() || null;
-    const existingVehicles = input.vehicle?.type && year && make && model
+    const existingVehicles = year && make && model
       ? await tx.select().from(vehiclesTable).where(and(
         eq(vehiclesTable.customerId, customer.id), eq(vehiclesTable.year, year),
         sql`lower(trim(${vehiclesTable.make})) = ${make.toLowerCase()}`,
@@ -334,17 +336,17 @@ export async function syncSpecialAppointment(input: Input, database: Database = 
     if (existingVehicles.length > 1) {
       throw new SpecialSyncError(409, "vehicle_conflict", "Multiple matching vehicles exist for this customer; staff must resolve them before retrying.");
     }
+    const vehicleType = (input.vehicle?.type || existingVehicles[0]?.type || "car") as SpecialVehicleType;
     const vehicleValues = {
-      customerId: customer.id, type: input.vehicle?.type as SpecialVehicleType, year: year ?? null,
+      customerId: customer.id, type: vehicleType, year: year ?? null,
       make, model,
       ...(input.vehicle?.colour?.trim() ? { colour: input.vehicle.colour.trim() } : {}),
     };
-    const [vehicle] = !input.vehicle?.type ? [] : existingVehicles[0]
+    const [vehicle] = existingVehicles[0]
       ? await tx.update(vehiclesTable).set(vehicleValues)
         .where(eq(vehiclesTable.id, existingVehicles[0].id)).returning()
       : await tx.insert(vehiclesTable).values(vehicleValues).returning();
-    const subtotalCents = special === "ceramic_special" ? 99500
-      : input.vehicle?.type ? specialPriceCents(special, input.vehicle.type) : null;
+    const subtotalCents = specialPriceCents(special, vehicleType);
     const total = subtotalCents === null ? null
       : ((subtotalCents + Math.round(subtotalCents * 0.15)) / 100).toFixed(2);
     const [created] = await tx.insert(bookingsTable).values({

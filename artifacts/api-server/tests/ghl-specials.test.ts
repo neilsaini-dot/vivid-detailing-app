@@ -15,7 +15,7 @@ import {
   syncSpecialAppointment, parseSpecialDate, normaliseSpecialInput, SpecialSyncError,
 } from "../src/lib/ghlSpecialBookings";
 import { createGhlSpecialBookingHandler } from "../src/routes/ghl-specials";
-import { finishPendingSpecialPrice, pendingSpecialVehicle } from "../src/lib/ghlSpecialIntake";
+import { finishPendingSpecialPrice, specialVehicleNotes } from "../src/lib/ghlSpecialIntake";
 
 after(async () => { await pool.end(); });
 
@@ -130,7 +130,7 @@ test("missing identifiers and invalid provided data still roll back", async () =
   });
 });
 
-test("incomplete intake creates one pending-price appointment and later fills the same booking", async () => {
+test("incomplete intake defaults to car and later enriches the same booking", async () => {
   await rollbackTest(async tx => {
     const contactId = randomUUID();
     const input = fixture({
@@ -139,25 +139,27 @@ test("incomplete intake creates one pending-price appointment and later fills th
     });
     const created = await syncSpecialAppointment(input, tx);
     assert.equal(created.action, "created");
-    assert.equal(created.totalEstimate, null);
+    assert.equal(created.totalEstimate, 228.85);
     assert.equal((await syncSpecialAppointment(input, tx)).action, "duplicate");
     const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
-    assert.equal(booking.vehicleId, null);
-    assert.equal(pendingSpecialVehicle(booking.internalNotes).model, "Corolla");
+    assert.ok(booking.vehicleId);
+    const [defaultVehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId));
+    assert.equal(defaultVehicle.type, "car");
+    assert.equal(defaultVehicle.model, "Corolla");
     const [customer] = await tx.select().from(customersTable).where(eq(customersTable.id, booking.customerId!));
     assert.equal(customer.name, null);
     assert.equal(customer.email, null);
     assert.equal(customer.phone, null);
     const [item] = await tx.select().from(bookingItemsTable).where(eq(bookingItemsTable.bookingId, booking.id));
-    assert.equal(item.unitPrice, null);
-    assert.equal(item.isQuoteBased, true);
-    assert.equal((await tx.select().from(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, booking.id))).length, 0);
+    assert.equal(Number(item.unitPrice), 199);
+    assert.equal(item.isQuoteBased, false);
+    assert.equal((await tx.select().from(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, booking.id))).length, 1);
     const rescheduled = await syncSpecialAppointment({
       ...input, vehicle: undefined, contact: undefined,
       startTime: "2027-01-13T09:00:00-04:00", endTime: "2027-01-13T15:00:00-04:00",
     }, tx);
     assert.equal(rescheduled.bookingId, created.bookingId);
-    assert.equal(rescheduled.totalEstimate, null);
+    assert.equal(rescheduled.totalEstimate, 228.85);
     const enriched = await syncSpecialAppointment({
       ...input, vehicle: { type: "suv" },
       contact: { id: contactId, name: "Provided Later", phone: "+19025550123" },
@@ -181,16 +183,26 @@ test("incomplete intake creates one pending-price appointment and later fills th
     }));
     assert.equal(blankUpdate.notes, undefined);
     assert.equal((await syncSpecialAppointment(blankUpdate, tx)).totalEstimate, 251.85);
+    const [stillSuv] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, updated.vehicleId!));
+    assert.equal(stillSuv.type, "suv");
   });
 });
 
-test("missing vehicle details keep ceramic fixed pricing and detailing pending", async () => {
+test("missing or blank vehicle types default to car with special pricing", async () => {
   await rollbackTest(async tx => {
-    for (const vehicle of [undefined, { type: "" }]) {
-      const ceramic = await syncSpecialAppointment(fixture({ vehicle, calendarId: SPECIAL_CALENDARS.ceramic, contact: { id: randomUUID() } }), tx);
+    for (const vehicle of [undefined, null, {}, { type: null }, { type: "" }, { type: " \t " }]) {
+      const input = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
+        ...fixture(), vehicle, contact: { id: randomUUID() },
+      }));
+      const ceramic = await syncSpecialAppointment({ ...input, calendarId: SPECIAL_CALENDARS.ceramic }, tx);
       assert.equal(ceramic.totalEstimate, 1144.25);
-      const detailing = await syncSpecialAppointment(fixture({ vehicle, contact: { id: randomUUID(), name: "" } }), tx);
-      assert.equal(detailing.totalEstimate, null);
+      const detailing = await syncSpecialAppointment({ ...input, appointmentId: randomUUID() }, tx);
+      assert.equal(detailing.totalEstimate, 228.85);
+      for (const result of [ceramic, detailing]) {
+        const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, result.bookingId!));
+        const [stored] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId!));
+        assert.equal(stored.type, "car");
+      }
     }
     const normalized = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({
       ...fixture(), contact: { id: randomUUID(), name: null, email: null, phone: null },
@@ -208,9 +220,65 @@ test("missing vehicle details keep ceramic fixed pricing and detailing pending",
   });
 });
 
+test("blank updates and matching appointments preserve known non-car vehicle types", async () => {
+  await rollbackTest(async tx => {
+    for (const type of ["suv", "truck", "van"] as const) {
+      const input = fixture({ vehicle: { type, year: "2020", make: "Test", model: "Fixture" } });
+      const created = await syncSpecialAppointment(input, tx);
+      for (const vehicle of [undefined, null, {}, { type: null }, { type: "" }, { type: " \t " }]) {
+        const blank = SyncGhlSpecialBookingBody.parse(normaliseSpecialInput({ ...input, vehicle }));
+        assert.equal((await syncSpecialAppointment(blank, tx)).totalEstimate, created.totalEstimate);
+      }
+      const another = await syncSpecialAppointment({
+        ...input, appointmentId: randomUUID(),
+        vehicle: { year: "2020", make: "Test", model: "Fixture" },
+      }, tx);
+      assert.equal(another.totalEstimate, created.totalEstimate);
+      const [first] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
+      const [second] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, another.bookingId!));
+      assert.equal(first.vehicleId, second.vehicleId);
+      const [stored] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, first.vehicleId!));
+      assert.equal(stored.type, type);
+    }
+  });
+});
+
+test("legacy pending imports acquire the car default on a later update", async () => {
+  await rollbackTest(async tx => {
+    const input = fixture({ vehicle: { year: "2022", make: "Toyota", model: "Corolla" } });
+    const created = await syncSpecialAppointment(input, tx);
+    const [original] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
+    await tx.update(bookingsTable).set({
+      vehicleId: null, totalEstimate: null,
+      internalNotes: specialVehicleNotes(original.internalNotes, { year: 2022, make: "Toyota", model: "Corolla" }),
+    }).where(eq(bookingsTable.id, original.id));
+    await tx.update(bookingItemsTable).set({ unitPrice: null, isQuoteBased: true })
+      .where(eq(bookingItemsTable.bookingId, original.id));
+    await tx.delete(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, original.id));
+    await tx.delete(vehiclesTable).where(eq(vehiclesTable.id, original.vehicleId!));
+    const updated = await syncSpecialAppointment({ ...input, vehicle: undefined, appointmentStatus: "confirmed" }, tx);
+    assert.equal(updated.bookingId, created.bookingId);
+    assert.equal(updated.totalEstimate, 228.85);
+    const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, original.id));
+    const [vehicle] = await tx.select().from(vehiclesTable).where(eq(vehiclesTable.id, booking.vehicleId!));
+    assert.equal(vehicle.type, "car");
+    assert.equal(vehicle.model, "Corolla");
+    assert.doesNotMatch(booking.internalNotes!, /Pending GHL vehicle details/);
+    assert.equal((await tx.select().from(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, original.id))).length, 1);
+  });
+});
+
 test("staff vehicle completion resolves pending price while preserving extras and overrides", async () => {
   await rollbackTest(async tx => {
     const created = await syncSpecialAppointment(fixture({ vehicle: undefined }), tx);
+    // Simulate a pending booking imported before the owner's car-default change.
+    const [original] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
+    await tx.update(bookingsTable).set({ vehicleId: null, totalEstimate: null })
+      .where(eq(bookingsTable.id, original.id));
+    await tx.update(bookingItemsTable).set({ unitPrice: null, isQuoteBased: true })
+      .where(eq(bookingItemsTable.bookingId, original.id));
+    await tx.delete(loyaltyActivityTable).where(eq(loyaltyActivityTable.bookingId, original.id));
+    await tx.delete(vehiclesTable).where(eq(vehiclesTable.id, original.vehicleId!));
     const [booking] = await tx.select().from(bookingsTable).where(eq(bookingsTable.id, created.bookingId!));
     const [vehicle] = await tx.insert(vehiclesTable).values({ customerId: booking.customerId, type: "truck" }).returning();
     await tx.insert(bookingItemsTable).values({

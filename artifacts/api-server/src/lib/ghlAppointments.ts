@@ -78,3 +78,21 @@ export async function deleteGhlAppointment(identity: GhlAppointmentIdentity, set
   const result = await response.json().catch(() => null) as { succeeded?: boolean } | null;
   if (result?.succeeded !== true) throw new GhlAppointmentApiError(424, "GHL did not confirm appointment deletion. Check and delete it manually.");
 }
+
+export async function inspectAppointmentLookup(identity: GhlAppointmentIdentity, settings: Config = config()) {
+  checkLocation(identity, settings);
+  const response = await (settings.fetcher ?? fetch)(
+    `${API}/calendars/events/appointments/${encodeURIComponent(identity.appointmentId)}`, options(settings, "GET"));
+  const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
+  const responseFields = Object.keys(payload).flatMap(key => {
+    const value = payload[key];
+    return [key, ...(value && typeof value === "object" && !Array.isArray(value)
+      ? Object.keys(value).map(child => `${key}.${child}`) : [])];
+  });
+  // Expose schema keys and a classification, never payload values, contacts,
+  // credentials, message bodies, or arbitrary provider error text.
+  const event = payload.event && typeof payload.event === "object"
+    ? payload.event as Record<string, unknown> : null;
+  return { httpStatus: response.status, responseFields, eventFound: !!event,
+    origin: event ? appointmentOrigin(event) : "unknown" };
+}

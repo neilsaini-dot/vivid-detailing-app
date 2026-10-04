@@ -787,6 +787,31 @@ paths:
                   $ref: "#/components/schemas/AiBooking"
         "503":
           description: Conversion tracking migration has not been applied
+  /admin/ai-bookings/{id}/origin-check:
+    get:
+      operationId: adminCheckAiBookingOrigin
+      summary: Read-only appointment lookup diagnostics without customer data
+      tags: [admin]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        "200":
+          description: Lookup structure and provenance classification only
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [httpStatus, responseFields, eventFound, origin]
+                properties:
+                  httpStatus: { type: integer }
+                  responseFields:
+                    type: array
+                    items: { type: string }
+                  eventFound: { type: boolean }
+                  origin: { type: string }
   /admin/ai-bookings/{id}:
     patch:
       operationId: adminSaveAiBooking

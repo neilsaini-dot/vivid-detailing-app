@@ -9,7 +9,7 @@ import { SyncGhlSpecialBookingBody } from "@workspace/api-zod";
 import { syncSpecialAppointment } from "../src/lib/ghlSpecialBookings";
 import { SPECIAL_CALENDARS } from "../src/lib/ghlSpecialsConfig";
 import { convertAiBooking as convertAiBookingReal, saveAiBooking, readAiBookings as readAiBookingsReal, resolveAiWebhook, AiConversionError, aiCalendarEventId } from "../src/lib/aiBookingConversion";
-import { appointmentOrigin, deleteGhlAppointment, getAppointmentOrigin } from "../src/lib/ghlAppointments";
+import { appointmentOrigin, deleteGhlAppointment, getAppointmentOrigin, inspectAppointmentLookup } from "../src/lib/ghlAppointments";
 import { isGhlSpecialBooking } from "../src/lib/ghlSpecialBookingOwnership";
 import { GhlConversionDeliveryError } from "../src/lib/ghl";
 import { createAiBookingsRouter } from "../src/routes/ai-bookings";
@@ -386,6 +386,17 @@ test("GHL deletion uses exact DELETE endpoint/version, never cancellation, and r
     fetcher: async () => new Response(null, { status: 404 }) });
   await assert.rejects(() => deleteGhlAppointment(identity, { token: "fixture-token", locationId: identity.locationId,
     fetcher: async () => new Response(JSON.stringify({ succeeded: false }), { status: 201 }) }));
+});
+
+test("origin diagnostics expose structure but never customer data or response values", async () => {
+  const result = await inspectAppointmentLookup({ appointmentId: "fixture", locationId: "fixture-location", calendarId: "fixture-calendar" }, {
+    token: "fixture-token", locationId: "fixture-location",
+    fetcher: async () => new Response(JSON.stringify({ appointment: { id: "private-id", contactId: "private-contact" } })),
+  });
+  assert.deepEqual(result.responseFields, ["appointment", "appointment.id", "appointment.contactId"]);
+  assert.equal(result.eventFound, false);
+  assert.ok(!JSON.stringify(result).includes("private-contact"));
+  assert.ok(!JSON.stringify(result).includes("private-id"));
 });
 
 test("Google-origin appointment callbacks are acknowledged without importing another booking", async () => {

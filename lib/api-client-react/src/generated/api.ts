@@ -20,6 +20,7 @@ import type {
   AbandonBooking200,
   AbandonBookingBody,
   AddOn,
+  AdminCheckAiBookingOrigin200,
   AdminCreateBookingBody,
   AdminListBookingsParams,
   AdminListReviewsParams,
@@ -3106,6 +3107,98 @@ export function useAdminListAiBookings<
   request?: SecondParameter<typeof customFetch>;
 }): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
   const queryOptions = getAdminListAiBookingsQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Read-only appointment lookup diagnostics without customer data
+ */
+export const getAdminCheckAiBookingOriginUrl = (id: string) => {
+  return `/api/admin/ai-bookings/${id}/origin-check`;
+};
+
+export const adminCheckAiBookingOrigin = async (
+  id: string,
+  options?: RequestInit,
+): Promise<AdminCheckAiBookingOrigin200> => {
+  return customFetch<AdminCheckAiBookingOrigin200>(
+    getAdminCheckAiBookingOriginUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getAdminCheckAiBookingOriginQueryKey = (id: string) => {
+  return [`/api/admin/ai-bookings/${id}/origin-check`] as const;
+};
+
+export const getAdminCheckAiBookingOriginQueryOptions = <
+  TData = Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getAdminCheckAiBookingOriginQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>
+  > = ({ signal }) =>
+    adminCheckAiBookingOrigin(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type AdminCheckAiBookingOriginQueryResult = NonNullable<
+  Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>
+>;
+export type AdminCheckAiBookingOriginQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Read-only appointment lookup diagnostics without customer data
+ */
+
+export function useAdminCheckAiBookingOrigin<
+  TData = Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>,
+  TError = ErrorType<unknown>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof adminCheckAiBookingOrigin>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getAdminCheckAiBookingOriginQueryOptions(id, options);
 
   const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
     queryKey: QueryKey;

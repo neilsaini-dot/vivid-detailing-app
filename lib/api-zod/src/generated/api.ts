@@ -1167,6 +1167,20 @@ export const AdminListAiBookingsResponse = zod.array(
 );
 
 /**
+ * @summary Read-only appointment lookup diagnostics without customer data
+ */
+export const AdminCheckAiBookingOriginParams = zod.object({
+  id: zod.coerce.string().uuid(),
+});
+
+export const AdminCheckAiBookingOriginResponse = zod.object({
+  httpStatus: zod.number(),
+  responseFields: zod.array(zod.string()),
+  eventFound: zod.boolean(),
+  origin: zod.string(),
+});
+
+/**
  * @summary Save reviewed customer and vehicle details without sending automations
  */
 export const AdminSaveAiBookingParams = zod.object({

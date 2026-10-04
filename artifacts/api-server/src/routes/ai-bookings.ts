@@ -1,11 +1,14 @@
 import { Router, type Request, type Response } from "express";
 import {
+  AdminCheckAiBookingOriginResponse,
   AdminListAiBookingsResponse, AdminSaveAiBookingParams, AdminSaveAiBookingBody, AdminSaveAiBookingResponse,
   AdminConvertAiBookingParams, AdminConvertAiBookingBody, AdminConvertAiBookingResponse,
   AdminResolveAiBookingWebhookParams, AdminResolveAiBookingWebhookBody, AdminResolveAiBookingWebhookResponse,
 } from "@workspace/api-zod";
 import { AiConversionError, readAiBookings, saveAiBooking, convertAiBooking, resolveAiWebhook } from "../lib/aiBookingConversion";
-import { GhlAppointmentApiError } from "../lib/ghlAppointments";
+import { GhlAppointmentApiError, inspectAppointmentLookup } from "../lib/ghlAppointments";
+import { db, ghlSpecialAppointmentsTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 
 const defaults = { readAiBookings, saveAiBooking, convertAiBooking, resolveAiWebhook };
 function handleError(req: Request, res: Response, cause: unknown) {
@@ -21,6 +24,16 @@ function handleError(req: Request, res: Response, cause: unknown) {
 
 export function createAiBookingsRouter(services: typeof defaults = defaults) {
 const router = Router();
+router.get("/admin/ai-bookings/:id/origin-check", async (req, res): Promise<void> => {
+  const params = AdminSaveAiBookingParams.safeParse(req.params);
+  if (!params.success) { res.status(422).json({ error: "Invalid booking ID." }); return; }
+  try {
+    const [mapping] = await db.select().from(ghlSpecialAppointmentsTable)
+      .where(eq(ghlSpecialAppointmentsTable.bookingId, params.data.id));
+    if (!mapping) { res.status(404).json({ error: "AI booking not found." }); return; }
+    res.json(AdminCheckAiBookingOriginResponse.parse(await inspectAppointmentLookup(mapping)));
+  } catch (cause) { handleError(req, res, cause); }
+});
 router.get("/admin/ai-bookings", async (req, res): Promise<void> => {
   try { res.json(AdminListAiBookingsResponse.parse(await services.readAiBookings())); }
   catch (cause) { handleError(req, res, cause); }

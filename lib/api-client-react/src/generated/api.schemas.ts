@@ -969,6 +969,13 @@ export type CompleteBookingDraftBody = {
   bookingId: string;
 };
 
+export type AdminCheckAiBookingOrigin200 = {
+  httpStatus: number;
+  responseFields: string[];
+  eventFound: boolean;
+  origin: string;
+};
+
 export type AdminResolveAiBookingWebhookBody = {
   verifiedInGhl: boolean;
   delivered: boolean;
